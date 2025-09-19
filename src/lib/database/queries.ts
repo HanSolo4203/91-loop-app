@@ -180,18 +180,18 @@ export async function getBatchesWithFilters(
 
     // Process and enrich the data
     const enrichedData: BatchQueryResult[] = (data || []).map(batch => {
-      const items = batch.batch_items || [];
-      const totalItems = items.reduce((sum, item) => sum + item.quantity_sent, 0);
-      const totalAmount = items.reduce((sum, item) => 
+      const items = (batch as any).batch_items || [];
+      const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity_sent, 0);
+      const totalAmount = items.reduce((sum: number, item: any) => 
         sum + (item.quantity_sent * item.price_per_item), 0);
       
-      const discrepancies = items.filter(item => 
+      const discrepancies = items.filter((item: any) => 
         item.quantity_sent !== item.quantity_received).length;
       const discrepancyPercentage = totalItems > 0 ? (discrepancies / items.length) * 100 : 0;
 
       return {
-        ...batch,
-        client: batch.clients as Client,
+        ...(batch as any),
+        client: (batch as any).clients as Client,
         item_count: items.length,
         total_amount: totalAmount,
         has_discrepancy: discrepancies > 0,
