@@ -19,7 +19,7 @@ interface BatchHeaderProps {
   batch: {
     id: string;
     paper_batch_id: string;
-    status: 'pickup' | 'processing' | 'delivery' | 'completed' | 'cancelled';
+    status: 'pickup' | 'washing' | 'completed' | 'delivered';
     pickup_date: string;
     delivery_date?: string;
     created_at: string;
@@ -61,12 +61,6 @@ const statusConfig = {
     label: 'Delivered',
     variant: 'secondary' as const,
     className: 'bg-purple-100 text-purple-800 border-purple-200',
-    icon: Package
-  },
-  cancelled: {
-    label: 'Cancelled',
-    variant: 'secondary' as const,
-    className: 'bg-red-100 text-red-800 border-red-200',
     icon: Package
   }
 };
