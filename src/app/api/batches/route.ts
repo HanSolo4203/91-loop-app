@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate required fields
-    const requiredFields = ['paper_batch_id', 'client_id', 'pickup_date', 'items'];
+    // Validate required fields (paper_batch_id is optional and may be generated)
+    const requiredFields = ['client_id', 'pickup_date', 'items'];
     for (const field of requiredFields) {
       if (!body[field]) {
         return NextResponse.json(

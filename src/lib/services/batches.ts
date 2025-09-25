@@ -39,7 +39,7 @@ export interface BatchItemData {
 }
 
 export interface CreateBatchRequest {
-  paper_batch_id: string;
+  paper_batch_id?: string;
   client_id: string;
   pickup_date: string;
   status?: BatchStatus;
@@ -101,11 +101,13 @@ export async function generateSystemBatchId(): Promise<string> {
 export async function validateBatchData(batchData: CreateBatchRequest): Promise<{ isValid: boolean; errors: string[] }> {
   const errors: string[] = [];
 
-  // Validate paper_batch_id
-  if (!batchData.paper_batch_id || batchData.paper_batch_id.trim().length === 0) {
-    errors.push('Paper batch ID is required');
-  } else if (batchData.paper_batch_id.length > 50) {
-    errors.push('Paper batch ID must be 50 characters or less');
+  // Validate paper_batch_id (optional)
+  if (batchData.paper_batch_id !== undefined) {
+    if (batchData.paper_batch_id.trim().length === 0) {
+      // allow empty string; will be generated
+    } else if (batchData.paper_batch_id.length > 50) {
+      errors.push('Paper batch ID must be 50 characters or less');
+    }
   }
 
   // Validate client_id
@@ -294,11 +296,42 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
       );
     }
 
+    // Generate paper_batch_id if missing or blank
+    let paperBatchId = batchData.paper_batch_id?.trim();
+    if (!paperBatchId) {
+      // Find current max numeric suffix and increment
+      const { data: maxRow, error: maxErr } = await supabaseAdmin
+        .from('batches')
+        .select('paper_batch_id')
+        .order('paper_batch_id', { ascending: false })
+        .limit(1000);
+
+      if (maxErr) {
+        throw new BatchServiceError(
+          `Failed to read last paper batch id: ${maxErr.message}`,
+          'READ_MAX_PAPER_ID_ERROR',
+          500
+        );
+      }
+
+      let maxNum = 0;
+      (maxRow || []).forEach((r: any) => {
+        const match = typeof r.paper_batch_id === 'string' && r.paper_batch_id.match(/(\d{1,})$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      });
+
+      const nextNum = maxNum + 1;
+      paperBatchId = `Paper_Batch_${String(nextNum).padStart(3, '0')}`;
+    }
+
     // Check if paper_batch_id already exists
     const { data: existingBatch, error: checkError } = await supabaseAdmin
       .from('batches')
       .select('id')
-      .eq('paper_batch_id', batchData.paper_batch_id)
+      .eq('paper_batch_id', paperBatchId)
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') {
@@ -322,7 +355,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
 
     // Start transaction by creating batch first
     const batchInsert: BatchInsert = {
-      paper_batch_id: batchData.paper_batch_id,
+      paper_batch_id: paperBatchId,
       client_id: batchData.client_id,
       pickup_date: batchData.pickup_date,
       status: batchData.status || 'pickup',
