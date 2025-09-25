@@ -143,6 +143,286 @@ export interface DiscrepancyReport {
   }>;
 }
 
+export interface ClientInvoiceSummary {
+  client_id: string;
+  client_name: string;
+  total_items_washed: number;
+  total_amount: number;
+  batch_count: number;
+  discrepancy_batches: number;
+}
+
+export interface ClientBatchSummaryItem {
+  id: string;
+  paper_batch_id: string;
+  system_batch_id: string;
+  pickup_date: string;
+  status: BatchStatus;
+  total_amount: number;
+  has_discrepancy: boolean;
+  total_items_received: number;
+}
+
+export interface BatchInvoiceItem {
+  category_name: string;
+  quantity_sent: number | null;
+  quantity_received: number | null;
+  unit_price: number | null;
+  line_total: number;
+  discrepancy: number; // sent - received
+}
+
+export interface BatchInvoice {
+  batch_id: string;
+  client_name: string | null;
+  paper_batch_id: string | null;
+  system_batch_id: string | null;
+  pickup_date: string;
+  total_amount: number;
+  has_discrepancy: boolean;
+  items: BatchInvoiceItem[];
+}
+
+/**
+ * Get a batch invoice with line items and pricing
+ */
+export async function getBatchInvoice(
+  batchId: string
+): Promise<AnalyticsServiceResponse<BatchInvoice>> {
+  try {
+    if (!batchId) {
+      throw new AnalyticsServiceError('Batch ID is required', 'INVALID_BATCH', 400);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('batches')
+      .select(`
+        id,
+        paper_batch_id,
+        system_batch_id,
+        pickup_date,
+        total_amount,
+        has_discrepancy,
+        client:clients(name),
+        items:batch_items(
+          quantity_sent,
+          quantity_received,
+          linen_category:linen_categories(name, price_per_item)
+        )
+      `)
+      .eq('id', batchId)
+      .single() as any;
+
+    if (error) {
+      throw new AnalyticsServiceError(`Failed to fetch batch invoice: ${error.message}`, 'FETCH_BATCH_INVOICE_ERROR', 500);
+    }
+
+    const items: BatchInvoiceItem[] = (data.items || []).map((it: any) => {
+      const unitPrice = it.linen_category?.price_per_item ?? null;
+      const qty = it.quantity_received ?? 0;
+      const lineTotal = unitPrice !== null ? unitPrice * qty : 0;
+      const discrepancy = (it.quantity_sent ?? 0) - (it.quantity_received ?? 0);
+      return {
+        category_name: it.linen_category?.name || 'Unknown',
+        quantity_sent: it.quantity_sent ?? null,
+        quantity_received: it.quantity_received ?? null,
+        unit_price: unitPrice,
+        line_total: lineTotal,
+        discrepancy,
+      };
+    });
+
+    const invoice: BatchInvoice = {
+      batch_id: data.id,
+      client_name: data.client?.name ?? null,
+      paper_batch_id: data.paper_batch_id ?? null,
+      system_batch_id: data.system_batch_id ?? null,
+      pickup_date: data.pickup_date,
+      total_amount: data.total_amount ?? 0,
+      has_discrepancy: !!data.has_discrepancy,
+      items,
+    };
+
+    return { data: invoice, error: null, success: true };
+  } catch (error) {
+    if (error instanceof AnalyticsServiceError) {
+      return { data: null, error: error.message, success: false };
+    }
+    return {
+      data: null,
+      error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      success: false,
+    };
+  }
+}
+
+/**
+ * Get batches for a specific client within a given month
+ */
+export async function getClientBatchesByMonth(
+  clientId: string,
+  year: number,
+  month: number
+): Promise<AnalyticsServiceResponse<ClientBatchSummaryItem[]>> {
+  try {
+    if (!clientId) {
+      throw new AnalyticsServiceError('Client ID is required', 'INVALID_CLIENT', 400);
+    }
+    if (year < 2020 || year > 2030) {
+      throw new AnalyticsServiceError('Year must be between 2020 and 2030', 'INVALID_YEAR', 400);
+    }
+    if (month < 1 || month > 12) {
+      throw new AnalyticsServiceError('Month must be between 1 and 12', 'INVALID_MONTH', 400);
+    }
+
+    const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+    const { data, error } = await supabaseAdmin
+      .from('batches')
+      .select(`
+        id,
+        paper_batch_id,
+        system_batch_id,
+        pickup_date,
+        status,
+        total_amount,
+        has_discrepancy,
+        items:batch_items(quantity_received)
+      `)
+      .eq('client_id', clientId)
+      .gte('pickup_date', startDate)
+      .lte('pickup_date', endDate) as any;
+
+    if (error) {
+      throw new AnalyticsServiceError(`Failed to fetch client batches: ${error.message}`, 'FETCH_CLIENT_BATCHES_ERROR', 500);
+    }
+
+    const rows: ClientBatchSummaryItem[] = (data || []).map((b: any) => ({
+      id: b.id,
+      paper_batch_id: b.paper_batch_id,
+      system_batch_id: b.system_batch_id || '',
+      pickup_date: b.pickup_date,
+      status: b.status,
+      total_amount: b.total_amount || 0,
+      has_discrepancy: !!b.has_discrepancy,
+      total_items_received: (b.items || []).reduce((s: number, it: any) => s + (it.quantity_received || 0), 0),
+    }));
+
+    return { data: rows, error: null, success: true };
+  } catch (error) {
+    if (error instanceof AnalyticsServiceError) {
+      return { data: null, error: error.message, success: false };
+    }
+    return {
+      data: null,
+      error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      success: false,
+    };
+  }
+}
+/**
+ * Get per-client invoicing summary for a given month
+ * @param year - Year for the report
+ * @param month - Month (1-12)
+ */
+export async function getInvoiceSummaryByMonth(
+  year: number,
+  month: number
+): Promise<AnalyticsServiceResponse<ClientInvoiceSummary[]>> {
+  try {
+    if (year < 2020 || year > 2030) {
+      throw new AnalyticsServiceError(
+        'Year must be between 2020 and 2030',
+        'INVALID_YEAR',
+        400
+      );
+    }
+
+    if (month < 1 || month > 12) {
+      throw new AnalyticsServiceError(
+        'Month must be between 1 and 12',
+        'INVALID_MONTH',
+        400
+      );
+    }
+
+    const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+    // Fetch batches within month with client and items
+    const { data, error } = await supabaseAdmin
+      .from('batches')
+      .select(`
+        id,
+        client_id,
+        total_amount,
+        has_discrepancy,
+        pickup_date,
+        client:clients(id, name),
+        items:batch_items(quantity_received)
+      `)
+      .gte('pickup_date', startDate)
+      .lte('pickup_date', endDate) as any;
+
+    if (error) {
+      throw new AnalyticsServiceError(
+        `Failed to fetch invoice data: ${error.message}`,
+        'FETCH_INVOICE_ERROR',
+        500
+      );
+    }
+
+    const summaryMap = new Map<string, ClientInvoiceSummary>();
+
+    (data || []).forEach((batch: any) => {
+      const clientId = batch.client?.id || batch.client_id || 'unknown';
+      const clientName = batch.client?.name || 'Unknown Client';
+      const existing = summaryMap.get(clientId) || {
+        client_id: clientId,
+        client_name: clientName,
+        total_items_washed: 0,
+        total_amount: 0,
+        batch_count: 0,
+        discrepancy_batches: 0,
+      } as ClientInvoiceSummary;
+
+      const itemsCount = (batch.items || []).reduce((sum: number, it: any) => sum + (it.quantity_received || 0), 0);
+
+      summaryMap.set(clientId, {
+        client_id: clientId,
+        client_name: clientName,
+        total_items_washed: existing.total_items_washed + itemsCount,
+        total_amount: existing.total_amount + (batch.total_amount || 0),
+        batch_count: existing.batch_count + 1,
+        discrepancy_batches: existing.discrepancy_batches + (batch.has_discrepancy ? 1 : 0),
+      });
+    });
+
+    const summaries = Array.from(summaryMap.values()).sort((a, b) => b.total_amount - a.total_amount);
+
+    return {
+      data: summaries,
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    if (error instanceof AnalyticsServiceError) {
+      return {
+        data: null,
+        error: error.message,
+        success: false,
+      };
+    }
+
+    return {
+      data: null,
+      error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      success: false,
+    };
+  }
+}
+
 /**
  * Get comprehensive monthly statistics
  * @param year - Year for statistics

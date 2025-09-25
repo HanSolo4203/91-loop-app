@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
 import type { LinenCategory } from '@/types/database';
+import { formatCurrencySSR } from '@/lib/utils/formatters';
 
 interface PricingCardProps {
   category: LinenCategory;
@@ -83,14 +84,7 @@ export default function PricingCard({
     }
   };
 
-  const formatPrice = (price: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(price);
-  };
+  const formatPrice = (price: number): string => formatCurrencySSR(price);
 
   const getPriceChangeIndicator = () => {
     const currentPrice = parseFloat(localPrice);
