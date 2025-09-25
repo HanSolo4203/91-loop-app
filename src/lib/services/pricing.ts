@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabaseAdmin } from '@/lib/supabase';
 import type { 
   LinenCategory, 
   LinenCategoryUpdate, 
-  ApiResponse, 
   PaginatedResponse 
 } from '@/types/database';
 
@@ -73,10 +73,10 @@ export async function getAllCategories(
       const to = from + pageSize - 1;
       
       // Get total count for pagination
-      const { count, error: countError } = await supabaseAdmin
+      const { count, error: countError } = await (supabaseAdmin as any)
         .from('linen_categories')
         .select('*', { count: 'exact', head: true })
-        .modify((query) => {
+        .modify((query: any) => {
           if (!includeInactive) {
             query.eq('is_active', true);
           }
@@ -249,7 +249,7 @@ export async function updateCategoryPrice(
       updated_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('linen_categories')
       .update(updateData)
       .eq('id', id)
@@ -362,7 +362,7 @@ export async function bulkUpdatePricing(
             updated_at: new Date().toISOString(),
           };
 
-          const { error } = await supabaseAdmin
+          const { error } = await (supabaseAdmin as any)
             .from('linen_categories')
             .update(updateData)
             .eq('id', update.id);
@@ -498,7 +498,7 @@ export async function getCategoryStats(
       }
 
       // Get stats for specific category using the database function
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await (supabaseAdmin as any)
         .rpc('get_linen_category_stats', { category_uuid: id });
 
       if (error) {
@@ -532,11 +532,11 @@ export async function getCategoryStats(
 
     const stats = {
       total_categories: data?.length || 0,
-      active_categories: data?.filter(c => c.is_active).length || 0,
-      average_price: data?.reduce((sum, c) => sum + c.price_per_item, 0) / (data?.length || 1) || 0,
+      active_categories: data?.filter((c: any) => c.is_active).length || 0,
+      average_price: data?.reduce((sum: number, c: any) => sum + c.price_per_item, 0) / (data?.length || 1) || 0,
       price_range: {
-        min: Math.min(...(data?.map(c => c.price_per_item) || [0])),
-        max: Math.max(...(data?.map(c => c.price_per_item) || [0])),
+        min: Math.min(...(data?.map((c: any) => c.price_per_item) || [0])),
+        max: Math.max(...(data?.map((c: any) => c.price_per_item) || [0])),
       },
     };
 

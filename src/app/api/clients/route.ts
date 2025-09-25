@@ -1,9 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getAllClients, 
   searchClients, 
-  createClient,
-  ClientServiceError 
+  createClient
 } from '@/lib/services/clients';
 import type { 
   ClientServiceResponse, 

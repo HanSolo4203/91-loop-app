@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Navigation from '@/components/navigation';
@@ -14,11 +13,7 @@ import {
   ArrowLeft, 
   RefreshCw, 
   AlertCircle, 
-  FileText,
-  Download,
-  Package,
-  CheckCircle,
-  Loader2
+  Package
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -107,37 +102,9 @@ function BatchDetailsLoading() {
   );
 }
 
-// Error component
-function BatchDetailsError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="border-red-200 bg-red-50">
-          <CardHeader>
-            <CardTitle className="text-red-800">Batch Details Error</CardTitle>
-            <CardDescription className="text-red-600">
-              Something went wrong while loading the batch details. Please try again.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-red-100 border border-red-200 rounded-md p-4 mb-4">
-              <p className="text-sm text-red-800 font-mono">
-                {error.message || 'An unexpected error occurred'}
-              </p>
-            </div>
-            <Button onClick={reset} className="bg-red-600 hover:bg-red-700">
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 // Breadcrumb component
-function Breadcrumb({ batchId }: { batchId: string }) {
+function Breadcrumb() {
   return (
     <nav className="flex items-center space-x-2 text-sm text-slate-600 mb-8">
       <Link href="/dashboard" className="flex items-center space-x-1 hover:text-slate-900 transition-colors">
@@ -157,7 +124,6 @@ function Breadcrumb({ batchId }: { batchId: string }) {
 // Main batch details content
 function BatchDetailsContent() {
   const params = useParams();
-  const router = useRouter();
   const batchId = params.id as string;
 
   const [batchDetails, setBatchDetails] = useState<BatchDetails | null>(null);
@@ -166,7 +132,7 @@ function BatchDetailsContent() {
   const [error, setError] = useState('');
 
   // Fetch batch details
-  const fetchBatchDetails = async (isRefresh = false) => {
+  const fetchBatchDetails = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setRefreshing(true);
     } else {
@@ -183,13 +149,13 @@ function BatchDetailsContent() {
       } else {
         setError(result.error || 'Failed to load batch details');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to load batch details. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [batchId]);
 
   // Handle status update
   const handleStatusUpdate = async (newStatus: string, notes?: string) => {
@@ -230,7 +196,7 @@ function BatchDetailsContent() {
     if (batchId) {
       fetchBatchDetails();
     }
-  }, [batchId]);
+  }, [batchId, fetchBatchDetails]);
 
   if (loading) {
     return <BatchDetailsLoading />;
@@ -277,7 +243,7 @@ function BatchDetailsContent() {
     <div className="min-h-screen bg-slate-50">
       <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Breadcrumb batchId={batchId} />
+        <Breadcrumb />
         
         {/* Page Header */}
         <div className="mb-8">

@@ -7,8 +7,6 @@ import MetricCard from '@/components/dashboard/metric-card';
 import MonthSelector from '@/components/dashboard/month-selector';
 import BatchesTable from '@/components/dashboard/batches-table';
 import { EmptyState, EmptyBatches } from '@/components/ui/empty-state';
-import { LoadingSkeleton } from '@/components/ui/loading-spinner';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { 
   LayoutDashboard, 
   Package, 
@@ -24,99 +22,6 @@ import Link from 'next/link';
 
 // Remove metadata export since this is now a client component
 
-// Loading component
-function DashboardLoading() {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Breadcrumb skeleton */}
-        <div className="mb-8">
-          <LoadingSkeleton width="w-48" height="h-4" />
-        </div>
-        
-        {/* Page header skeleton */}
-        <div className="mb-8">
-          <LoadingSkeleton width="w-64" height="h-8" className="mb-2" />
-          <LoadingSkeleton width="w-96" height="h-4" />
-        </div>
-
-        {/* Month selector skeleton */}
-        <div className="mb-6">
-          <LoadingSkeleton width="w-64" height="h-10" />
-        </div>
-
-        {/* Cards skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <LoadingSkeleton width="w-24" height="h-4" />
-                <LoadingSkeleton width="w-16" height="h-8" />
-              </CardHeader>
-              <CardContent>
-                <LoadingSkeleton width="w-32" height="h-3" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Batches table skeleton */}
-        <Card>
-          <CardHeader>
-            <LoadingSkeleton width="w-48" height="h-6" />
-            <LoadingSkeleton width="w-64" height="h-4" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex space-x-4">
-                  <LoadingSkeleton width="w-24" height="h-4" />
-                  <LoadingSkeleton width="w-32" height="h-4" />
-                  <LoadingSkeleton width="w-40" height="h-4" />
-                  <LoadingSkeleton width="w-20" height="h-4" />
-                  <LoadingSkeleton width="w-16" height="h-4" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// Error component
-function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="border-red-200 bg-red-50">
-          <CardHeader>
-            <CardTitle className="text-red-800">Dashboard Error</CardTitle>
-            <CardDescription className="text-red-600">
-              Something went wrong while loading the dashboard. Please try again.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-red-100 border border-red-200 rounded-md p-4 mb-4">
-              <p className="text-sm text-red-800 font-mono">
-                {error.message || 'An unexpected error occurred'}
-              </p>
-            </div>
-            <button
-              onClick={reset}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-            >
-              Try Again
-            </button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 // Breadcrumb component
 function Breadcrumb() {

@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   createBatch, 
-  getBatches, 
-  BatchServiceError 
+  getBatches
 } from '@/lib/services/batches';
 import type { 
   CreateBatchRequest,

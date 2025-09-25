@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabaseAdmin } from '@/lib/supabase';
 import type { 
   Batch, 
@@ -124,7 +125,7 @@ export async function validateBatchData(batchData: CreateBatchRequest): Promise<
 
       if (clientError || !client) {
         errors.push('Client not found');
-      } else if (!client.is_active) {
+      } else if (!(client as any).is_active) {
         errors.push('Client is inactive');
       }
     }
@@ -189,7 +190,7 @@ export async function validateBatchData(batchData: CreateBatchRequest): Promise<
 
           if (categoryError || !category) {
             errors.push(`${itemPrefix} Linen category not found`);
-          } else if (!category.is_active) {
+          } else if (!(category as any).is_active) {
             errors.push(`${itemPrefix} Linen category is inactive`);
           }
         }
@@ -257,10 +258,10 @@ export async function calculateBatchTotal(items: BatchItemData[]): Promise<numbe
           );
         }
 
-        price = category.price_per_item;
+        price = (category as any).price_per_item;
       }
 
-      total += quantity * price;
+      total += quantity * (price || 0);
     }
 
     return Math.round(total * 100) / 100; // Round to 2 decimal places
@@ -329,7 +330,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
       notes: batchData.notes || null,
     };
 
-    const { data: newBatch, error: batchError } = await supabaseAdmin
+    const { data: newBatch, error: batchError } = await (supabaseAdmin as any)
       .from('batches')
       .insert(batchInsert)
       .select()
@@ -364,7 +365,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
           );
         }
 
-        price = category.price_per_item;
+        price = (category as any).price_per_item;
       }
 
       const quantityReceived = item.quantity_received !== undefined ? item.quantity_received : item.quantity_sent;
@@ -379,7 +380,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
       });
     }
 
-    const { data: createdItems, error: itemsError } = await supabaseAdmin
+    const { error: itemsError } = await (supabaseAdmin as any)
       .from('batch_items')
       .insert(batchItems)
       .select(`

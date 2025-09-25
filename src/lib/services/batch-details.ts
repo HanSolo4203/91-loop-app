@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabaseAdmin } from '@/lib/supabase';
 import type { 
   Batch, 
@@ -145,7 +146,7 @@ export async function getBatchById(
     }
 
     // Transform items with detailed calculations
-    const itemsWithDetails: BatchItemWithDetails[] = itemsData?.map(item => {
+    const itemsWithDetails: BatchItemWithDetails[] = itemsData?.map((item: any) => {
       const category = item.linen_categories as LinenCategory;
       const quantityDiscrepancy = item.quantity_sent - item.quantity_received;
       const discrepancyPercentage = item.quantity_sent > 0 
@@ -186,16 +187,16 @@ export async function getBatchById(
     // Get status history (simplified - in a real app, you'd have a status_history table)
     const statusHistory = [
       {
-        status: batchData.status,
-        timestamp: batchData.updated_at || batchData.created_at,
-        notes: batchData.notes || undefined
+        status: (batchData as any).status,
+        timestamp: (batchData as any).updated_at || (batchData as any).created_at,
+        notes: (batchData as any).notes || undefined
       }
     ];
 
     // Construct the complete batch details
     const batchDetails: BatchDetails = {
-      ...batchData,
-      client: batchData.clients as Client,
+      ...(batchData as any),
+      client: (batchData as any).clients as Client,
       items: itemsWithDetails,
       financial_summary: {
         total_amount: totalAmount,
@@ -271,7 +272,7 @@ export async function updateBatchStatus(
     }
 
     // Update the batch
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('batches')
       .update({
         status,
@@ -364,7 +365,7 @@ export async function getBatchItems(
     }
 
     // Transform items with detailed calculations
-    const itemsWithDetails: BatchItemWithDetails[] = data?.map(item => {
+    const itemsWithDetails: BatchItemWithDetails[] = data?.map((item: any) => {
       const category = item.linen_categories as LinenCategory;
       const quantityDiscrepancy = item.quantity_sent - item.quantity_received;
       const discrepancyPercentage = item.quantity_sent > 0 
@@ -436,7 +437,7 @@ export async function updateBatchNotes(
     }
 
     // Update the batch notes
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('batches')
       .update({
         notes: notes.trim() || null,
@@ -548,7 +549,7 @@ export async function updateBatch(
     }
 
     // Prepare update object
-    const updateObject: any = {
+    const updateObject: Record<string, unknown> = {
       ...updateData,
       updated_at: new Date().toISOString()
     };
@@ -559,7 +560,7 @@ export async function updateBatch(
     }
 
     // Update the batch
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('batches')
       .update(updateObject)
       .eq('id', id)

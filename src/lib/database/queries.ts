@@ -1,11 +1,18 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabaseAdmin } from '@/lib/supabase';
 import type { 
   Batch, 
   Client, 
-  LinenCategory,
-  BatchItem,
   BatchStatus 
 } from '@/types/database';
+
+interface BatchWithItems {
+  batch_items: Array<{
+    quantity_sent: number;
+    quantity_received: number;
+    price_per_item: number;
+  }>;
+}
 
 // Custom error class for query errors
 export class QueryError extends Error {
@@ -180,12 +187,12 @@ export async function getBatchesWithFilters(
 
     // Process and enrich the data
     const enrichedData: BatchQueryResult[] = (data || []).map(batch => {
-      const items = (batch as any).batch_items || [];
-      const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity_sent, 0);
-      const totalAmount = items.reduce((sum: number, item: any) => 
+      const items = (batch as BatchWithItems).batch_items || [];
+      const totalItems = items.reduce((sum: number, item) => sum + item.quantity_sent, 0);
+      const totalAmount = items.reduce((sum: number, item) => 
         sum + (item.quantity_sent * item.price_per_item), 0);
       
-      const discrepancies = items.filter((item: any) => 
+      const discrepancies = items.filter((item) => 
         item.quantity_sent !== item.quantity_received).length;
       const discrepancyPercentage = totalItems > 0 ? (discrepancies / items.length) * 100 : 0;
 
@@ -275,7 +282,7 @@ export async function getRevenueAnalysis(
     // Group data by period
     const groupedData = new Map<string, RevenueResult>();
 
-    (data || []).forEach(batch => {
+    (data || []).forEach((batch: { pickup_date: string; total_amount: number; client_id: string; clients: { name: string } }) => {
       const date = new Date(batch.pickup_date);
       let period: string;
 
@@ -405,10 +412,10 @@ export async function getDiscrepancyReport(
     // Process data and identify discrepancies
     const reports: DiscrepancyReport[] = [];
 
-    (data || []).forEach(batch => {
+    (data || []).forEach((batch: any) => {
       const items = batch.batch_items || [];
       const itemsWithDiscrepancy = items
-        .map(item => {
+        .map((item: any) => {
           const discrepancy = item.quantity_sent - item.quantity_received;
           const discrepancyPercentage = item.quantity_sent > 0 
             ? Math.abs(discrepancy) / item.quantity_sent * 100 
@@ -422,10 +429,10 @@ export async function getDiscrepancyReport(
             discrepancy_percentage: discrepancyPercentage
           };
         })
-        .filter(item => item.discrepancy !== 0);
+        .filter((item: any) => item.discrepancy !== 0);
 
       if (itemsWithDiscrepancy.length > 0) {
-        const totalItems = items.reduce((sum, item) => sum + item.quantity_sent, 0);
+        const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity_sent, 0);
         const discrepancyCount = itemsWithDiscrepancy.length;
         const discrepancyPercentage = totalItems > 0 
           ? (discrepancyCount / items.length) * 100 
@@ -433,7 +440,7 @@ export async function getDiscrepancyReport(
 
         // Apply threshold filter
         if (discrepancyPercentage >= threshold) {
-          const totalValueImpact = itemsWithDiscrepancy.reduce((sum, item) => 
+          const totalValueImpact = itemsWithDiscrepancy.reduce((sum: number, item: any) => 
             sum + Math.abs(item.discrepancy), 0);
 
           reports.push({
@@ -443,7 +450,7 @@ export async function getDiscrepancyReport(
             pickup_date: batch.pickup_date,
             total_items: totalItems,
             discrepancy_count: discrepancyCount,
-            discrepancy_percentage,
+            discrepancy_percentage: discrepancyPercentage,
             total_value_impact: totalValueImpact,
             items_with_discrepancy: itemsWithDiscrepancy
           });
@@ -524,7 +531,7 @@ export async function getClientPerformanceMetrics(
     // Group data by client
     const clientData = new Map<string, ClientPerformanceMetrics>();
 
-    (data || []).forEach(batch => {
+    (data || []).forEach((batch: any) => {
       const clientId = batch.client_id;
       
       if (!clientData.has(clientId)) {
@@ -546,7 +553,7 @@ export async function getClientPerformanceMetrics(
       client.total_revenue += batch.total_amount || 0;
       
       // Calculate items processed
-      const itemsProcessed = batch.batch_items?.reduce((sum, item) => 
+      const itemsProcessed = batch.batch_items?.reduce((sum: number, item: any) => 
         sum + item.quantity_sent, 0) || 0;
       client.total_items_processed += itemsProcessed;
 
@@ -645,17 +652,17 @@ export async function getBatchStatistics(
 
     // Calculate statistics
     const totalBatches = batches?.length || 0;
-    const totalRevenue = batches?.reduce((sum, batch) => sum + (batch.total_amount || 0), 0) || 0;
-    const totalItems = batches?.reduce((sum, batch) => 
-      sum + (batch.batch_items?.reduce((itemSum, item) => itemSum + item.quantity_sent, 0) || 0), 0) || 0;
+    const totalRevenue = batches?.reduce((sum: number, batch: any) => sum + (batch.total_amount || 0), 0) || 0;
+    const totalItems = batches?.reduce((sum: number, batch: any) => 
+      sum + (batch.batch_items?.reduce((itemSum: number, item: any) => itemSum + item.quantity_sent, 0) || 0), 0) || 0;
     
-    const completedBatches = batches?.filter(batch => batch.status === 'completed').length || 0;
+    const completedBatches = batches?.filter((batch: any) => batch.status === 'completed').length || 0;
     const avgBatchValue = totalBatches > 0 ? totalRevenue / totalBatches : 0;
 
     // Calculate discrepancies
     let discrepancyCount = 0;
-    batches?.forEach(batch => {
-      const hasDiscrepancy = batch.batch_items?.some(item => 
+    batches?.forEach((batch: any) => {
+      const hasDiscrepancy = batch.batch_items?.some((item: any) => 
         item.quantity_sent !== item.quantity_received) || false;
       if (hasDiscrepancy) discrepancyCount++;
     });

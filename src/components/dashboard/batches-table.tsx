@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -20,12 +21,9 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  MoreHorizontal,
   Package,
-  AlertCircle,
   CheckCircle,
-  Clock,
-  XCircle
+  Clock
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -82,19 +80,36 @@ const ITEMS_PER_PAGE = 10;
 
 export default function BatchesTable({ batches, loading = false, onBatchClick, selectedMonth }: BatchesTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('washing,completed,delivered');
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filter and search batches
   const filteredBatches = useMemo(() => {
-    if (!searchTerm) return batches;
+    let filtered = batches;
     
-    const term = searchTerm.toLowerCase();
-    return batches.filter(batch =>
-      batch.paper_batch_id.toLowerCase().includes(term) ||
-      batch.client.name.toLowerCase().includes(term) ||
-      batch.status.toLowerCase().includes(term)
-    );
-  }, [batches, searchTerm]);
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'washing,completed,delivered') {
+        filtered = filtered.filter(batch => 
+          ['washing', 'completed', 'delivered'].includes(batch.status)
+        );
+      } else {
+        filtered = filtered.filter(batch => batch.status === statusFilter);
+      }
+    }
+    
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(batch =>
+        batch.paper_batch_id.toLowerCase().includes(term) ||
+        batch.client.name.toLowerCase().includes(term) ||
+        batch.status.toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered;
+  }, [batches, searchTerm, statusFilter]);
 
   // Pagination
   const totalPages = Math.ceil(filteredBatches.length / ITEMS_PER_PAGE);
@@ -105,6 +120,12 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
   // Reset to first page when search changes
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  // Reset to first page when status filter changes
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
     setCurrentPage(1);
   };
 
@@ -166,17 +187,39 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
             <CardDescription>
               {filteredBatches.length} batch{filteredBatches.length !== 1 ? 'es' : ''} found
               {selectedMonth && ` for ${new Date(selectedMonth.year, selectedMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
+              {statusFilter !== 'all' && (
+                <span className="text-blue-600">
+                  {statusFilter === 'washing,completed,delivered' 
+                    ? ' (Washing + Completed + Delivered)' 
+                    : ` (${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)})`}
+                </span>
+              )}
               {searchTerm && ` matching "${searchTerm}"`}
             </CardDescription>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <Input
-              placeholder="Search batches..."
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10 w-64"
-            />
+          <div className="flex items-center space-x-3">
+            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="pickup">Pickup</SelectItem>
+                <SelectItem value="washing">Washing</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="delivered">Delivered</SelectItem>
+                <SelectItem value="washing,completed,delivered">Washing + Completed + Delivered</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Search batches..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="pl-10 w-64"
+              />
+            </div>
           </div>
         </div>
       </CardHeader>

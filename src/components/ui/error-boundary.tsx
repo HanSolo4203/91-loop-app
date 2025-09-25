@@ -4,9 +4,8 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, RefreshCw, Home, Bug, Mail } from 'lucide-react';
-import Link from 'next/link';
-import { AppError, ErrorCode, getUserFriendlyMessage, getErrorSuggestions, isAppError } from '@/lib/errors/custom-errors';
+import { AlertTriangle, RefreshCw, Home, Bug } from 'lucide-react';
+import { getUserFriendlyMessage, getErrorSuggestions, isAppError } from '@/lib/errors/custom-errors';
 
 interface Props {
   children: ReactNode;
@@ -321,7 +320,7 @@ export function withErrorBoundary<P extends object>(
  * Hook for programmatically triggering error boundary
  */
 export function useErrorHandler() {
-  return (error: Error, errorInfo?: ErrorInfo) => {
+  return (error: Error) => {
     // This will trigger the error boundary if called during render
     throw error;
   };

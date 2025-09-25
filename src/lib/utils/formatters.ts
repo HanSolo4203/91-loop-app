@@ -310,8 +310,7 @@ export function formatRelativeTime(
  * @returns object with formatted status information
  */
 export function formatBatchStatus(
-  status: BatchStatus,
-  variant: 'label' | 'description' | 'full' = 'label'
+  status: BatchStatus
 ): {
   label: string;
   description: string;
@@ -331,17 +330,11 @@ export function formatBatchStatus(
         color: 'blue',
         icon: '📦'
       },
-      processing: {
-        label: 'Processing',
+      washing: {
+        label: 'Washing',
         description: 'Items being washed and processed',
         color: 'yellow',
         icon: '🔄'
-      },
-      delivery: {
-        label: 'Delivery',
-        description: 'Items ready for delivery',
-        color: 'orange',
-        icon: '🚚'
       },
       completed: {
         label: 'Completed',
@@ -349,11 +342,11 @@ export function formatBatchStatus(
         color: 'green',
         icon: '✅'
       },
-      cancelled: {
-        label: 'Cancelled',
-        description: 'Batch has been cancelled',
-        color: 'red',
-        icon: '❌'
+      delivered: {
+        label: 'Delivered',
+        description: 'Items delivered to client',
+        color: 'purple',
+        icon: '🚚'
       }
     };
 

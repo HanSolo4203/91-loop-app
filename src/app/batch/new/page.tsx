@@ -1,23 +1,21 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import Navigation from '@/components/navigation';
 import ClientInfoForm from '@/components/batch/client-info-form';
 import LinenCountGrid, { LinenCountGridRef } from '@/components/batch/linen-count-grid';
 import BatchTotalCard from '@/components/batch/batch-total-card';
 import { 
   LayoutDashboard, 
-  Package, 
   PlusCircle, 
   ArrowLeft, 
   Save, 
   X,
   AlertCircle,
-  CheckCircle,
   Calendar,
   FileText
 } from 'lucide-react';
@@ -72,37 +70,6 @@ function NewBatchLoading() {
   );
 }
 
-// Error component
-function NewBatchError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <Navigation />
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="border-red-200 bg-red-50">
-          <CardHeader>
-            <CardTitle className="text-red-800">Create Batch Error</CardTitle>
-            <CardDescription className="text-red-600">
-              Something went wrong while loading the batch creation form. Please try again.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-red-100 border border-red-200 rounded-md p-4 mb-4">
-              <p className="text-sm text-red-800 font-mono">
-                {error.message || 'An unexpected error occurred'}
-              </p>
-            </div>
-            <button
-              onClick={reset}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-            >
-              Try Again
-            </button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 // Breadcrumb component
 function Breadcrumb() {
@@ -152,7 +119,7 @@ function NewBatchContent() {
         } else {
           setErrorMessage('Failed to load linen categories');
         }
-      } catch (error) {
+      } catch {
         setErrorMessage('Failed to load linen categories');
       } finally {
         setIsLoading(false);
@@ -246,7 +213,7 @@ function NewBatchContent() {
         setCreateStatus('error');
         setErrorMessage(result.error || 'Failed to create batch');
       }
-    } catch (error) {
+    } catch {
       setCreateStatus('error');
       setErrorMessage('Failed to create batch. Please try again.');
     } finally {

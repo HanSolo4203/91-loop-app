@@ -52,6 +52,7 @@ export interface ErrorContext {
   userAgent?: string;
   url?: string;
   method?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   additionalData?: Record<string, any>;
 }
 
@@ -182,14 +183,15 @@ export class TokenExpiredError extends AppError {
 /**
  * Validation errors
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export class ValidationError extends AppError {
   public readonly field?: string;
-  public readonly value?: any;
+  public readonly value?: unknown;
 
   constructor(
     message: string,
     field?: string,
-    value?: any,
+    value?: unknown,
     context?: ErrorContext
   ) {
     super(message, ErrorCode.VALIDATION_ERROR, 400, context);
@@ -365,7 +367,7 @@ export class ServiceUnavailableError extends AppError {
 /**
  * Check if an error is an AppError instance
  */
-export function isAppError(error: any): error is AppError {
+export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }
 

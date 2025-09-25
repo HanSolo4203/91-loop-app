@@ -9,8 +9,7 @@ import {
   TrendingUp, 
   TrendingDown,
   AlertTriangle,
-  CheckCircle,
-  Clock
+  CheckCircle
 } from 'lucide-react';
 
 interface LinenCountItem {
@@ -41,8 +40,7 @@ export default function BatchTotalCard({
   clientName,
   pickupDate,
   status = 'draft',
-  errorMessage,
-  onStatusChange
+  errorMessage
 }: BatchTotalCardProps) {
   // Calculate totals and statistics
   const calculateTotals = () => {
@@ -108,23 +106,6 @@ export default function BatchTotalCard({
     }
   };
 
-  // Get status icon
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'draft':
-        return <Clock className="w-4 h-4 text-slate-500" />;
-      case 'ready':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'creating':
-        return <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />;
-      case 'success':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'error':
-        return <AlertTriangle className="w-4 h-4 text-red-600" />;
-      default:
-        return <Clock className="w-4 h-4 text-slate-500" />;
-    }
-  };
 
   // Check if batch is ready to create
   const isReadyToCreate = () => {

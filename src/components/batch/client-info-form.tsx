@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,9 @@ import {
   Phone, 
   Mail, 
   MapPin, 
-  Users, 
-  Search, 
   Plus,
   Check,
-  X,
-  ChevronDown
+  X
 } from 'lucide-react';
 import type { Client } from '@/types/database';
 
@@ -38,7 +35,6 @@ interface ClientInfoFormProps {
 export default function ClientInfoForm({
   selectedClient,
   onClientSelect,
-  onClientCreate,
   isLoading = false,
   error
 }: ClientInfoFormProps) {
@@ -54,7 +50,7 @@ export default function ClientInfoForm({
   const [clientsError, setClientsError] = useState('');
 
   // Load all clients
-  const loadAllClients = async () => {
+  const loadAllClients = useCallback(async () => {
     setIsLoadingClients(true);
     setClientsError('');
 
@@ -68,18 +64,18 @@ export default function ClientInfoForm({
         setClientsError(result.error || 'Failed to load clients');
         setAllClients([]);
       }
-    } catch (error) {
+    } catch {
       setClientsError('Failed to load clients');
       setAllClients([]);
     } finally {
       setIsLoadingClients(false);
     }
-  };
+  }, []);
 
   // Load clients on component mount
   useEffect(() => {
     loadAllClients();
-  }, []);
+  }, [loadAllClients]);
 
   // Handle client selection from dropdown
   const handleClientSelect = (clientId: string) => {
@@ -122,7 +118,7 @@ export default function ClientInfoForm({
       } else {
         setClientsError(result.error || 'Failed to create client');
       }
-    } catch (error) {
+    } catch {
       setClientsError('Failed to create client');
     }
   };

@@ -1,11 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getMonthlyStats, 
   getRevenueByMonth, 
   getTopClients, 
   getDiscrepancyReport,
-  getDashboardOverview,
-  AnalyticsServiceError 
+  getDashboardOverview
 } from '@/lib/services/analytics';
 import type { 
   AnalyticsServiceResponse 

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { 
-  getBatchItems, 
-  BatchDetailsServiceError 
+  getBatchItems
 } from '@/lib/services/batch-details';
 import type { 
   BatchDetailsServiceResponse
@@ -68,6 +67,7 @@ export async function GET(
         success: true,
         error: null,
         data: response,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as BatchDetailsServiceResponse<any>,
       { status: 200 }
     );
