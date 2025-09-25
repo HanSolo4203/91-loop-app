@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { 
-  getRecentBatches, 
-  AnalyticsServiceError 
+  getRecentBatches
 } from '@/lib/services/analytics';
 import type { 
   AnalyticsServiceResponse 
@@ -50,15 +50,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate status if provided
-    if (status && !['pickup', 'processing', 'delivery', 'completed', 'cancelled'].includes(status)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid status. Must be one of: pickup, processing, delivery, completed, cancelled',
-          data: null,
-        } as AnalyticsServiceResponse<null>,
-        { status: 400 }
-      );
+    if (status) {
+      const statusList = status.split(',').map(s => s.trim());
+      const validStatuses = ['pickup', 'washing', 'completed', 'delivered'];
+      const invalidStatuses = statusList.filter(s => !validStatuses.includes(s));
+      
+      if (invalidStatuses.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Invalid status values: ${invalidStatuses.join(', ')}. Must be one or more of: pickup, washing, completed, delivered`,
+            data: null,
+          } as AnalyticsServiceResponse<null>,
+          { status: 400 }
+        );
+      }
     }
 
     // Validate has_discrepancy if provided
@@ -120,7 +126,8 @@ export async function GET(request: NextRequest) {
     let filteredBatches = result.data || [];
 
     if (status) {
-      filteredBatches = filteredBatches.filter(batch => batch.status === status);
+      const statusList = status.split(',').map(s => s.trim());
+      filteredBatches = filteredBatches.filter(batch => statusList.includes(batch.status));
     }
 
     if (client_id) {

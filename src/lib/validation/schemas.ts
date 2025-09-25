@@ -20,28 +20,21 @@ export const BaseTimestampSchema = z.string().datetime('Invalid timestamp format
 // Status enums
 export const BatchStatusSchema = z.enum([
   'pickup',
-  'processing', 
-  'delivery',
+  'washing',
   'completed',
-  'cancelled'
-], {
-  errorMap: () => ({ message: 'Invalid batch status' })
-});
+  'delivered'
+]);
 
 export const ClientStatusSchema = z.enum([
   'active',
   'inactive',
   'suspended'
-], {
-  errorMap: () => ({ message: 'Invalid client status' })
-});
+]);
 
 export const LinenCategoryStatusSchema = z.enum([
   'active',
   'inactive'
-], {
-  errorMap: () => ({ message: 'Invalid linen category status' })
-});
+]);
 
 // Client schemas
 export const ClientSchema = z.object({
@@ -385,7 +378,7 @@ export function validateSchema<T>(
     return schema.parse(data);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessages = error.errors.map(err => {
+      const errorMessages = error.issues.map(err => {
         const path = err.path.length > 0 ? `${err.path.join('.')}: ` : '';
         return `${path}${err.message}`;
       });
@@ -422,7 +415,7 @@ export function validateSchemaSafe<T>(
         data: result.data
       };
     } else {
-      const errorMessages = result.error.errors.map(err => {
+      const errorMessages = result.error.issues.map(err => {
         const path = err.path.length > 0 ? `${err.path.join('.')}: ` : '';
         return `${path}${err.message}`;
       });
@@ -432,7 +425,7 @@ export function validateSchemaSafe<T>(
         error: errorMessages.join(', ')
       };
     }
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: 'Validation failed'

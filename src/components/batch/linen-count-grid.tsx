@@ -63,9 +63,16 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
     // Don't notify parent during initialization - only on user interaction
   }, [categories]);
 
+  // Notify parent when items change (but not during initialization)
+  useEffect(() => {
+    if (items.length > 0) {
+      onItemsChangeRef.current(items);
+    }
+  }, [items]);
+
 
   // Validate quantity input
-  const validateQuantity = (value: string, field: 'sent' | 'received'): boolean => {
+  const validateQuantity = (value: string): boolean => {
     const num = parseInt(value);
     if (isNaN(num) || num < 0) {
       return false;
@@ -81,7 +88,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
     const numValue = value === '' ? 0 : parseInt(value);
     
     // Validate input
-    if (value !== '' && !validateQuantity(value, field)) {
+    if (value !== '' && !validateQuantity(value)) {
       setValidationErrors(prev => ({
         ...prev,
         [`${categoryId}-${field}`]: `Invalid quantity. Must be 0-10,000`
@@ -120,9 +127,6 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
         return item;
       });
       
-      // Notify parent component
-      onItemsChangeRef.current(newItems);
-      
       return newItems;
     });
   };
@@ -139,9 +143,6 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
         }
         return item;
       });
-      
-      // Notify parent component
-      onItemsChangeRef.current(newItems);
       
       return newItems;
     });

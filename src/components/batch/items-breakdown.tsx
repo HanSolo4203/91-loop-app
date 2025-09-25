@@ -14,7 +14,6 @@ import {
   Package, 
   AlertTriangle, 
   CheckCircle, 
-  XCircle,
   TrendingUp,
   TrendingDown,
   Minus
@@ -147,8 +146,6 @@ export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdow
   const itemsWithDiscrepancy = items.filter(item => item.discrepancy.quantity !== 0).length;
   const totalSent = items.reduce((sum, item) => sum + item.quantity_sent, 0);
   const totalReceived = items.reduce((sum, item) => sum + item.quantity_received, 0);
-  const totalSentValue = items.reduce((sum, item) => sum + item.pricing.total_sent_value, 0);
-  const totalReceivedValue = items.reduce((sum, item) => sum + item.pricing.total_received_value, 0);
   const totalDiscrepancyValue = items.reduce((sum, item) => sum + item.pricing.discrepancy_value, 0);
 
   return (

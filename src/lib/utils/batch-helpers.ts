@@ -139,7 +139,7 @@ export function validatePaperBatchId(paperBatchId: string): boolean {
     if (sequence < 1 || sequence > 999) return false;
 
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -165,7 +165,7 @@ export function parsePaperBatchId(paperBatchId: string): {
       month: parseInt(parts[2], 10),
       sequence: parseInt(parts[3], 10)
     };
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -182,7 +182,7 @@ export function generateSystemBatchId(): string {
     const extraRandom = Math.random().toString(16).substring(2, 8);
     
     return `${timestamp}-${randomPart}-${extraRandom}`;
-  } catch (error) {
+  } catch {
     throw new BatchHelperError(
       'Failed to generate system batch ID',
       'SYSTEM_ID_GENERATION_ERROR',
@@ -204,11 +204,10 @@ export function validateStatusTransition(
   try {
     // Define valid transitions
     const validTransitions: Record<BatchStatus, BatchStatus[]> = {
-      pickup: ['processing', 'cancelled'],
-      processing: ['delivery', 'cancelled'],
-      delivery: ['completed', 'cancelled'],
+      pickup: ['washing'],
+      washing: ['completed'],
       completed: [], // No transitions from completed
-      cancelled: [] // No transitions from cancelled
+      delivered: [] // No transitions from delivered
     };
 
     const isValid = validTransitions[fromStatus]?.includes(toStatus) || false;
@@ -219,7 +218,7 @@ export function validateStatusTransition(
       isValid,
       reason: isValid ? undefined : `Invalid transition from ${fromStatus} to ${toStatus}`
     };
-  } catch (error) {
+  } catch {
     return {
       from: fromStatus,
       to: toStatus,
@@ -250,8 +249,6 @@ export function detectDiscrepancies(
 
     let totalDiscrepancy = 0;
     let itemsWithDiscrepancy = 0;
-    let totalSentValue = 0;
-    let totalReceivedValue = 0;
     let totalValueImpact = 0;
 
     const details = items.map(item => {
@@ -262,14 +259,9 @@ export function detectDiscrepancies(
 
       // Find category for pricing
       const category = categories.find(cat => cat.id === item.linen_category_id);
-      const unitPrice = category?.unit_price || item.price_per_item || 0;
+      const unitPrice = category?.price_per_item || item.price_per_item || 0;
       
-      const sentValue = item.quantity_sent * unitPrice;
-      const receivedValue = item.quantity_received * unitPrice;
       const valueImpact = quantityDiscrepancy * unitPrice;
-
-      totalSentValue += sentValue;
-      totalReceivedValue += receivedValue;
       totalValueImpact += Math.abs(valueImpact);
 
       if (quantityDiscrepancy !== 0) {
@@ -340,7 +332,7 @@ export function calculateFinancialTotals(
     items.forEach(item => {
       // Find category for pricing
       const category = categories.find(cat => cat.id === item.linen_category_id);
-      const unitPrice = category?.unit_price || item.price_per_item || 0;
+      const unitPrice = category?.price_per_item || item.price_per_item || 0;
 
       const sentValue = item.quantity_sent * unitPrice;
       const receivedValue = item.quantity_received * unitPrice;
@@ -560,7 +552,7 @@ export function validateBatchItemQuantities(
       errors,
       warnings
     };
-  } catch (error) {
+  } catch {
     return {
       isValid: false,
       errors: ['Error validating quantities'],

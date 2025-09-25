@@ -4,14 +4,13 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogOverlay } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { 
   ArrowRight, 
   CheckCircle, 
   Clock, 
   Package, 
-  AlertCircle,
   RefreshCw
 } from 'lucide-react';
 
@@ -21,7 +20,24 @@ interface StatusUpdaterProps {
   loading?: boolean;
 }
 
-const statusFlow = {
+interface StatusOption {
+  status: string;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+}
+
+interface StatusFlowItem {
+  next: string | null;
+  label: string | null;
+  description: string | null;
+  icon: React.ComponentType<{ className?: string }> | null;
+  color: string | null;
+  options?: StatusOption[];
+}
+
+const statusFlow: Record<string, StatusFlowItem> = {
   pickup: {
     next: 'washing',
     label: 'Start Washing',
@@ -129,7 +145,7 @@ export default function StatusUpdater({ currentStatus, onStatusUpdate, loading =
     setError('');
   };
 
-  const canUpdateStatus = (nextStatusInfo.next !== null || ((nextStatusInfo as any).options && (nextStatusInfo as any).options.length > 0)) && !loading;
+  const canUpdateStatus = (nextStatusInfo.next !== null || (nextStatusInfo.options && nextStatusInfo.options.length > 0)) && !loading;
 
   if (loading) {
     return (
@@ -180,7 +196,7 @@ export default function StatusUpdater({ currentStatus, onStatusUpdate, loading =
                   <span>Choose next status:</span>
                 </div>
                 <div className="space-y-2">
-                  {(nextStatusInfo as any).options?.map((option: any) => {
+                  {nextStatusInfo.options?.map((option: StatusOption) => {
                     const OptionIcon = option.icon;
                     return (
                       <Button
@@ -236,7 +252,7 @@ export default function StatusUpdater({ currentStatus, onStatusUpdate, loading =
                   <DialogDescription>
                     {selectedStatus 
                       ? (currentStatus === 'washing' 
-                          ? (nextStatusInfo as any).options?.find((opt: any) => opt.status === selectedStatus)?.description
+                          ? nextStatusInfo.options?.find((opt: StatusOption) => opt.status === selectedStatus)?.description
                           : nextStatusInfo.description)
                       : 'Confirm the status update'
                     }
@@ -293,8 +309,8 @@ export default function StatusUpdater({ currentStatus, onStatusUpdate, loading =
                     disabled={isUpdating}
                     className={selectedStatus 
                       ? (currentStatus === 'washing' 
-                          ? (nextStatusInfo as any).options?.find((opt: any) => opt.status === selectedStatus)?.color
-                          : nextStatusInfo.color)
+                          ? nextStatusInfo.options?.find((opt: StatusOption) => opt.status === selectedStatus)?.color || 'bg-blue-600 hover:bg-blue-700'
+                          : nextStatusInfo.color || 'bg-blue-600 hover:bg-blue-700')
                       : 'bg-blue-600 hover:bg-blue-700'
                     }
                   >

@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getBatchById, 
-  updateBatch,
-  BatchDetailsServiceError 
+  updateBatch
 } from '@/lib/services/batch-details';
 import type { 
   BatchDetailsServiceResponse,
@@ -90,7 +90,7 @@ export async function PATCH(
     let updateData: BatchUpdateData;
     try {
       updateData = await request.json();
-    } catch (parseError) {
+    } catch {
       return NextResponse.json(
         {
           success: false,

@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   getCategoryById, 
   updateCategoryPrice, 
-  getCategoryStats,
-  PricingServiceError 
+  getCategoryStats
 } from '@/lib/services/pricing';
 import type { 
   ApiResponse, 
-  LinenCategory 
+  LinenCategory,
+  LinenCategoryStats
 } from '@/types/database';
 
 // GET /api/categories/[id] - Get a single category by ID
@@ -62,7 +62,7 @@ export async function GET(
               category: result.data,
               stats: statsResult.data,
             },
-          } as ApiResponse<{ category: LinenCategory; stats: any }>,
+          } as ApiResponse<{ category: LinenCategory; stats: LinenCategoryStats | null }>,
           { status: 200 }
         );
       }
@@ -125,7 +125,7 @@ export async function PATCH(
     }
 
     // Handle different update types
-    const { price, name, is_active } = body;
+    const { price } = body;
 
     // If updating price specifically
     if (price !== undefined) {

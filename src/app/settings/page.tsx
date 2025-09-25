@@ -1,10 +1,8 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
-import { Metadata } from 'next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import Navigation from '@/components/navigation';
 import PricingCard from '@/components/settings/pricing-card';
 import PricingSummary from '@/components/settings/pricing-summary';
@@ -12,10 +10,6 @@ import {
   LayoutDashboard, 
   Settings, 
   User, 
-  Bell, 
-  Shield, 
-  Database, 
-  Palette, 
   DollarSign, 
   Save, 
   RefreshCw,
@@ -69,37 +63,6 @@ function SettingsLoading() {
   );
 }
 
-// Error component
-function SettingsError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="border-red-200 bg-red-50">
-          <CardHeader>
-            <CardTitle className="text-red-800">Settings Error</CardTitle>
-            <CardDescription className="text-red-600">
-              Something went wrong while loading the settings page. Please try again.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-red-100 border border-red-200 rounded-md p-4 mb-4">
-              <p className="text-sm text-red-800 font-mono">
-                {error.message || 'An unexpected error occurred'}
-              </p>
-            </div>
-            <button
-              onClick={reset}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-            >
-              Try Again
-            </button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 // Breadcrumb component
 function Breadcrumb() {
@@ -156,7 +119,7 @@ function SettingsContent() {
         ];
         
         setCategories(mockCategories);
-      } catch (error) {
+      } catch {
         setErrorMessage('Failed to load categories');
         setSaveStatus('error');
       } finally {
@@ -196,7 +159,7 @@ function SettingsContent() {
       
       // Clear success message after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
-    } catch (error) {
+    } catch {
       setSaveStatus('error');
       setErrorMessage('Failed to save changes');
     } finally {
@@ -211,7 +174,7 @@ function SettingsContent() {
       await new Promise(resolve => setTimeout(resolve, 1000));
       setUpdatedPrices({});
       setSaveStatus('idle');
-    } catch (error) {
+    } catch {
       setErrorMessage('Failed to refresh data');
       setSaveStatus('error');
     } finally {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabaseAdmin } from '@/lib/supabase';
 import type { 
   Client, 
@@ -79,7 +80,7 @@ export async function searchClients(
       .order('name', { ascending: true })
       .range(offset, offset + pageSize - 1);
 
-    const { data, error, count } = await dbQuery;
+    const { data, error } = await dbQuery;
 
     if (error) {
       throw new ClientServiceError(
@@ -314,7 +315,7 @@ export async function createClient(clientData: CreateClientRequest): Promise<Cli
       is_active: clientData.is_active !== undefined ? clientData.is_active : true,
     };
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('clients')
       .insert(clientInsert)
       .select()
@@ -401,7 +402,7 @@ export async function updateClient(id: string, clientData: Partial<CreateClientR
     }
 
     // Check for duplicate name (if name is being updated)
-    if (clientData.name && clientData.name.trim() !== existingClient.name) {
+    if (clientData.name && clientData.name.trim() !== (existingClient as any).name) {
       const { data: duplicateName, error: nameCheckError } = await supabaseAdmin
         .from('clients')
         .select('id')
@@ -427,7 +428,7 @@ export async function updateClient(id: string, clientData: Partial<CreateClientR
     }
 
     // Check for duplicate email (if email is being updated)
-    if (clientData.email && clientData.email.trim() !== existingClient.email) {
+    if (clientData.email && clientData.email.trim() !== (existingClient as any).email) {
       const { data: duplicateEmail, error: emailCheckError } = await supabaseAdmin
         .from('clients')
         .select('id')
@@ -473,7 +474,7 @@ export async function updateClient(id: string, clientData: Partial<CreateClientR
       updateData.is_active = clientData.is_active;
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('clients')
       .update(updateData)
       .eq('id', id)
@@ -583,7 +584,7 @@ export async function getClientStats(id?: string): Promise<ClientServiceResponse
       }
 
       // Get stats for specific client using the database function
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await (supabaseAdmin as any)
         .rpc('get_client_stats', { client_uuid: id });
 
       if (error) {
@@ -616,8 +617,8 @@ export async function getClientStats(id?: string): Promise<ClientServiceResponse
 
     const stats = {
       total_clients: data?.length || 0,
-      active_clients: data?.filter(c => c.is_active).length || 0,
-      inactive_clients: data?.filter(c => !c.is_active).length || 0,
+      active_clients: data?.filter((c: any) => c.is_active).length || 0,
+      inactive_clients: data?.filter((c: any) => !c.is_active).length || 0,
     };
 
     return {

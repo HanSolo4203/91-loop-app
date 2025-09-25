@@ -91,9 +91,6 @@ export default function PricingSummary({
     }).format(price);
   };
 
-  const formatPercentage = (value: number): string => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
-  };
 
   const getChangeColor = (value: number) => {
     if (value > 0) return 'text-red-600';
