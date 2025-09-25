@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import Navigation from '@/components/navigation';
 import PricingCard from '@/components/settings/pricing-card';
 import PricingSummary from '@/components/settings/pricing-summary';
+import ClientsTable from '@/components/settings/clients-table';
+import ClientForm, { ClientFormData } from '@/components/settings/client-form';
+import ClientDetails from '@/components/settings/client-details';
 import { 
   LayoutDashboard, 
   Settings, 
@@ -14,10 +17,12 @@ import {
   Save, 
   RefreshCw,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Users,
+  FileSpreadsheet
 } from 'lucide-react';
 import Link from 'next/link';
-import type { LinenCategory } from '@/types/database';
+import type { LinenCategory, Client } from '@/types/database';
 
 // Loading component
 function SettingsLoading() {
@@ -87,6 +92,12 @@ function SettingsContent() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [activeTab, setActiveTab] = useState('pricing');
+  
+  // Client management state
+  const [clientsView, setClientsView] = useState<'list' | 'form' | 'details'>('list');
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [clientSuccess, setClientSuccess] = useState<string | null>(null);
 
   // Mock data for demonstration - replace with actual API calls
   useEffect(() => {
@@ -184,6 +195,66 @@ function SettingsContent() {
 
   const hasChanges = Object.keys(updatedPrices).length > 0;
 
+  // Client management functions
+  const handleAddClient = () => {
+    setSelectedClient(null);
+    setClientsView('form');
+    setClientError(null);
+    setClientSuccess(null);
+  };
+
+  const handleEditClient = (client: Client) => {
+    setSelectedClient(client);
+    setClientsView('form');
+    setClientError(null);
+    setClientSuccess(null);
+  };
+
+  const handleViewClient = (client: Client) => {
+    setSelectedClient(client);
+    setClientsView('details');
+    setClientError(null);
+    setClientSuccess(null);
+  };
+
+  const handleBackToClients = () => {
+    setClientsView('list');
+    setSelectedClient(null);
+    setClientError(null);
+    setClientSuccess(null);
+  };
+
+  const handleSaveClient = async (clientData: ClientFormData) => {
+    try {
+      setClientError(null);
+      setClientSuccess(null);
+
+      const url = selectedClient ? `/api/clients/${selectedClient.id}` : '/api/clients';
+      const method = selectedClient ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(clientData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setClientSuccess(selectedClient ? 'Client updated successfully!' : 'Client created successfully!');
+        setTimeout(() => {
+          handleBackToClients();
+        }, 1500);
+      } else {
+        setClientError(result.error || 'Failed to save client');
+      }
+    } catch {
+      setClientError('Failed to save client. Please try again.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
@@ -214,6 +285,16 @@ function SettingsContent() {
                 }`}
               >
                 Pricing Management
+              </button>
+              <button 
+                onClick={() => setActiveTab('clients')}
+                className={`border-b-2 py-2 px-1 text-sm font-medium transition-colors ${
+                  activeTab === 'clients' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                Client Management
               </button>
               <button 
                 onClick={() => setActiveTab('account')}
@@ -349,8 +430,65 @@ function SettingsContent() {
           </div>
         )}
 
+        {/* Client Management Section */}
+        {activeTab === 'clients' && (
+          <div className="mb-12">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-slate-900 flex items-center space-x-2">
+                <Users className="w-6 h-6 text-blue-600" />
+                <span>Client Management</span>
+              </h2>
+              <p className="text-slate-600 mt-1">
+                Manage your clients, add new ones, and update their information and contact details.
+              </p>
+            </div>
+
+            {/* Client Success/Error Messages */}
+            {clientSuccess && (
+              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-green-800">{clientSuccess}</span>
+              </div>
+            )}
+
+            {clientError && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                <span className="text-red-800">{clientError}</span>
+              </div>
+            )}
+
+            {/* Client Views */}
+            {clientsView === 'list' && (
+              <ClientsTable
+                onAddClient={handleAddClient}
+                onEditClient={handleEditClient}
+                onViewClient={handleViewClient}
+              />
+            )}
+
+            {clientsView === 'form' && (
+              <ClientForm
+                client={selectedClient}
+                onSave={handleSaveClient}
+                onCancel={handleBackToClients}
+              />
+            )}
+
+            {clientsView === 'details' && selectedClient && (
+              <ClientDetails
+                client={selectedClient}
+                onEdit={() => handleEditClient(selectedClient)}
+                onBack={handleBackToClients}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Reports moved to top navigation at /reports */}
+
         {/* Other Settings Sections */}
-        {activeTab !== 'pricing' && (
+        {activeTab !== 'pricing' && activeTab !== 'clients' && (
           <div className="space-y-6">
             {/* Profile Settings */}
             <Card>

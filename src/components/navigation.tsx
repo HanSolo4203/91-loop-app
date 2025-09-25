@@ -10,7 +10,8 @@ import {
   Settings, 
   User,
   Menu,
-  X
+  X,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -24,6 +25,11 @@ const navigation = [
     name: 'New Batch',
     href: '/batch/new',
     icon: PlusCircle,
+  },
+  {
+    name: 'Reports',
+    href: '/reports',
+    icon: FileSpreadsheet,
   },
   {
     name: 'Settings',

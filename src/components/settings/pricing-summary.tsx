@@ -12,6 +12,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import type { LinenCategory } from '@/types/database';
+import { formatCurrencySSR } from '@/lib/utils/formatters';
 
 interface PricingSummaryProps {
   categories: LinenCategory[];
@@ -82,14 +83,7 @@ export default function PricingSummary({
 
   const stats = calculateStats();
 
-  const formatPrice = (price: number): string => {
-    return new Intl.NumberFormat('en-ZA', {
-      style: 'currency',
-      currency: 'ZAR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(price);
-  };
+  const formatPrice = (price: number): string => formatCurrencySSR(price);
 
 
   const getChangeColor = (value: number) => {
