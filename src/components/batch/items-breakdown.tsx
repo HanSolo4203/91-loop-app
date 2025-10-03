@@ -18,6 +18,7 @@ import {
   TrendingDown,
   Minus
 } from 'lucide-react';
+import { formatCurrencySSR } from '@/lib/utils/formatters';
 
 interface BatchItem {
   id: string;
@@ -52,12 +53,7 @@ interface ItemsBreakdownProps {
 }
 
 export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdownProps) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-ZA', {
-      style: 'currency',
-      currency: 'ZAR'
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatCurrencySSR(amount);
 
   const getDiscrepancyIcon = (discrepancy: number) => {
     if (discrepancy > 0) {
@@ -200,7 +196,11 @@ export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdow
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatCurrency(item.pricing.unit_price)}
+                    {formatCurrency(
+                      Number.isFinite(item.pricing?.unit_price)
+                        ? (item.pricing as any).unit_price
+                        : (item.price_per_item ?? item.category.unit_price ?? 0)
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <span className="font-medium">{item.quantity_sent}</span>

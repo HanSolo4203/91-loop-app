@@ -296,66 +296,38 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
       );
     }
 
-    // Generate paper_batch_id if missing or blank
-    let paperBatchId = batchData.paper_batch_id?.trim();
-    if (!paperBatchId) {
-      // Find current max numeric suffix and increment
-      const { data: maxRow, error: maxErr } = await supabaseAdmin
+    // If a paper_batch_id is provided, ensure it's unique; otherwise let DB trigger generate it
+    const trimmedPaperId = typeof batchData.paper_batch_id === 'string' ? batchData.paper_batch_id.trim() : undefined;
+    if (trimmedPaperId) {
+      const { data: existingBatch, error: checkError } = await supabaseAdmin
         .from('batches')
-        .select('paper_batch_id')
-        .order('paper_batch_id', { ascending: false })
-        .limit(1000);
+        .select('id')
+        .eq('paper_batch_id', trimmedPaperId)
+        .single();
 
-      if (maxErr) {
+      if (checkError && checkError.code !== 'PGRST116') {
         throw new BatchServiceError(
-          `Failed to read last paper batch id: ${maxErr.message}`,
-          'READ_MAX_PAPER_ID_ERROR',
+          `Failed to check existing batch: ${checkError.message}`,
+          'CHECK_EXISTING_ERROR',
           500
         );
       }
 
-      let maxNum = 0;
-      (maxRow || []).forEach((r: any) => {
-        const match = typeof r.paper_batch_id === 'string' && r.paper_batch_id.match(/(\d{1,})$/);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      });
-
-      const nextNum = maxNum + 1;
-      paperBatchId = `Paper_Batch_${String(nextNum).padStart(3, '0')}`;
-    }
-
-    // Check if paper_batch_id already exists
-    const { data: existingBatch, error: checkError } = await supabaseAdmin
-      .from('batches')
-      .select('id')
-      .eq('paper_batch_id', paperBatchId)
-      .single();
-
-    if (checkError && checkError.code !== 'PGRST116') {
-      throw new BatchServiceError(
-        `Failed to check existing batch: ${checkError.message}`,
-        'CHECK_EXISTING_ERROR',
-        500
-      );
-    }
-
-    if (existingBatch) {
-      throw new BatchServiceError(
-        'Paper batch ID already exists',
-        'DUPLICATE_BATCH_ID',
-        409
-      );
+      if (existingBatch) {
+        throw new BatchServiceError(
+          'Paper batch ID already exists',
+          'DUPLICATE_BATCH_ID',
+          409
+        );
+      }
     }
 
     // Calculate total amount
     const totalAmount = await calculateBatchTotal(batchData.items);
 
-    // Start transaction by creating batch first
-    const batchInsert: BatchInsert = {
-      paper_batch_id: paperBatchId,
+    // Start transaction by creating batch first (omit paper_batch_id if auto-generating)
+    const batchInsert: any = {
+      ...(trimmedPaperId ? { paper_batch_id: trimmedPaperId } : {}),
       client_id: batchData.client_id,
       pickup_date: batchData.pickup_date,
       status: batchData.status || 'pickup',
@@ -363,11 +335,33 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
       notes: batchData.notes || null,
     };
 
-    const { data: newBatch, error: batchError } = await (supabaseAdmin as any)
-      .from('batches')
-      .insert(batchInsert)
-      .select()
-      .single();
+    // Insert with simple retry if unique violation occurs on auto-generated paper_batch_id
+    let newBatch: any = null;
+    let batchError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data, error } = await (supabaseAdmin as any)
+        .from('batches')
+        .insert(batchInsert)
+        .select()
+        .single();
+
+      if (!error) {
+        newBatch = data;
+        batchError = null;
+        break;
+      }
+
+      // If duplicate key on paper_batch_id and we didn't provide a custom ID, retry
+      const isDuplicate = error.code === '23505' || (typeof error.message === 'string' && error.message.includes('duplicate key value'));
+      const usedCustomId = !!trimmedPaperId;
+      if (isDuplicate && !usedCustomId) {
+        // Let the next attempt try again; DB trigger will pick next sequence value
+        continue;
+      } else {
+        batchError = error;
+        break;
+      }
+    }
 
     if (batchError) {
       throw new BatchServiceError(
