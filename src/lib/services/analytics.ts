@@ -651,7 +651,7 @@ export async function getRecentBatches(
         total_amount,
         has_discrepancy,
         created_at,
-        clients(name),
+        client:clients(name),
         batch_items(id)
       `)
       .order('created_at', { ascending: false })
@@ -665,11 +665,11 @@ export async function getRecentBatches(
       );
     }
 
-    const recentBatches: RecentBatch[] = (data || []).map((batch: BatchWithClient) => ({
+    const recentBatches: RecentBatch[] = (data || []).map((batch: any) => ({
       id: batch.id,
       paper_batch_id: batch.paper_batch_id,
       system_batch_id: batch.system_batch_id,
-      client_name: batch.client_name || 'Unknown Client',
+      client_name: (batch.client?.name) || 'Unknown Client',
       pickup_date: batch.pickup_date,
       status: batch.status,
       total_amount: batch.total_amount,

@@ -97,7 +97,13 @@ function NewBatchContent() {
   // State management
   const [paperBatchId, setPaperBatchId] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [pickupDate, setPickupDate] = useState('');
+  const [pickupDate, setPickupDate] = useState(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [notes, setNotes] = useState('');
   const [categories, setCategories] = useState<LinenCategory[]>([]);
   const [linenItems, setLinenItems] = useState<any[]>([]);
@@ -129,13 +135,29 @@ function NewBatchContent() {
     loadCategories();
   }, []);
 
+  // Auto-fill Paper Batch ID from API if empty
+  useEffect(() => {
+    const suggestPaperId = async () => {
+      try {
+        if (paperBatchId.trim()) return;
+        const res = await fetch('/api/batches/next-paper-id');
+        const json = await res.json();
+        if (json.success && json.data?.id) {
+          setPaperBatchId(json.data.id);
+        }
+      } catch {
+        // ignore suggestion failures
+      }
+    };
+    suggestPaperId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Validate form data
   const validateForm = () => {
     const errors: Record<string, string> = {};
 
-    if (!paperBatchId.trim()) {
-      errors.paperBatchId = 'Paper Batch ID is required';
-    }
+    // Paper Batch ID is optional; DB will auto-generate when blank
 
     if (!selectedClient) {
       errors.client = 'Client must be selected';
@@ -177,7 +199,7 @@ function NewBatchContent() {
       
       // Prepare batch data
       const batchData = {
-        paper_batch_id: paperBatchId.trim(),
+        paper_batch_id: paperBatchId.trim() || undefined,
         client_id: selectedClient!.id,
         pickup_date: pickupDate,
         status: 'pickup',
@@ -235,7 +257,6 @@ function NewBatchContent() {
   const isFormReady = () => {
     const currentItems = getCurrentItems();
     return (
-      paperBatchId.trim().length > 0 &&
       selectedClient &&
       pickupDate &&
       currentItems.some(item => item.quantity_sent > 0)
@@ -287,7 +308,7 @@ function NewBatchContent() {
                 {/* Paper Batch ID */}
                 <div className="space-y-2">
                   <label htmlFor="paperBatchId" className="text-sm font-medium text-slate-700">
-                    Paper Batch ID *
+                    Paper Batch ID (optional)
                   </label>
                   <Input
                     id="paperBatchId"
@@ -298,12 +319,7 @@ function NewBatchContent() {
                     className={validationErrors.paperBatchId ? 'border-red-300' : ''}
                     disabled={isCreating}
                   />
-                  {validationErrors.paperBatchId && (
-                    <p className="text-sm text-red-600 flex items-center space-x-1">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>{validationErrors.paperBatchId}</span>
-                    </p>
-                  )}
+                  {/* Paper Batch ID is optional; no validation error shown */}
                 </div>
 
                 {/* Pickup Date */}

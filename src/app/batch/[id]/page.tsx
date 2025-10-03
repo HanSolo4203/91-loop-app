@@ -9,6 +9,7 @@ import BatchHeader from '@/components/batch/batch-header';
 import StatusUpdater from '@/components/batch/status-updater';
 import ItemsBreakdown from '@/components/batch/items-breakdown';
 import FinancialSummary from '@/components/batch/financial-summary';
+import InvoiceView from '@/components/batch/invoice-view';
 import { 
   ArrowLeft, 
   RefreshCw, 
@@ -130,6 +131,7 @@ function BatchDetailsContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [showInvoice, setShowInvoice] = useState(false);
 
   // Fetch batch details
   const fetchBatchDetails = useCallback(async (isRefresh = false) => {
@@ -186,9 +188,7 @@ function BatchDetailsContent() {
 
   // Handle invoice generation
   const handleGenerateInvoice = () => {
-    // For now, just open a print dialog
-    // In a real app, this would generate a proper invoice
-    window.print();
+    setShowInvoice(true);
   };
 
   // Load batch details on mount
@@ -304,11 +304,29 @@ function BatchDetailsContent() {
           </div>
         </div>
 
-        {/* Items Breakdown - Full Width */}
-        <ItemsBreakdown
-          items={batchDetails.items}
-          loading={refreshing}
-        />
+        {/* Items Breakdown / Invoice */}
+        {showInvoice ? (
+          <InvoiceView
+            batchId={batchDetails.id}
+            paperBatchId={batchDetails.paper_batch_id}
+            client={{ name: batchDetails.client.name, email: batchDetails.client.email, address: batchDetails.client.address }}
+            pickup_date={batchDetails.pickup_date}
+            items={batchDetails.items.map((it: any) => ({ 
+              id: it.id, 
+              category: { name: (it.linen_category?.name || it.category?.name || 'Item') }, 
+              quantity_sent: it.quantity_sent,
+              quantity_received: it.quantity_received, 
+              price_per_item: it.price_per_item,
+              discrepancy_details: it.discrepancy_details
+            }))}
+            subtotal={batchDetails.financial_summary.total_amount}
+          />
+        ) : (
+          <ItemsBreakdown
+            items={batchDetails.items}
+            loading={refreshing}
+          />
+        )}
       </div>
     </div>
   );

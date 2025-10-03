@@ -93,6 +93,9 @@ export default function FinancialSummary({
   // Calculate derived values
   const totalItemsDiscrepancy = financial_summary.total_items_sent - financial_summary.total_items_received;
   const discrepancyValue = totalItemsDiscrepancy * financial_summary.average_item_price;
+  const vatRate = 0.15;
+  const vatAmount = Math.round(financial_summary.total_amount * vatRate * 100) / 100;
+  const totalInclVat = Math.round((financial_summary.total_amount + vatAmount) * 100) / 100;
 
   return (
     <Card>
@@ -169,6 +172,22 @@ export default function FinancialSummary({
           </div>
         </div>
 
+        {/* VAT Summary */}
+        <div className="space-y-2 p-4 bg-slate-50 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-700">Subtotal</span>
+            <span className="font-semibold">{formatCurrency(financial_summary.total_amount)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-700">VAT (15%)</span>
+            <span className="font-semibold">{formatCurrency(vatAmount)}</span>
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t">
+            <span className="text-sm font-medium text-slate-900">Total incl. VAT</span>
+            <span className="text-lg font-bold text-slate-900">{formatCurrency(totalInclVat)}</span>
+          </div>
+        </div>
+
         {/* Discrepancy Analysis */}
         <div className="space-y-3">
           <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
@@ -225,10 +244,10 @@ export default function FinancialSummary({
             <Button 
               variant="outline"
               className="flex items-center justify-center space-x-2"
-              onClick={() => window.print()}
+              onClick={onGenerateInvoice}
             >
-              <Download className="w-4 h-4" />
-              <span>Print Summary</span>
+              <FileText className="w-4 h-4" />
+              <span>View Invoice</span>
             </Button>
           </div>
           
