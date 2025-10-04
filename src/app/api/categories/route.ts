@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     const { data: category, error } = await supabaseAdmin
       .from('linen_categories')
-      .insert(newCategory)
+      .insert(newCategory as any)
       .select()
       .single();
 
