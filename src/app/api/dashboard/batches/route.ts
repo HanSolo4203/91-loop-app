@@ -10,6 +10,31 @@ import type {
 // GET /api/dashboard/batches - Get recent batches with pagination
 export async function GET(request: NextRequest) {
   try {
+    console.log('GET /api/dashboard/batches - Starting request');
+    
+    // Check environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    console.log('Environment check:', {
+      hasSupabaseUrl: !!supabaseUrl,
+      hasServiceRoleKey: !!serviceRoleKey,
+      supabaseUrlLength: supabaseUrl?.length || 0,
+      serviceRoleKeyLength: serviceRoleKey?.length || 0
+    });
+    
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Missing required environment variables');
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Server configuration error: Missing environment variables',
+          data: null,
+        } as AnalyticsServiceResponse<null>,
+        { status: 500 }
+      );
+    }
+    
     const { searchParams } = new URL(request.url);
     
     // Parse query parameters
@@ -109,9 +134,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Get recent batches
+    console.log('Calling getRecentBatches with:', { limitNum, offsetNum });
     const result = await getRecentBatches(limitNum, offsetNum);
     
+    console.log('getRecentBatches result:', { success: result.success, error: result.error, dataLength: result.data?.length });
+    
     if (!result.success) {
+      console.error('getRecentBatches failed:', result.error);
       return NextResponse.json(
         {
           success: false,
