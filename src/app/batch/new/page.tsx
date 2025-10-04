@@ -266,7 +266,7 @@ function NewBatchContent() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Breadcrumb />
         
         {/* Page Header */}
@@ -290,9 +290,9 @@ function NewBatchContent() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
           {/* Left Column - Form */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="xl:col-span-3 space-y-6">
             {/* Batch Information Card */}
             <Card>
               <CardHeader>
@@ -384,7 +384,7 @@ function NewBatchContent() {
           </div>
 
           {/* Right Column - Batch Total */}
-          <div className="lg:col-span-1">
+          <div className="xl:col-span-1">
             <div className="sticky top-8">
               <BatchTotalCard
                 items={getCurrentItems()}

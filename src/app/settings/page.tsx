@@ -9,6 +9,9 @@ import PricingSummary from '@/components/settings/pricing-summary';
 import ClientsTable from '@/components/settings/clients-table';
 import ClientForm, { ClientFormData } from '@/components/settings/client-form';
 import ClientDetails from '@/components/settings/client-details';
+import AddLinenCategoryForm from '@/components/settings/add-linen-category-form';
+import SectionHeader from '@/components/settings/section-header';
+import { categorizeBySections } from '@/lib/utils/category-sections';
 import { 
   LayoutDashboard, 
   Settings, 
@@ -19,10 +22,11 @@ import {
   AlertCircle,
   CheckCircle,
   Users,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Plus as PlusIcon
 } from 'lucide-react';
 import Link from 'next/link';
-import type { LinenCategory, Client } from '@/types/database';
+import type { LinenCategory, Client, LinenCategoryFormData } from '@/types/database';
 
 // Loading component
 function SettingsLoading() {
@@ -92,6 +96,17 @@ function SettingsContent() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [activeTab, setActiveTab] = useState('pricing');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+    // Initialize with all sections expanded by default
+    return {
+      'Front of House': true,
+      'Kitchen': true,
+      'Housekeeping': true,
+      'Other': true,
+    };
+  });
   
   // Client management state
   const [clientsView, setClientsView] = useState<'list' | 'form' | 'details'>('list');
@@ -99,37 +114,42 @@ function SettingsContent() {
   const [clientError, setClientError] = useState<string | null>(null);
   const [clientSuccess, setClientSuccess] = useState<string | null>(null);
 
-  // Mock data for demonstration - replace with actual API calls
+  // Load categories from API
   useEffect(() => {
     const loadCategories = async () => {
       setIsLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const response = await fetch('/api/categories');
+        const result = await response.json();
         
-        // Mock data based on the database migration
-        const mockCategories: LinenCategory[] = [
-          { id: '1', name: 'BATH TOWELS', price_per_item: 2.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '2', name: 'HAND TOWELS', price_per_item: 1.25, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '3', name: 'FACE TOWELS', price_per_item: 0.75, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '4', name: 'SINGLE FITTED SHEET', price_per_item: 3.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '5', name: 'KING FITTED SHEET', price_per_item: 4.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '6', name: 'SINGLE DUVET COVER', price_per_item: 4.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '7', name: 'KING DUVET COVER', price_per_item: 6.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '8', name: 'DUVET INNER SINGLE', price_per_item: 5.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '9', name: 'DUVET INNER KING', price_per_item: 7.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '10', name: 'SMALL PILLOWS', price_per_item: 2.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '11', name: 'SMALL PILLOW CASES', price_per_item: 1.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '12', name: 'PILLOW PROTECTORS', price_per_item: 1.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '13', name: 'MATT PROTECTORS (K)', price_per_item: 3.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '14', name: 'MATT PROTECTORS (S)', price_per_item: 2.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '15', name: 'WATERPROOF MATTRESS PROTECTOR', price_per_item: 4.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '16', name: 'SHOWER MATS', price_per_item: 1.75, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '17', name: 'SINGLE FLEECE', price_per_item: 2.25, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '18', name: 'DOUBLE FLEECE', price_per_item: 3.25, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-        ];
-        
-        setCategories(mockCategories);
+        if (result.success) {
+          setCategories(result.data);
+        } else {
+          // Fallback to mock data if API fails
+          const mockCategories: LinenCategory[] = [
+            { id: '1', name: 'BATH TOWELS', price_per_item: 2.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '2', name: 'HAND TOWELS', price_per_item: 1.25, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '3', name: 'FACE TOWELS', price_per_item: 0.75, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '4', name: 'SINGLE FITTED SHEET', price_per_item: 3.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '5', name: 'KING FITTED SHEET', price_per_item: 4.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '6', name: 'SINGLE DUVET COVER', price_per_item: 4.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '7', name: 'KING DUVET COVER', price_per_item: 6.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '8', name: 'DUVET INNER SINGLE', price_per_item: 5.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '9', name: 'DUVET INNER KING', price_per_item: 7.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '10', name: 'SMALL PILLOWS', price_per_item: 2.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '11', name: 'SMALL PILLOW CASES', price_per_item: 1.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '12', name: 'PILLOW PROTECTORS', price_per_item: 1.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '13', name: 'MATT PROTECTORS (K)', price_per_item: 3.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '14', name: 'MATT PROTECTORS (S)', price_per_item: 2.50, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '15', name: 'WATERPROOF MATTRESS PROTECTOR', price_per_item: 4.00, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '16', name: 'SHOWER MATS', price_per_item: 1.75, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '17', name: 'SINGLE FLEECE', price_per_item: 2.25, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: '18', name: 'DOUBLE FLEECE', price_per_item: 3.25, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+          ];
+          setCategories(mockCategories);
+          setErrorMessage('Failed to load categories from API, using mock data');
+          setSaveStatus('error');
+        }
       } catch {
         setErrorMessage('Failed to load categories');
         setSaveStatus('error');
@@ -153,26 +173,48 @@ function SettingsContent() {
 
     setIsSaving(true);
     setSaveStatus('idle');
+    setErrorMessage('');
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Create array of update promises
+      const updatePromises = Object.entries(updatedPrices).map(async ([categoryId, newPrice]) => {
+        const response = await fetch(`/api/categories/${categoryId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            price_per_item: newPrice
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(`Failed to update ${categoryId}: ${result.error}`);
+        }
+
+        return { categoryId, updatedCategory: result.data };
+      });
+
+      // Execute all updates
+      const results = await Promise.all(updatePromises);
       
-      // Update categories with new prices
-      setCategories(prev => prev.map(cat => 
-        updatedPrices[cat.id] !== undefined 
-          ? { ...cat, price_per_item: updatedPrices[cat.id], updated_at: new Date().toISOString() }
-          : cat
-      ));
+      // Update local state with the updated categories
+      setCategories(prev => prev.map(cat => {
+        const update = results.find(r => r.categoryId === cat.id);
+        return update ? update.updatedCategory : cat;
+      }));
       
       setUpdatedPrices({});
       setSaveStatus('success');
       
       // Clear success message after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
-    } catch {
+    } catch (error) {
+      console.error('Error saving price changes:', error);
       setSaveStatus('error');
-      setErrorMessage('Failed to save changes');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to save changes');
     } finally {
       setIsSaving(false);
     }
@@ -180,12 +222,21 @@ function SettingsContent() {
 
   const handleRefresh = async () => {
     setIsLoading(true);
+    setErrorMessage('');
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setUpdatedPrices({});
-      setSaveStatus('idle');
-    } catch {
+      const response = await fetch('/api/categories');
+      const result = await response.json();
+      
+      if (result.success) {
+        setCategories(result.data);
+        setUpdatedPrices({});
+        setSaveStatus('idle');
+      } else {
+        setErrorMessage('Failed to refresh categories');
+        setSaveStatus('error');
+      }
+    } catch (error) {
+      console.error('Error refreshing categories:', error);
       setErrorMessage('Failed to refresh data');
       setSaveStatus('error');
     } finally {
@@ -194,6 +245,14 @@ function SettingsContent() {
   };
 
   const hasChanges = Object.keys(updatedPrices).length > 0;
+
+  // Toggle section expansion
+  const toggleSection = (sectionName: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
 
   // Client management functions
   const handleAddClient = () => {
@@ -252,6 +311,41 @@ function SettingsContent() {
       }
     } catch {
       setClientError('Failed to save client. Please try again.');
+    }
+  };
+
+  // Add new category function
+  const handleAddCategory = async (categoryData: LinenCategoryFormData) => {
+    setIsAddingCategory(true);
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(categoryData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Add new category to the list
+        setCategories(prev => [...prev, result.data].sort((a, b) => a.name.localeCompare(b.name)));
+        setShowAddForm(false);
+        setSaveStatus('success');
+        setErrorMessage('');
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      } else {
+        setSaveStatus('error');
+        setErrorMessage(result.error || 'Failed to add category');
+      }
+    } catch {
+      setSaveStatus('error');
+      setErrorMessage('Failed to add category. Please try again.');
+    } finally {
+      setIsAddingCategory(false);
     }
   };
 
@@ -369,23 +463,44 @@ function SettingsContent() {
               />
             </div>
 
+            {/* Add New Category Form */}
+            {showAddForm && (
+              <AddLinenCategoryForm
+                onAdd={handleAddCategory}
+                onCancel={() => setShowAddForm(false)}
+                isSubmitting={isAddingCategory}
+              />
+            )}
+
             {/* Categories Grid */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-slate-900">Category Pricing</h3>
                 <div className="flex items-center space-x-2">
+                  {!showAddForm && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddForm(true)}
+                      disabled={isLoading || isSaving || isAddingCategory}
+                      className="flex items-center space-x-2"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      <span>Add Category</span>
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleRefresh}
-                    disabled={isLoading || isSaving}
+                    disabled={isLoading || isSaving || isAddingCategory}
                   >
                     <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
                     Refresh
                   </Button>
                   <Button
                     onClick={handleSaveChanges}
-                    disabled={!hasChanges || isSaving}
+                    disabled={!hasChanges || isSaving || isAddingCategory}
                     className="flex items-center space-x-2"
                   >
                     {isSaving ? (
@@ -398,31 +513,57 @@ function SettingsContent() {
                 </div>
               </div>
               
-              {/* Categories Grid */}
+              {/* Categories List - Sectioned Layout */}
               {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {Array.from({ length: 18 }).map((_, i) => (
-                    <Card key={i} className="animate-pulse">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <div className="h-4 bg-slate-200 rounded w-3/4"></div>
-                          <div className="h-3 bg-slate-200 rounded w-1/2"></div>
-                          <div className="h-10 bg-slate-200 rounded"></div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                <div className="space-y-6">
+                  {/* Loading skeleton for sections */}
+                  {Array.from({ length: 3 }).map((_, sectionIndex) => (
+                    <div key={sectionIndex} className="space-y-4">
+                      <div className="h-16 bg-slate-200 rounded animate-pulse"></div>
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <Card key={i} className="animate-pulse">
+                          <CardContent className="p-6">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-3 flex-1">
+                                <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                                <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                              </div>
+                              <div className="h-10 bg-slate-200 rounded w-32"></div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {categories.map((category) => (
-                    <PricingCard
-                      key={category.id}
-                      category={category}
-                      onPriceChange={handlePriceChange}
-                      isUpdating={isSaving}
-                      hasError={false}
-                    />
+                <div className="space-y-6">
+                  {categorizeBySections(categories).map((section) => (
+                    <div key={section.name}>
+                      <SectionHeader 
+                        title={section.name} 
+                        count={section.categories.length}
+                        isExpanded={expandedSections[section.name] || false}
+                        onToggle={() => toggleSection(section.name)}
+                      />
+                      <div className={`transition-all duration-300 overflow-hidden ${
+                        expandedSections[section.name] 
+                          ? 'max-h-screen opacity-100' 
+                          : 'max-h-0 opacity-0'
+                      }`}>
+                        <div className="space-y-4">
+                          {section.categories.map((category) => (
+                            <PricingCard
+                              key={category.id}
+                              category={category}
+                              onPriceChange={handlePriceChange}
+                              isUpdating={isSaving}
+                              hasError={false}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}

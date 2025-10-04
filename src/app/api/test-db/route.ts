@@ -48,7 +48,7 @@ export async function GET() {
     // Test if we have any linen categories
     const { data: categories, error: categoriesError } = await supabaseAdmin
       .from('linen_categories')
-      .select('id, name, unit_price')
+      .select('id, name, price_per_item')
       .limit(5);
 
     if (categoriesError) {

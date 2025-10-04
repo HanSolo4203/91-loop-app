@@ -1,307 +1,116 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  getAllCategories, 
-  bulkUpdatePricing, 
-  searchCategories,
-  getCategoryStats
-} from '@/lib/services/pricing';
-import type { 
-  ApiResponse, 
-  PaginatedResponse, 
-  LinenCategory 
-} from '@/types/database';
+import { supabaseAdmin } from '@/lib/supabase';
+import type { LinenCategoryInsert, LinenCategoryUpdate } from '@/types/database';
 
-// GET /api/categories - Fetch all categories with optional pagination and filtering
-export async function GET(request: NextRequest) {
+// GET /api/categories - Get all linen categories
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    
-    // Parse query parameters
-    const includeInactive = searchParams.get('includeInactive') === 'true';
-    const page = searchParams.get('page') ? parseInt(searchParams.get('page')!, 10) : undefined;
-    const pageSize = searchParams.get('pageSize') ? parseInt(searchParams.get('pageSize')!, 10) : undefined;
-    const search = searchParams.get('search');
-    const stats = searchParams.get('stats') === 'true';
+    const { data: categories, error } = await supabaseAdmin
+      .from('linen_categories')
+      .select('*')
+      .order('name', { ascending: true });
 
-    // Validate pagination parameters
-    if (page !== undefined && (isNaN(page) || page < 1)) {
+    if (error) {
+      console.error('Error fetching categories:', error);
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Page must be a positive integer',
-          data: null,
-        } as ApiResponse<null>,
-        { status: 400 }
-      );
-    }
-
-    if (pageSize !== undefined && (isNaN(pageSize) || pageSize < 1 || pageSize > 100)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Page size must be between 1 and 100',
-          data: null,
-        } as ApiResponse<null>,
-        { status: 400 }
-      );
-    }
-
-    // Handle search request
-    if (search) {
-      const result = await searchCategories(search, includeInactive);
-      
-      if (!result.success) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: result.error,
-            data: null,
-          } as ApiResponse<null>,
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json(
-        {
-          success: true,
-          error: null,
-          data: result.data,
-        } as ApiResponse<LinenCategory[]>,
-        { status: 200 }
-      );
-    }
-
-    // Handle stats request
-    if (stats) {
-      const result = await getCategoryStats();
-      
-      if (!result.success) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: result.error,
-            data: null,
-          } as ApiResponse<null>,
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json(
-        {
-          success: true,
-          error: null,
-          data: result.data,
-        } as ApiResponse<any>,
-        { status: 200 }
-      );
-    }
-
-    // Handle regular fetch request
-    const result = await getAllCategories(includeInactive, page, pageSize);
-    
-    if (!result.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error,
-          data: null,
-        } as ApiResponse<null>,
+        { success: false, error: 'Failed to fetch categories' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        error: null,
-        data: result.data,
-      } as ApiResponse<LinenCategory[] | PaginatedResponse<LinenCategory>>,
-      { status: 200 }
-    );
+    return NextResponse.json({
+      success: true,
+      data: categories || []
+    });
   } catch (error) {
-    console.error('GET /api/categories error:', error);
-    
+    console.error('Unexpected error:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error',
-        data: null,
-      } as ApiResponse<null>,
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
-// PATCH /api/categories - Bulk update pricing for multiple categories
-export async function PATCH(request: NextRequest) {
+// POST /api/categories - Create a new linen category
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    // Validate request body
-    if (!body || typeof body !== 'object') {
+    const { name, price_per_item, is_active = true } = body;
+
+    // Validate required fields
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Request body must be a valid JSON object',
-          data: null,
-        } as ApiResponse<null>,
+        { success: false, error: 'Category name is required' },
         { status: 400 }
       );
     }
 
-    const { updates } = body;
-
-    // Validate updates array
-    if (!Array.isArray(updates)) {
+    if (price_per_item === undefined || price_per_item === null) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Updates must be an array',
-          data: null,
-        } as ApiResponse<null>,
+        { success: false, error: 'Price per item is required' },
         { status: 400 }
       );
     }
 
-    if (updates.length === 0) {
+    if (typeof price_per_item !== 'number' || price_per_item < 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Updates array cannot be empty',
-          data: null,
-        } as ApiResponse<null>,
+        { success: false, error: 'Price per item must be a non-negative number' },
         { status: 400 }
       );
     }
 
-    // Validate each update object
-    for (let i = 0; i < updates.length; i++) {
-      const update = updates[i];
-      
-      if (!update || typeof update !== 'object') {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Update at index ${i} must be an object`,
-            data: null,
-          } as ApiResponse<null>,
-          { status: 400 }
-        );
-      }
+    // Check if category name already exists
+    const { data: existingCategory, error: checkError } = await supabaseAdmin
+      .from('linen_categories')
+      .select('id')
+      .eq('name', name.trim())
+      .single();
 
-      if (!update.id || typeof update.id !== 'string') {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Update at index ${i} must have a valid id field`,
-            data: null,
-          } as ApiResponse<null>,
-          { status: 400 }
-        );
-      }
-
-      if (typeof update.price !== 'number') {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Update at index ${i} must have a valid price field`,
-            data: null,
-          } as ApiResponse<null>,
-          { status: 400 }
-        );
-      }
-
-      if (update.price < 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Update at index ${i} price must be non-negative`,
-            data: null,
-          } as ApiResponse<null>,
-          { status: 400 }
-        );
-      }
-    }
-
-    // Perform bulk update
-    const result = await bulkUpdatePricing(updates);
-    
-    if (!result.success) {
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('Error checking existing category:', checkError);
       return NextResponse.json(
-        {
-          success: false,
-          error: result.error,
-          data: null,
-        } as ApiResponse<null>,
+        { success: false, error: 'Failed to check existing category' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        error: null,
-        data: result.data,
-      } as ApiResponse<any>,
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('PATCH /api/categories error:', error);
-    
-    // Handle JSON parsing errors
-    if (error instanceof SyntaxError) {
+    if (existingCategory) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid JSON in request body',
-          data: null,
-        } as ApiResponse<null>,
-        { status: 400 }
+        { success: false, error: 'Category with this name already exists' },
+        { status: 409 }
       );
     }
 
+    // Create new category
+    const newCategory: LinenCategoryInsert = {
+      name: name.trim(),
+      price_per_item,
+      is_active
+    };
+
+    const { data: category, error } = await supabaseAdmin
+      .from('linen_categories')
+      .insert(newCategory)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating category:', error);
+      return NextResponse.json(
+        { success: false, error: 'Failed to create category' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: category
+    }, { status: 201 });
+  } catch (error) {
+    console.error('Unexpected error:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error',
-        data: null,
-      } as ApiResponse<null>,
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }
-}
-
-// Handle unsupported methods
-export async function POST() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'Method not allowed. Use PATCH for bulk updates.',
-      data: null,
-    } as ApiResponse<null>,
-    { status: 405 }
-  );
-}
-
-export async function PUT() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'Method not allowed. Use PATCH for bulk updates.',
-      data: null,
-    } as ApiResponse<null>,
-    { status: 405 }
-  );
-}
-
-export async function DELETE() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'Method not allowed. Use individual category endpoints for deletion.',
-      data: null,
-    } as ApiResponse<null>,
-    { status: 405 }
-  );
 }
