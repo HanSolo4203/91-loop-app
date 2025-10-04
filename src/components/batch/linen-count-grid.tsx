@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import TabletNumericInput from '@/components/ui/tablet-numeric-input';
 import { Package, Calculator, AlertCircle, CheckCircle, Search, X, Copy, Trash2, RotateCcw } from 'lucide-react';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { categorizeBySections } from '@/lib/utils/category-sections';
@@ -389,7 +390,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                   </div>
 
                   {/* Categories Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                     {section.categories.map((category) => {
                       const item = items.find(i => i.category.id === category.id);
                       if (!item) return null;
@@ -403,7 +404,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                         <div
                           key={item.category.id}
                           data-card-id={item.category.id}
-                          className={`p-5 border rounded-lg transition-all cursor-pointer ${
+                          className={`p-4 lg:p-5 border rounded-lg transition-all cursor-pointer touch-manipulation ${
                             hasDiscrepancy ? 'border-orange-200 bg-orange-50' :
                             hasQuantity ? 'border-blue-200 bg-blue-50' :
                             'border-slate-200 hover:border-slate-300'
@@ -455,13 +456,11 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                                 <label className="text-xs font-medium text-slate-700">
                                   Quantity Sent
                                 </label>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="10000"
-                                  value={item.quantity_sent || ''}
-                                  onChange={(e) => handleQuantityChange(item.category.id, 'sent', e.target.value)}
+                                <TabletNumericInput
+                                  value={item.quantity_sent.toString()}
+                                  onChange={(value) => handleQuantityChange(item.category.id, 'sent', value)}
                                   placeholder="0"
+                                  maxLength={5}
                                   className={`text-sm ${
                                     validationErrors[`${item.category.id}-sent`] ? 'border-red-300' : ''
                                   }`}
@@ -482,7 +481,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                                         e.stopPropagation();
                                         handleCopyQuantityToReceived(item.category.id);
                                       }}
-                                      className="flex items-center space-x-1 px-3 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
+                                      className="flex items-center space-x-1 px-3 py-2 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors touch-manipulation min-h-[44px]"
                                       title="Copy quantity sent to received"
                                     >
                                       <Copy className="w-3 h-3" />
@@ -494,7 +493,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                                       e.stopPropagation();
                                       handleClearAllFields(item.category.id);
                                     }}
-                                    className="flex items-center space-x-1 px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors"
+                                    className="flex items-center space-x-1 px-3 py-2 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors touch-manipulation min-h-[44px]"
                                     title="Clear all fields"
                                   >
                                     <RotateCcw className="w-3 h-3" />
@@ -507,13 +506,11 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                                 <label className="text-xs font-medium text-slate-700">
                                   Quantity Received
                                 </label>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="10000"
-                                  value={item.quantity_received || ''}
-                                  onChange={(e) => handleQuantityChange(item.category.id, 'received', e.target.value)}
+                                <TabletNumericInput
+                                  value={item.quantity_received.toString()}
+                                  onChange={(value) => handleQuantityChange(item.category.id, 'received', value)}
                                   placeholder="0"
+                                  maxLength={5}
                                   className={`text-sm ${
                                     validationErrors[`${item.category.id}-received`] ? 'border-red-300' : ''
                                   }`}
