@@ -2,7 +2,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import type { 
   Batch, 
-  BatchInsert, 
   BatchItem, 
   BatchItemInsert,
   BatchStatus,
