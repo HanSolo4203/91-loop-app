@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import type { LinenCategory } from '@/types/database';
+import type { LinenCategory, LinenCategoryUpdate } from '@/types/database';
 
 // GET /api/categories/[id] - Get a specific linen category
 export async function GET(
@@ -67,7 +67,7 @@ export async function PATCH(
     }
 
     // Validate input
-    const updateData: Record<string, unknown> = {};
+    const updateData: LinenCategoryUpdate = {};
 
     if (body.name !== undefined) {
       if (typeof body.name !== 'string' || body.name.trim().length === 0) {
@@ -182,7 +182,7 @@ export async function DELETE(
     }
 
     // Check if category exists
-    const { data: existingCategory, error: checkError } = await supabaseAdmin
+    const { error: checkError } = await supabaseAdmin
       .from('linen_categories')
       .select('id, name')
       .eq('id', id)

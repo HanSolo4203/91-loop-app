@@ -39,6 +39,7 @@ export interface CreateClientRequest {
   email?: string;
   address?: string;
   is_active?: boolean;
+  logo_url?: string;
 }
 
 /**
@@ -313,6 +314,7 @@ export async function createClient(clientData: CreateClientRequest): Promise<Cli
       email: clientData.email?.trim() || null,
       address: clientData.address?.trim() || null,
       is_active: clientData.is_active !== undefined ? clientData.is_active : true,
+      logo_url: clientData.logo_url?.trim() || null,
     };
 
     const { data, error } = await (supabaseAdmin as any)
@@ -472,6 +474,9 @@ export async function updateClient(id: string, clientData: Partial<CreateClientR
     }
     if (clientData.is_active !== undefined) {
       updateData.is_active = clientData.is_active;
+    }
+    if (clientData.logo_url !== undefined) {
+      updateData.logo_url = clientData.logo_url?.trim() || null;
     }
 
     const { data, error } = await (supabaseAdmin as any)

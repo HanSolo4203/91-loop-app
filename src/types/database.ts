@@ -4,6 +4,34 @@
 export interface Database {
   public: {
     Tables: {
+      // Profiles table for user authentication
+      profiles: {
+        Row: {
+          id: string;
+          email: string | null;
+          full_name: string | null;
+          role: 'admin' | 'user';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email?: string | null;
+          full_name?: string | null;
+          role?: 'admin' | 'user';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string | null;
+          full_name?: string | null;
+          role?: 'admin' | 'user';
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+
       // Linen Categories table
       linen_categories: {
         Row: {
@@ -41,6 +69,7 @@ export interface Database {
           email: string | null;
           address: string | null;
           is_active: boolean;
+          logo_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -51,6 +80,7 @@ export interface Database {
           email?: string | null;
           address?: string | null;
           is_active?: boolean;
+          logo_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -61,6 +91,7 @@ export interface Database {
           email?: string | null;
           address?: string | null;
           is_active?: boolean;
+          logo_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -300,6 +331,7 @@ export type Functions<T extends keyof Database['public']['Functions']> = Databas
 export type Enums<T extends keyof Database['public']['Enums']> = Database['public']['Enums'][T];
 
 // Specific table row types
+export type Profile = Tables<'profiles'>;
 export type LinenCategory = Tables<'linen_categories'>;
 export type Client = Tables<'clients'>;
 export type Batch = Tables<'batches'>;
@@ -310,12 +342,14 @@ export type BatchReportView = Views<'batch_report_view'>;
 export type BatchItemsDetailView = Views<'batch_items_detail_view'>;
 
 // Insert types
+export type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
 export type LinenCategoryInsert = Database['public']['Tables']['linen_categories']['Insert'];
 export type ClientInsert = Database['public']['Tables']['clients']['Insert'];
 export type BatchInsert = Database['public']['Tables']['batches']['Insert'];
 export type BatchItemInsert = Database['public']['Tables']['batch_items']['Insert'];
 
 // Update types
+export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
 export type LinenCategoryUpdate = Database['public']['Tables']['linen_categories']['Update'];
 export type ClientUpdate = Database['public']['Tables']['clients']['Update'];
 export type BatchUpdate = Database['public']['Tables']['batches']['Update'];
@@ -383,6 +417,7 @@ export interface ClientFormData {
   email?: string;
   address?: string;
   is_active: boolean;
+  logo_url?: string;
 }
 
 export interface LinenCategoryFormData {
