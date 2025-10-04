@@ -301,9 +301,9 @@ function NewBatchContent() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
           {/* Left Column - Form */}
-          <div className="xl:col-span-3 space-y-6">
+          <div className="lg:col-span-2 xl:col-span-3 space-y-6">
             {/* Batch Information Card */}
             <Card>
               <CardHeader>
@@ -395,7 +395,7 @@ function NewBatchContent() {
           </div>
 
           {/* Right Column - Batch Total */}
-          <div className="xl:col-span-1">
+          <div className="lg:col-span-1 xl:col-span-1">
             <div className="sticky top-8">
               <BatchTotalCard
                 items={getCurrentItems()}
@@ -411,7 +411,7 @@ function NewBatchContent() {
                 <Button
                   onClick={handleCreateBatch}
                   disabled={!isFormReady() || isCreating}
-                  className="w-full flex items-center justify-center space-x-2"
+                  className="w-full flex items-center justify-center space-x-2 min-h-[48px] text-base font-semibold touch-manipulation"
                   size="lg"
                 >
                   {isCreating ? (
@@ -421,7 +421,7 @@ function NewBatchContent() {
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" />
+                      <Save className="w-5 h-5" />
                       <span>Create Batch</span>
                     </>
                   )}
@@ -431,10 +431,10 @@ function NewBatchContent() {
                   variant="outline"
                   onClick={() => router.push('/dashboard')}
                   disabled={isCreating}
-                  className="w-full"
+                  className="w-full min-h-[48px] text-base font-semibold touch-manipulation"
                   size="lg"
                 >
-                  <X className="w-4 h-4 mr-2" />
+                  <X className="w-5 h-5 mr-2" />
                   Cancel
                 </Button>
               </div>
