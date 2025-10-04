@@ -97,13 +97,8 @@ function NewBatchContent() {
   // State management
   const [paperBatchId, setPaperBatchId] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [pickupDate, setPickupDate] = useState(() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  });
+  const [pickupDate, setPickupDate] = useState('');
+  const [isClient, setIsClient] = useState(false);
   const [notes, setNotes] = useState('');
   const [categories, setCategories] = useState<LinenCategory[]>([]);
   const [linenItems, setLinenItems] = useState<any[]>([]);
@@ -115,6 +110,17 @@ function NewBatchContent() {
 
   // Load categories on component mount
   useEffect(() => {
+    setIsClient(true);
+    
+    // Set default pickup date after client-side hydration
+    if (!pickupDate) {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      setPickupDate(`${yyyy}-${mm}-${dd}`);
+    }
+
     const loadCategories = async () => {
       try {
         const response = await fetch('/api/categories?includeInactive=false');
@@ -262,6 +268,11 @@ function NewBatchContent() {
       currentItems.some(item => item.quantity_sent > 0)
     );
   };
+
+  // Prevent hydration mismatch by not rendering until client-side
+  if (!isClient) {
+    return <NewBatchLoading />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
