@@ -1,5 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
 interface SectionHeaderProps {
   title: string;

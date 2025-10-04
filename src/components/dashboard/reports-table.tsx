@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import MonthSelector from '@/components/dashboard/month-selector';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
 interface ClientInvoiceSummary {
@@ -18,6 +18,34 @@ interface ClientInvoiceSummary {
   discrepancy_batches: number;
 }
 
+interface BatchRow {
+  id: string;
+  pickup_date: string;
+  paper_batch_id: string | null;
+  status: string;
+  has_discrepancy: boolean;
+  total_items_received: number;
+  total_amount: number;
+}
+
+interface InvoiceItem {
+  category_name: string;
+  quantity_sent: number | null;
+  quantity_received: number | null;
+  unit_price: number | null;
+  line_total: number;
+  discrepancy: number;
+}
+
+interface InvoiceData {
+  client_name: string;
+  pickup_date: string;
+  paper_batch_id: string | null;
+  has_discrepancy: boolean;
+  total_amount: number;
+  items: InvoiceItem[];
+}
+
 export default function ReportsTable() {
   const now = new Date();
   const [month, setMonth] = useState<number>(now.getMonth());
@@ -26,12 +54,12 @@ export default function ReportsTable() {
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ClientInvoiceSummary[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [batchRows, setBatchRows] = useState<Record<string, any[]>>({});
+  const [batchRows, setBatchRows] = useState<Record<string, BatchRow[]>>({});
   const [loadingClient, setLoadingClient] = useState<Record<string, boolean>>({});
   const [invoiceOpen, setInvoiceOpen] = useState<boolean>(false);
-  const [selectedBatch, setSelectedBatch] = useState<any | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<BatchRow | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState<boolean>(false);
-  const [invoiceData, setInvoiceData] = useState<any | null>(null);
+  const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
 
   const fetchData = async (m: number, y: number) => {
     try {
@@ -56,7 +84,7 @@ export default function ReportsTable() {
 
   useEffect(() => {
     fetchData(month, year);
-  }, []);
+  }, [month, year]);
 
   const handleChange = (m: number, y: number) => {
     setMonth(m);
@@ -96,7 +124,7 @@ export default function ReportsTable() {
     }
   };
 
-  const openInvoice = async (batch: any) => {
+  const openInvoice = async (batch: BatchRow) => {
     setSelectedBatch(batch);
     setInvoiceLoading(true);
     setInvoiceData(null);
@@ -214,7 +242,7 @@ export default function ReportsTable() {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {batchRows[r.client_id].map((b: any) => (
+                                    {batchRows[r.client_id].map((b: BatchRow) => (
                                       <tr key={b.id} className="border-t">
                                         <td className="py-2 pr-4">{new Date(b.pickup_date).toLocaleDateString()}</td>
                                         <td className="py-2 pr-4">{b.paper_batch_id || '-'}</td>
@@ -311,7 +339,7 @@ export default function ReportsTable() {
                       </tr>
                     </thead>
                     <tbody>
-                      {invoiceData.items?.map((it: any, idx: number) => (
+                      {invoiceData.items?.map((it: InvoiceItem, idx: number) => (
                         <tr key={idx} className="border-t">
                           <td className="py-2 px-3">{it.category_name}</td>
                           <td className="py-2 px-3 text-right">{it.quantity_sent ?? '-'}</td>
