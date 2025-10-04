@@ -2,7 +2,6 @@
 
 import Navigation from '@/components/navigation';
 import ReportsTable from '@/components/dashboard/reports-table';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileSpreadsheet } from 'lucide-react';
 
 export default function ReportsPage() {

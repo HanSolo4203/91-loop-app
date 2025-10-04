@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -16,7 +15,7 @@ export async function GET() {
     }
 
     let maxNum = 0;
-    (data || []).forEach((row: any) => {
+    (data || []).forEach((row: { paper_batch_id: string | null }) => {
       if (typeof row.paper_batch_id === 'string') {
         const match = row.paper_batch_id.match(/(\d{1,})$/);
         if (match) {
@@ -30,7 +29,7 @@ export async function GET() {
     const id = String(next).padStart(3, '0');
 
     return NextResponse.json({ success: true, error: null, data: { id, next } }, { status: 200 });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Internal server error', data: null }, { status: 500 });
   }
 }

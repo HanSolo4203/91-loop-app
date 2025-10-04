@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { 
-  Download, 
   FileText, 
   TrendingUp, 
   Users, 
@@ -60,7 +60,7 @@ interface StatisticsData {
   generated_at: string;
 }
 
-export default function StatisticsPage() {
+function StatisticsPageContent() {
   const searchParams = useSearchParams();
   const month = searchParams.get('month');
   
@@ -80,7 +80,7 @@ export default function StatisticsPage() {
         } else {
           setError(result.error || 'Failed to load statistics');
         }
-      } catch (err) {
+      } catch {
         setError('Failed to load statistics. Please try again.');
       } finally {
         setLoading(false);
@@ -147,9 +147,11 @@ export default function StatisticsPage() {
 
         {/* Logo and Title */}
         <div className="text-center mb-8 border-b-2 border-blue-100 pb-8">
-          <img 
+          <Image 
             src="https://bwuslachnnapmtenbdgq.supabase.co/storage/v1/object/public/business-logos/rsl_dynamic_italic_final444.svg" 
             alt="RSL Express Logo" 
+            width={200}
+            height={80}
             className="h-20 w-auto object-contain mx-auto mb-4"
           />
           <h1 className="text-3xl font-bold text-blue-900 mb-2">Monthly Statistics Report</h1>
@@ -332,5 +334,20 @@ export default function StatisticsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function StatisticsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading statistics...</p>
+        </div>
+      </div>
+    }>
+      <StatisticsPageContent />
+    </Suspense>
   );
 }

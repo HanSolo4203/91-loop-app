@@ -35,7 +35,6 @@ export default function TabletNumericInput({
   useEffect(() => {
     const checkTablet = () => {
       const width = window.innerWidth;
-      const height = window.innerHeight;
       // Consider it a tablet if width is between 768px and 1024px, or if it's a touch device
       const isTabletSize = width >= 768 && width <= 1024;
       const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
