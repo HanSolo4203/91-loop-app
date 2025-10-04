@@ -79,19 +79,18 @@ export default function BatchHeader({ batch, client, loading = false }: BatchHea
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="h-4 bg-slate-200 rounded w-32"></div>
-              <div className="space-y-2">
-                <div className="h-4 bg-slate-200 rounded w-full"></div>
-                <div className="h-4 bg-slate-200 rounded w-3/4"></div>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="h-4 bg-slate-200 rounded w-32"></div>
-              <div className="space-y-2">
-                <div className="h-4 bg-slate-200 rounded w-full"></div>
-                <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+          <div className="space-y-6">
+            <div className="bg-slate-50 rounded-lg p-4">
+              <div className="h-4 bg-slate-200 rounded w-32 mb-4"></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 rounded w-full"></div>
+                  <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 rounded w-full"></div>
+                  <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -135,6 +134,9 @@ export default function BatchHeader({ batch, client, loading = false }: BatchHea
                 Batch {batch.paper_batch_id}
               </CardTitle>
               <p className="text-sm text-slate-600 mt-1">
+                Client: {client.name}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
                 System ID: #{batch.id.slice(-8).toUpperCase()}
               </p>
             </div>
@@ -146,14 +148,14 @@ export default function BatchHeader({ batch, client, loading = false }: BatchHea
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-6">
           {/* Batch Information */}
-          <div className="space-y-4">
-            <h4 className="font-medium text-slate-900 flex items-center space-x-2">
+          <div className="bg-slate-50 rounded-lg p-4">
+            <h4 className="font-medium text-slate-900 flex items-center space-x-2 mb-4">
               <Package className="w-4 h-4" />
               <span>Batch Information</span>
             </h4>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex items-center space-x-3">
                 <Calendar className="w-4 h-4 text-slate-400" />
                 <div>
@@ -182,62 +184,6 @@ export default function BatchHeader({ batch, client, loading = false }: BatchHea
             </div>
           </div>
 
-          {/* Client Information */}
-          <div className="space-y-4">
-            <h4 className="font-medium text-slate-900 flex items-center space-x-2">
-              <User className="w-4 h-4" />
-              <span>Client Information</span>
-            </h4>
-            <div className="space-y-3">
-              <div className="flex items-center space-x-3">
-                <User className="w-4 h-4 text-slate-400" />
-                <div>
-                  <p className="text-sm text-slate-600">Client Name</p>
-                  <p className="font-medium">{client.name}</p>
-                </div>
-              </div>
-              
-              {client.contact_person && (
-                <div className="flex items-center space-x-3">
-                  <User className="w-4 h-4 text-slate-400" />
-                  <div>
-                    <p className="text-sm text-slate-600">Contact Person</p>
-                    <p className="font-medium">{client.contact_person}</p>
-                  </div>
-                </div>
-              )}
-              
-              {client.email && (
-                <div className="flex items-center space-x-3">
-                  <Mail className="w-4 h-4 text-slate-400" />
-                  <div>
-                    <p className="text-sm text-slate-600">Email</p>
-                    <p className="font-medium">{client.email}</p>
-                  </div>
-                </div>
-              )}
-              
-              {client.phone && (
-                <div className="flex items-center space-x-3">
-                  <Phone className="w-4 h-4 text-slate-400" />
-                  <div>
-                    <p className="text-sm text-slate-600">Phone</p>
-                    <p className="font-medium">{client.phone}</p>
-                  </div>
-                </div>
-              )}
-              
-              {client.address && (
-                <div className="flex items-center space-x-3">
-                  <MapPin className="w-4 h-4 text-slate-400" />
-                  <div>
-                    <p className="text-sm text-slate-600">Address</p>
-                    <p className="font-medium">{client.address}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Notes Section */}
