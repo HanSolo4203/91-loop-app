@@ -190,7 +190,8 @@ function BatchDetailsContent() {
 
   // Handle invoice generation
   const handleGenerateInvoice = () => {
-    setShowInvoice(true);
+    // Open invoice in new tab
+    window.open(`/invoice/${batchId}`, '_blank');
   };
 
   // Set client-side flag and load batch details on mount
@@ -280,36 +281,32 @@ function BatchDetailsContent() {
           </div>
         </div>
 
-        {/* Batch Header */}
-        <div className="mb-8">
-          <BatchHeader 
+        {/* Top Row - Batch Header and Status Management */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Batch Header */}
+          <BatchHeader
             batch={batchDetails}
             client={batchDetails.client}
             loading={refreshing}
           />
+
+          {/* Status Management */}
+          <StatusUpdater
+            currentStatus={batchDetails.status}
+            onStatusUpdate={handleStatusUpdate}
+            loading={refreshing}
+          />
         </div>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          {/* Left Column - Batch Info */}
-          <div className="lg:col-span-2 space-y-6">
-            <StatusUpdater
-              currentStatus={batchDetails.status}
-              onStatusUpdate={handleStatusUpdate}
-              loading={refreshing}
-            />
-          </div>
-
-          {/* Right Column - Financial Summary */}
-          <div className="lg:col-span-1">
-            <FinancialSummary
-              financial_summary={batchDetails.financial_summary}
-              batchId={batchDetails.id}
-              paperBatchId={batchDetails.paper_batch_id}
-              onGenerateInvoice={handleGenerateInvoice}
-              loading={refreshing}
-            />
-          </div>
+        {/* Financial Summary - Full Width */}
+        <div className="mb-8">
+          <FinancialSummary
+            financial_summary={batchDetails.financial_summary}
+            batchId={batchDetails.id}
+            paperBatchId={batchDetails.paper_batch_id}
+            onGenerateInvoice={handleGenerateInvoice}
+            loading={refreshing}
+          />
         </div>
 
         {/* Items Breakdown / Invoice */}

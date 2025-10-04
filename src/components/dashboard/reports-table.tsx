@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import MonthSelector from '@/components/dashboard/month-selector';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
-import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, Download, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
@@ -60,6 +60,7 @@ export default function ReportsTable() {
   const [selectedBatch, setSelectedBatch] = useState<BatchRow | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState<boolean>(false);
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
+  const [exportLoading, setExportLoading] = useState<boolean>(false);
 
   const fetchData = async (m: number, y: number) => {
     try {
@@ -140,6 +141,38 @@ export default function ReportsTable() {
     }
   };
 
+  const handleExportExcel = async () => {
+    try {
+      setExportLoading(true);
+      const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const response = await fetch(`/api/dashboard/reports/export-excel?month=${ym}`);
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `RSL_Express_Report_${new Date(year, month).toLocaleDateString('en-US', { year: 'numeric', month: 'long' }).replace(/\s+/g, '_')}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        throw new Error('Failed to export Excel file');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to export Excel file. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleViewStatistics = () => {
+    const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+    window.open(`/reports/statistics?month=${ym}`, '_blank');
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -149,6 +182,28 @@ export default function ReportsTable() {
             <span>Client Invoicing Summary</span>
           </CardTitle>
           <div className="flex items-center space-x-2">
+            <div className="flex space-x-2">
+              <Button
+                onClick={handleExportExcel}
+                disabled={exportLoading || loading}
+                size="sm"
+                variant="outline"
+                className="flex items-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>{exportLoading ? 'Exporting...' : 'Excel'}</span>
+              </Button>
+              <Button
+                onClick={handleViewStatistics}
+                disabled={loading}
+                size="sm"
+                variant="outline"
+                className="flex items-center space-x-2"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Statistics</span>
+              </Button>
+            </div>
             <MonthSelector value={{ month, year }} onChange={handleChange} loading={loading} />
             <button
               onClick={() => fetchData(month, year)}

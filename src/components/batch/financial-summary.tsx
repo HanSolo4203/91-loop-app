@@ -105,153 +105,143 @@ export default function FinancialSummary({
           <span>Financial Summary</span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Total Amount */}
-        <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
+      <CardContent className="space-y-4">
+        {/* Total Amount - Compact */}
+        <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-green-700 font-medium">Total Batch Value</p>
-              <p className="text-3xl font-bold text-green-800">
+              <p className="text-green-700 font-medium text-sm">Total Batch Value</p>
+              <p className="text-2xl font-bold text-green-800">
                 {formatCurrency(financial_summary.total_amount)}
               </p>
             </div>
-            <div className="p-3 bg-green-200 rounded-full">
-              <DollarSign className="w-6 h-6 text-green-700" />
+            <div className="p-2 bg-green-200 rounded-full">
+              <DollarSign className="w-5 h-5 text-green-700" />
             </div>
           </div>
         </div>
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <Calculator className="w-4 h-4 text-slate-600" />
-                <span className="text-sm font-medium text-slate-700">Items Sent</span>
-              </div>
-              <span className="font-semibold">{formatNumber(financial_summary.total_items_sent)}</span>
+        {/* Key Metrics - Full Width Layout */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <Calculator className="w-4 h-4 text-slate-600" />
+              <span className="text-sm font-medium text-slate-700">Items Sent</span>
             </div>
-
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="w-4 h-4 text-slate-600" />
-                <span className="text-sm font-medium text-slate-700">Items Received</span>
-              </div>
-              <span className="font-semibold">{formatNumber(financial_summary.total_items_received)}</span>
-            </div>
+            <span className="font-semibold text-sm">{formatNumber(financial_summary.total_items_sent)}</span>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <DollarSign className="w-4 h-4 text-slate-600" />
-                <span className="text-sm font-medium text-slate-700">Avg. Item Price</span>
-              </div>
-              <span className="font-semibold">{formatCurrency(financial_summary.average_item_price)}</span>
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-slate-600" />
+              <span className="text-sm font-medium text-slate-700">Items Received</span>
             </div>
+            <span className="font-semibold text-sm">{formatNumber(financial_summary.total_items_received)}</span>
+          </div>
 
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-              <div className="flex items-center space-x-2">
-                {totalItemsDiscrepancy > 0 ? (
-                  <TrendingDown className="w-4 h-4 text-red-500" />
-                ) : totalItemsDiscrepancy < 0 ? (
-                  <TrendingUp className="w-4 h-4 text-green-500" />
-                ) : (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                )}
-                <span className="text-sm font-medium text-slate-700">Item Discrepancy</span>
-              </div>
-              <span className={`font-semibold ${
-                totalItemsDiscrepancy > 0 ? 'text-red-600' : 
-                totalItemsDiscrepancy < 0 ? 'text-green-600' : 'text-slate-900'
-              }`}>
-                {totalItemsDiscrepancy > 0 ? '-' : totalItemsDiscrepancy < 0 ? '+' : ''}
-                {Math.abs(totalItemsDiscrepancy)}
-              </span>
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <DollarSign className="w-4 h-4 text-slate-600" />
+              <span className="text-sm font-medium text-slate-700">Avg. Price</span>
             </div>
+            <span className="font-semibold text-sm">{formatCurrency(financial_summary.average_item_price)}</span>
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center space-x-2">
+              {totalItemsDiscrepancy > 0 ? (
+                <TrendingDown className="w-4 h-4 text-red-500" />
+              ) : totalItemsDiscrepancy < 0 ? (
+                <TrendingUp className="w-4 h-4 text-green-500" />
+              ) : (
+                <CheckCircle className="w-4 h-4 text-green-500" />
+              )}
+              <span className="text-sm font-medium text-slate-700">Discrepancy</span>
+            </div>
+            <span className={`font-semibold text-sm ${
+              totalItemsDiscrepancy > 0 ? 'text-red-600' : 
+              totalItemsDiscrepancy < 0 ? 'text-green-600' : 'text-slate-900'
+            }`}>
+              {totalItemsDiscrepancy > 0 ? '-' : totalItemsDiscrepancy < 0 ? '+' : ''}
+              {Math.abs(totalItemsDiscrepancy)}
+            </span>
           </div>
         </div>
 
-        {/* VAT Summary */}
-        <div className="space-y-2 p-4 bg-slate-50 rounded-lg border">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-700">Subtotal</span>
-            <span className="font-semibold">{formatCurrency(financial_summary.total_amount)}</span>
+        {/* VAT Summary - Compact */}
+        <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50 rounded-lg border text-center">
+          <div>
+            <p className="text-xs text-slate-600">Subtotal</p>
+            <p className="text-sm font-semibold">{formatCurrency(financial_summary.total_amount)}</p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-700">VAT (15%)</span>
-            <span className="font-semibold">{formatCurrency(vatAmount)}</span>
+          <div>
+            <p className="text-xs text-slate-600">VAT (15%)</p>
+            <p className="text-sm font-semibold">{formatCurrency(vatAmount)}</p>
           </div>
-          <div className="flex items-center justify-between pt-2 border-t">
-            <span className="text-sm font-medium text-slate-900">Total incl. VAT</span>
-            <span className="text-lg font-bold text-slate-900">{formatCurrency(totalInclVat)}</span>
+          <div>
+            <p className="text-xs text-slate-600">Total incl. VAT</p>
+            <p className="text-sm font-bold text-slate-900">{formatCurrency(totalInclVat)}</p>
           </div>
         </div>
 
-        {/* Discrepancy Analysis */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <DiscrepancyIcon className="w-5 h-5 text-slate-600" />
-              <div>
-                <p className="font-medium text-slate-700">Discrepancy Status</p>
-                <Badge className={discrepancyStatus.className}>
-                  {discrepancyStatus.label}
-                </Badge>
-              </div>
+        {/* Discrepancy Analysis - Compact */}
+        <div className="p-3 bg-slate-50 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <DiscrepancyIcon className="w-4 h-4 text-slate-600" />
+              <span className="text-sm font-medium text-slate-700">Discrepancy Status</span>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-slate-600">
-                {financial_summary.discrepancy_count} of {financial_summary.total_items_sent} items
-              </p>
-              <p className="font-semibold text-slate-900">
-                {financial_summary.discrepancy_percentage.toFixed(1)}%
-              </p>
-            </div>
+            <Badge className={discrepancyStatus.className}>
+              {discrepancyStatus.label}
+            </Badge>
           </div>
-
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-600">
+              {financial_summary.discrepancy_count} of {financial_summary.total_items_sent} items
+            </span>
+            <span className="font-semibold text-slate-900">
+              {financial_summary.discrepancy_percentage.toFixed(1)}%
+            </span>
+          </div>
           {financial_summary.discrepancy_percentage > 0 && (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <div className="flex items-start space-x-3">
-                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-800">
-                    Discrepancy Impact
-                  </p>
-                  <p className="text-sm text-amber-700 mt-1">
-                    {Math.abs(totalItemsDiscrepancy)} item{Math.abs(totalItemsDiscrepancy) !== 1 ? 's' : ''} discrepancy 
-                    {discrepancyValue !== 0 && (
-                      <span> worth {formatCurrency(Math.abs(discrepancyValue))}</span>
-                    )}
-                  </p>
-                </div>
+            <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                <span className="text-amber-800">
+                  {Math.abs(totalItemsDiscrepancy)} item{Math.abs(totalItemsDiscrepancy) !== 1 ? 's' : ''} discrepancy 
+                  {discrepancyValue !== 0 && (
+                    <span> worth {formatCurrency(Math.abs(discrepancyValue))}</span>
+                  )}
+                </span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="pt-4 border-t border-slate-200">
-          <div className="flex flex-col sm:flex-row gap-3">
+        {/* Action Buttons - Compact */}
+        <div className="pt-3 border-t border-slate-200">
+          <div className="flex gap-2">
             <Button 
               onClick={onGenerateInvoice}
-              className="flex-1 flex items-center justify-center space-x-2"
+              size="sm"
+              className="flex-1 flex items-center justify-center space-x-1"
             >
-              <FileText className="w-4 h-4" />
-              <span>Generate Invoice</span>
+              <FileText className="w-3 h-3" />
+              <span className="text-xs">Generate Invoice</span>
             </Button>
             
             <Button 
               variant="outline"
-              className="flex items-center justify-center space-x-2"
-              onClick={onGenerateInvoice}
+              size="sm"
+              className="flex items-center justify-center space-x-1"
+              onClick={() => window.open(`/invoice/${batchId}`, '_blank')}
             >
-              <FileText className="w-4 h-4" />
-              <span>View Invoice</span>
+              <FileText className="w-3 h-3" />
+              <span className="text-xs">View Invoice</span>
             </Button>
           </div>
           
-          <div className="mt-3 text-center">
+          <div className="mt-2 text-center">
             <p className="text-xs text-slate-500">
               Batch ID: {paperBatchId} • System ID: #{batchId.slice(-8).toUpperCase()}
             </p>
