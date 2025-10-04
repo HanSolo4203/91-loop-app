@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Navigation from '@/components/navigation';
@@ -132,6 +133,7 @@ function BatchDetailsContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [showInvoice, setShowInvoice] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   // Fetch batch details
   const fetchBatchDetails = useCallback(async (isRefresh = false) => {
@@ -191,12 +193,18 @@ function BatchDetailsContent() {
     setShowInvoice(true);
   };
 
-  // Load batch details on mount
+  // Set client-side flag and load batch details on mount
   useEffect(() => {
+    setIsClient(true);
     if (batchId) {
       fetchBatchDetails();
     }
   }, [batchId, fetchBatchDetails]);
+
+  // Prevent hydration mismatch by not rendering until client-side
+  if (!isClient) {
+    return <BatchDetailsLoading />;
+  }
 
   if (loading) {
     return <BatchDetailsLoading />;
