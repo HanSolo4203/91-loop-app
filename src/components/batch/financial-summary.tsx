@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   CheckCircle,
   FileText,
-  Download
 } from 'lucide-react';
 
 interface FinancialSummaryProps {

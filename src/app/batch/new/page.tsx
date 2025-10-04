@@ -139,7 +139,7 @@ function NewBatchContent() {
     };
 
     loadCategories();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-fill Paper Batch ID from API if empty
   useEffect(() => {

@@ -198,7 +198,7 @@ export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdow
                   <TableCell className="text-right font-medium">
                     {formatCurrency(
                       Number.isFinite(item.pricing?.unit_price)
-                        ? (item.pricing as any).unit_price
+                        ? (item.pricing as { unit_price: number }).unit_price
                         : (item.price_per_item ?? item.category.unit_price ?? 0)
                     )}
                   </TableCell>

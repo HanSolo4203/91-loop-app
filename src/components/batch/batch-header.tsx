@@ -5,10 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Package, 
   Calendar, 
-  User, 
-  Phone, 
-  Mail, 
-  MapPin,
   FileText,
   Clock,
   RefreshCw,

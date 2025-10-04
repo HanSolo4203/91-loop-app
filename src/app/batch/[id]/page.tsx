@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Navigation from '@/components/navigation';
@@ -132,7 +131,7 @@ function BatchDetailsContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [showInvoice, setShowInvoice] = useState(false);
+  const [showInvoice] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
   // Fetch batch details
@@ -316,13 +315,13 @@ function BatchDetailsContent() {
             paperBatchId={batchDetails.paper_batch_id}
             client={{ name: batchDetails.client.name, email: batchDetails.client.email, address: batchDetails.client.address }}
             pickup_date={batchDetails.pickup_date}
-            items={batchDetails.items.map((it: any) => ({ 
+            items={batchDetails.items.map((it) => ({ 
               id: it.id, 
-              category: { name: (it.linen_category?.name || it.category?.name || 'Item') }, 
+              category: { name: it.category?.name || 'Item' }, 
               quantity_sent: it.quantity_sent,
               quantity_received: it.quantity_received, 
               price_per_item: it.price_per_item,
-              discrepancy_details: it.discrepancy_details
+              discrepancy_details: null
             }))}
             subtotal={batchDetails.financial_summary.total_amount}
           />

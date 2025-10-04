@@ -31,7 +31,7 @@ interface InvoiceViewProps {
   vatRate?: number; // default 0.15
 }
 
-export default function InvoiceView({ batchId, paperBatchId, client, pickup_date, items, subtotal, vatRate = 0.15 }: InvoiceViewProps) {
+export default function InvoiceView({ batchId, paperBatchId, client, pickup_date, items, vatRate = 0.15 }: InvoiceViewProps) {
   const lines: InvoiceItem[] = items.map((it) => {
     const qtySent = it.quantity_sent;
     const qtyReceived = it.quantity_received;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import type { LinenCategoryUpdate, LinenCategory } from '@/types/database';
+import type { LinenCategory } from '@/types/database';
 
 // GET /api/categories/[id] - Get a specific linen category
 export async function GET(
@@ -67,7 +67,7 @@ export async function PATCH(
     }
 
     // Validate input
-    const updateData: Record<string, any> = {};
+    const updateData: Record<string, unknown> = {};
 
     if (body.name !== undefined) {
       if (typeof body.name !== 'string' || body.name.trim().length === 0) {
@@ -104,19 +104,12 @@ export async function PATCH(
       .from('linen_categories')
       .select('id, name')
       .eq('id', id)
-      .single() as { data: Pick<LinenCategory, 'id' | 'name'> | null; error: any };
+      .single() as { data: Pick<LinenCategory, 'id' | 'name'> | null; error: unknown };
 
     if (checkError) {
-      if (checkError.code === 'PGRST116') {
-        return NextResponse.json(
-          { success: false, error: 'Category not found' },
-          { status: 404 }
-        );
-      }
-      console.error('Error checking existing category:', checkError);
       return NextResponse.json(
-        { success: false, error: 'Failed to check existing category' },
-        { status: 500 }
+        { success: false, error: 'Category not found' },
+        { status: 404 }
       );
     }
 
@@ -196,16 +189,9 @@ export async function DELETE(
       .single();
 
     if (checkError) {
-      if (checkError.code === 'PGRST116') {
-        return NextResponse.json(
-          { success: false, error: 'Category not found' },
-          { status: 404 }
-        );
-      }
-      console.error('Error checking existing category:', checkError);
       return NextResponse.json(
-        { success: false, error: 'Failed to check existing category' },
-        { status: 500 }
+        { success: false, error: 'Category not found' },
+        { status: 404 }
       );
     }
 

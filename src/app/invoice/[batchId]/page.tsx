@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 
 interface BatchDetails {
@@ -65,7 +66,7 @@ export default function InvoicePage() {
         } else {
           setError(result.error || 'Failed to load invoice data');
         }
-      } catch (err) {
+      } catch {
         setError('Failed to load invoice data. Please try again.');
       } finally {
         setLoading(false);
@@ -151,9 +152,11 @@ export default function InvoicePage() {
         {/* Invoice Header */}
         <div className="flex items-start justify-between mb-8 border-b-2 border-blue-100 pb-8">
           <div className="flex flex-col">
-            <img 
+            <Image 
               src={logoUrl} 
               alt="RSL Express Logo" 
+              width={256}
+              height={128}
               className="h-32 w-auto object-contain mb-4"
               onError={(e) => {
                 // Fallback to text if image fails to load

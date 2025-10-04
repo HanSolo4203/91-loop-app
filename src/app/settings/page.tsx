@@ -22,7 +22,6 @@ import {
   AlertCircle,
   CheckCircle,
   Users,
-  FileSpreadsheet,
   Plus as PlusIcon
 } from 'lucide-react';
 import Link from 'next/link';
