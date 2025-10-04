@@ -119,56 +119,28 @@ export default function PricingCard({
       isUpdating ? 'border-blue-200 bg-blue-50' : 
       'hover:shadow-md'
     }`}>
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          {/* Category Name */}
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium text-slate-900 text-sm leading-tight">
-              {category.name}
-            </h3>
-            {!category.is_active && (
-              <Badge variant="secondary" className="text-xs">
-                Inactive
-              </Badge>
-            )}
-          </div>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          {/* Left side - Category info */}
+          <div className="flex-1 space-y-2">
+            {/* Category Name */}
+            <div className="flex items-center space-x-3">
+              <h3 className="font-medium text-slate-900 text-base leading-tight">
+                {category.name}
+              </h3>
+              {!category.is_active && (
+                <Badge variant="secondary" className="text-xs">
+                  Inactive
+                </Badge>
+              )}
+            </div>
 
-          {/* Current Price Display */}
-          <div className="flex items-center space-x-2">
-            <DollarSign className="w-4 h-4 text-slate-500" />
-            <span className="text-sm text-slate-600">
-              Current: {formatPrice(category.price_per_item)}
-            </span>
-          </div>
-
-          {/* Price Input */}
-          <div className="space-y-1">
-            <div className="relative">
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max="1000"
-                value={localPrice}
-                onChange={(e) => handlePriceChange(e.target.value)}
-                onBlur={handleBlur}
-                placeholder="0.00"
-                className={`${
-                  !isValid ? 'border-orange-300 focus:border-orange-500 focus:ring-orange-500' :
-                  hasError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' :
-                  'border-slate-300 focus:border-blue-500 focus:ring-blue-500'
-                } transition-colors`}
-                disabled={isUpdating}
-              />
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                {isUpdating ? (
-                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                ) : hasError ? (
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                ) : isValid && localPrice !== category.price_per_item.toString() ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                ) : null}
-              </div>
+            {/* Current Price Display */}
+            <div className="flex items-center space-x-2">
+              <DollarSign className="w-4 h-4 text-slate-500" />
+              <span className="text-sm text-slate-600">
+                Current: {formatPrice(category.price_per_item)}
+              </span>
             </div>
 
             {/* Validation Message */}
@@ -186,21 +158,56 @@ export default function PricingCard({
                 <span>{errorMessage}</span>
               </p>
             )}
+
+            {/* Category ID (for debugging - remove in production) */}
+            {process.env.NODE_ENV === 'development' && (
+              <p className="text-xs text-slate-400 font-mono">
+                ID: {category.id.slice(0, 8)}...
+              </p>
+            )}
           </div>
 
-          {/* Price Change Indicator */}
-          {getPriceChangeIndicator() && (
-            <div className="flex justify-end">
-              {getPriceChangeIndicator()}
-            </div>
-          )}
+          {/* Right side - Price input and indicators */}
+          <div className="flex items-center space-x-4">
+            {/* Price Change Indicator */}
+            {getPriceChangeIndicator() && (
+              <div className="flex-shrink-0">
+                {getPriceChangeIndicator()}
+              </div>
+            )}
 
-          {/* Category ID (for debugging - remove in production) */}
-          {process.env.NODE_ENV === 'development' && (
-            <p className="text-xs text-slate-400 font-mono">
-              ID: {category.id.slice(0, 8)}...
-            </p>
-          )}
+            {/* Price Input */}
+            <div className="w-32">
+              <div className="relative">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="1000"
+                  value={localPrice}
+                  onChange={(e) => handlePriceChange(e.target.value)}
+                  onBlur={handleBlur}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  placeholder="0.00"
+                  className={`${
+                    !isValid ? 'border-orange-300 focus:border-orange-500 focus:ring-orange-500' :
+                    hasError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' :
+                    'border-slate-300 focus:border-blue-500 focus:ring-blue-500'
+                  } transition-colors text-right`}
+                  disabled={isUpdating}
+                />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  {isUpdating ? (
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  ) : hasError ? (
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                  ) : isValid && localPrice !== category.price_per_item.toString() ? (
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
