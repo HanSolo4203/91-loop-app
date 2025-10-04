@@ -8,10 +8,12 @@ import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, Download, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import Image from 'next/image';
 
 interface ClientInvoiceSummary {
   client_id: string;
   client_name: string;
+  logo_url: string | null;
   total_items_washed: number;
   total_amount: number;
   batch_count: number;
@@ -39,6 +41,7 @@ interface InvoiceItem {
 
 interface InvoiceData {
   client_name: string;
+  client_logo_url: string | null;
   pickup_date: string;
   paper_batch_id: string | null;
   has_discrepancy: boolean;
@@ -264,6 +267,19 @@ export default function ReportsTable() {
                           ) : (
                             <ChevronRight className="w-4 h-4 text-slate-500" />
                           )}
+                          {r.logo_url && (
+                            <div className="w-10 h-10 relative">
+                              <Image 
+                                src={r.logo_url} 
+                                alt={`${r.client_name} logo`}
+                                fill
+                                className="object-contain rounded-sm"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
                           <span>{r.client_name}</span>
                         </button>
                       </TableCell>
@@ -354,11 +370,28 @@ export default function ReportsTable() {
               <div className="text-sm text-slate-700">Loading invoice...</div>
             ) : invoiceData ? (
               <div className="space-y-4 text-sm text-slate-800">
-                <div className="grid grid-cols-2 gap-3">
+                {/* Client Logo and Header */}
+                <div className="flex items-center space-x-4 pb-4 border-b">
+                  {invoiceData.client_logo_url && (
+                    <div className="w-16 h-16 relative">
+                      <Image 
+                        src={invoiceData.client_logo_url} 
+                        alt={`${invoiceData.client_name} logo`}
+                        fill
+                        className="object-contain rounded-lg border border-slate-200"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                   <div>
-                    <p className="text-slate-500">Client</p>
-                    <p className="font-medium">{invoiceData.client_name || 'Unknown'}</p>
+                    <h3 className="text-lg font-semibold text-slate-900">{invoiceData.client_name || 'Unknown Client'}</h3>
+                    <p className="text-slate-600">Batch Invoice Summary</p>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-slate-500">Pickup Date</p>
                     <p className="font-medium">{new Date(invoiceData.pickup_date).toLocaleString()}</p>
@@ -374,10 +407,6 @@ export default function ReportsTable() {
                   <div>
                     <p className="text-slate-500">Discrepancy</p>
                     <p className={`font-medium ${invoiceData.has_discrepancy ? 'text-red-600' : 'text-green-600'}`}>{invoiceData.has_discrepancy ? 'Yes' : 'No'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Invoice Total</p>
-                    <p className="font-medium">{formatCurrencySSR(invoiceData.total_amount)}</p>
                   </div>
                 </div>
 
@@ -405,6 +434,13 @@ export default function ReportsTable() {
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot className="bg-slate-50">
+                      <tr className="border-t-2 border-slate-200">
+                        <td colSpan={4} className="py-3 px-3 font-semibold text-slate-900">Total</td>
+                        <td className="py-3 px-3 text-right font-semibold text-slate-900">{formatCurrencySSR(invoiceData.total_amount)}</td>
+                        <td className="py-3 px-3"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>

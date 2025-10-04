@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import ImageUpload from '@/components/ui/image-upload';
 import {
   User,
   Mail,
@@ -31,6 +32,7 @@ export interface ClientFormData {
   email?: string;
   address?: string;
   is_active: boolean;
+  logo_url?: string;
 }
 
 export default function ClientForm({ client, onSave, onCancel, isLoading = false }: ClientFormProps) {
@@ -39,7 +41,8 @@ export default function ClientForm({ client, onSave, onCancel, isLoading = false
     contact_number: '',
     email: '',
     address: '',
-    is_active: true
+    is_active: true,
+    logo_url: ''
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -53,7 +56,8 @@ export default function ClientForm({ client, onSave, onCancel, isLoading = false
         contact_number: client.contact_number || '',
         email: client.email || '',
         address: client.address || '',
-        is_active: client.is_active ?? true
+        is_active: client.is_active ?? true,
+        logo_url: client.logo_url || ''
       });
     } else {
       setFormData({
@@ -61,7 +65,8 @@ export default function ClientForm({ client, onSave, onCancel, isLoading = false
         contact_number: '',
         email: '',
         address: '',
-        is_active: true
+        is_active: true,
+        logo_url: ''
       });
     }
     setErrors({});
@@ -177,6 +182,27 @@ export default function ClientForm({ client, onSave, onCancel, isLoading = false
               <p className="text-sm text-red-600 flex items-center space-x-1">
                 <AlertCircle className="w-4 h-4" />
                 <span>{errors.name}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Logo Upload */}
+          <div className="space-y-2">
+            <ImageUpload
+              label="Client Logo"
+              value={formData.logo_url}
+              onChange={(url) => handleInputChange('logo_url', url || '')}
+              onError={(error) => setErrors(prev => ({ ...prev, logo_url: error }))}
+              disabled={isSubmitting || isLoading}
+              maxSizeMB={2}
+              acceptedFormats={['.jpg', '.jpeg', '.png', '.webp', '.svg']}
+              previewSize="md"
+              showPreview={true}
+            />
+            {errors.logo_url && (
+              <p className="text-sm text-red-600 flex items-center space-x-1">
+                <AlertCircle className="w-4 h-4" />
+                <span>{errors.logo_url}</span>
               </p>
             )}
           </div>

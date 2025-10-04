@@ -211,6 +211,7 @@ export async function POST(request: NextRequest) {
       email: body.email || undefined,
       address: body.address || undefined,
       is_active: body.is_active !== undefined ? body.is_active : true,
+      logo_url: body.logo_url || undefined,
     };
 
     // Create the client

@@ -146,6 +146,7 @@ export interface DiscrepancyReport {
 export interface ClientInvoiceSummary {
   client_id: string;
   client_name: string;
+  logo_url: string | null;
   total_items_washed: number;
   total_amount: number;
   batch_count: number;
@@ -175,6 +176,7 @@ export interface BatchInvoiceItem {
 export interface BatchInvoice {
   batch_id: string;
   client_name: string | null;
+  client_logo_url: string | null;
   paper_batch_id: string | null;
   system_batch_id: string | null;
   pickup_date: string;
@@ -203,7 +205,7 @@ export async function getBatchInvoice(
         pickup_date,
         total_amount,
         has_discrepancy,
-        client:clients(name),
+        client:clients(name, logo_url),
         items:batch_items(
           quantity_sent,
           quantity_received,
@@ -235,6 +237,7 @@ export async function getBatchInvoice(
     const invoice: BatchInvoice = {
       batch_id: data.id,
       client_name: data.client?.name ?? null,
+      client_logo_url: data.client?.logo_url ?? null,
       paper_batch_id: data.paper_batch_id ?? null,
       system_batch_id: data.system_batch_id ?? null,
       pickup_date: data.pickup_date,
@@ -359,7 +362,7 @@ export async function getInvoiceSummaryByMonth(
         total_amount,
         has_discrepancy,
         pickup_date,
-        client:clients(id, name),
+        client:clients(id, name, logo_url),
         items:batch_items(quantity_received)
       `)
       .gte('pickup_date', startDate)
@@ -378,9 +381,11 @@ export async function getInvoiceSummaryByMonth(
     (data || []).forEach((batch: any) => {
       const clientId = batch.client?.id || batch.client_id || 'unknown';
       const clientName = batch.client?.name || 'Unknown Client';
+      const clientLogoUrl = batch.client?.logo_url || null;
       const existing = summaryMap.get(clientId) || {
         client_id: clientId,
         client_name: clientName,
+        logo_url: clientLogoUrl,
         total_items_washed: 0,
         total_amount: 0,
         batch_count: 0,
@@ -392,6 +397,7 @@ export async function getInvoiceSummaryByMonth(
       summaryMap.set(clientId, {
         client_id: clientId,
         client_name: clientName,
+        logo_url: clientLogoUrl,
         total_items_washed: existing.total_items_washed + itemsCount,
         total_amount: existing.total_amount + (batch.total_amount || 0),
         batch_count: existing.batch_count + 1,

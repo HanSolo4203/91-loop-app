@@ -7,6 +7,7 @@ import MetricCard from '@/components/dashboard/metric-card';
 import MonthSelector from '@/components/dashboard/month-selector';
 import BatchesTable from '@/components/dashboard/batches-table';
 import { EmptyState, EmptyBatches } from '@/components/ui/empty-state';
+import { AuthGuard } from '@/components/auth/auth-guard';
 import { 
   LayoutDashboard, 
   Package, 
@@ -308,4 +309,10 @@ function DashboardContent() {
   );
 }
 
-export default DashboardContent;
+export default function DashboardPage() {
+  return (
+    <AuthGuard>
+      <DashboardContent />
+    </AuthGuard>
+  );
+}
