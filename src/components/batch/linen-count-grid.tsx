@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Package, Calculator, AlertCircle, CheckCircle, Lock, Search, X, Copy, Trash2, RotateCcw } from 'lucide-react';
+import { Package, Calculator, AlertCircle, CheckCircle, Search, X, Copy, Trash2, RotateCcw } from 'lucide-react';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { categorizeBySections } from '@/lib/utils/category-sections';
 import type { LinenCategory } from '@/types/database';
@@ -223,15 +223,6 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
     });
   };
 
-  // Handle card focus
-  const handleCardFocus = (categoryId: string) => {
-    setFocusedCardId(categoryId);
-  };
-
-  // Handle card blur (click outside)
-  const handleCardBlur = () => {
-    setFocusedCardId(null);
-  };
 
   // Handle card click to focus
   const handleCardClick = (categoryId: string) => {
@@ -376,7 +367,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                 <Search className="mx-auto h-12 w-12 text-slate-400 mb-4" />
                 <h3 className="text-lg font-medium text-slate-900 mb-2">No categories found</h3>
                 <p className="text-slate-600">
-                  No linen categories match your search for "{searchQuery}". Try a different search term.
+                  No linen categories match your search for &quot;{searchQuery}&quot;. Try a different search term.
                 </p>
                 <button
                   onClick={() => setSearchQuery('')}

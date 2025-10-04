@@ -5,10 +5,10 @@ import type { LinenCategoryUpdate, LinenCategory } from '@/types/database';
 // GET /api/categories/[id] - Get a specific linen category
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json(
@@ -53,10 +53,10 @@ export async function GET(
 // PATCH /api/categories/[id] - Update a specific linen category
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     if (!id) {
@@ -176,10 +176,10 @@ export async function PATCH(
 // DELETE /api/categories/[id] - Delete a specific linen category
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json(
