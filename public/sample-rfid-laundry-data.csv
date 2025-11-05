@@ -1,0 +1,65 @@
+RFID Number,Category,Status,Condition,Location,User,QTY Washed,Washes Remaining,Assigned Location,Date Assigned,Date/Time
+RFID001234567890,Bath Towels,Procured,Good,Warehouse,John Smith,0,100,91 Loop Hostel,2025-10-01,2025-10-01 08:30:00
+RFID001234567891,Bed Sheets,Issued to Customer,Good,91 Loop Hostel,Sarah Johnson,15,85,91 Loop Hostel,2025-10-01,2025-10-01 09:15:00
+RFID001234567892,Bath Towels,Received Into Laundry,Average,Laundry Facility,Mike Chen,45,55,Trade Boutique Hotel,2025-09-15,2025-10-08 10:30:00
+RFID001234567940,Bed Sheets,Received Into Laundry,Good,Laundry Facility,John Smith,12,88,Hotel Grand Plaza,2025-10-05,2025-10-08 09:15:00
+RFID001234567941,Duvet Covers,Received Into Laundry,Good,Laundry Facility,Sarah Johnson,8,92,91 Loop Hostel,2025-10-04,2025-10-08 11:20:00
+RFID001234567942,Hand Towels,External Laundry,Good,External Laundry,Mike Chen,34,66,Luxury Resort,2025-09-28,2025-10-07 14:30:00
+RFID001234567943,Tablecloths,Received Into Laundry,Average,Laundry Facility,Emma Davis,22,78,Trade Boutique Hotel,2025-09-20,2025-10-08 08:45:00
+RFID001234567893,Bed Sheets,Issued to Customer,Good,Trade Boutique Hotel,Emma Davis,8,92,Trade Boutique Hotel,2025-10-05,2025-10-05 14:20:00
+RFID001234567894,Pillow Cases,Damaged,Bad,Warehouse,John Smith,78,0,,2025-08-12,2025-10-08 11:45:00
+RFID001234567895,Duvet Covers,Procured,Good,Warehouse,Sarah Johnson,0,100,Hotel Grand Plaza,2025-10-07,2025-10-07 08:00:00
+RFID001234567896,Bath Towels,Received Into Laundry,Stained,Laundry Facility,Mike Chen,67,33,91 Loop Hostel,2025-09-01,2025-10-08 09:20:00
+RFID001234567944,Napkins,Received Into Laundry,Good,Laundry Facility,John Smith,15,85,Trade Boutique Hotel,2025-10-03,2025-10-08 10:05:00
+RFID001234567897,Hand Towels,Issued to Customer,Good,Cozy Bed & Breakfast,Emma Davis,23,77,Cozy Bed & Breakfast,2025-09-28,2025-09-28 13:10:00
+RFID001234567898,Bed Sheets,Lost/Stolen,Unknown,Unknown,John Smith,12,88,91 Loop Hostel,2025-09-20,2025-10-03 16:00:00
+RFID001234567899,Tablecloths,Procured,Good,Warehouse,Sarah Johnson,0,100,Trade Boutique Hotel,2025-10-08,2025-10-08 07:30:00
+RFID001234567900,Bath Mats,Issued to Customer,Good,Hotel Grand Plaza,Mike Chen,34,66,Hotel Grand Plaza,2025-09-18,2025-09-18 10:45:00
+RFID001234567901,Napkins,Received Into Laundry,Good,Laundry Facility,Emma Davis,89,11,Trade Boutique Hotel,2025-08-01,2025-10-08 12:15:00
+RFID001234567945,Bath Mats,External Laundry,Good,External Laundry,Sarah Johnson,28,72,Cozy Bed & Breakfast,2025-09-30,2025-10-07 16:20:00
+RFID001234567902,Bath Towels,Issued to Customer,Average,Luxury Resort,John Smith,56,44,Luxury Resort,2025-09-10,2025-09-10 11:30:00
+RFID001234567903,Bed Sheets,Procured,Good,Warehouse,Sarah Johnson,0,100,91 Loop Hostel,2025-10-06,2025-10-06 09:00:00
+RFID001234567904,Duvet Covers,Received Into Laundry,Teared,Laundry Facility,Mike Chen,71,29,Trade Boutique Hotel,2025-08-25,2025-10-08 13:40:00
+RFID001234567905,Hand Towels,Issued to Customer,Good,Trade Boutique Hotel,Emma Davis,19,81,Trade Boutique Hotel,2025-09-30,2025-09-30 15:20:00
+RFID001234567906,Pillow Cases,Damaged,Bad,Warehouse,John Smith,95,0,,2025-07-15,2025-10-08 08:50:00
+RFID001234567907,Bath Towels,Issued to Customer,Good,91 Loop Hostel,Sarah Johnson,28,72,91 Loop Hostel,2025-09-22,2025-09-22 10:10:00
+RFID001234567908,Tablecloths,Procured,Good,Warehouse,Mike Chen,0,100,Hotel Grand Plaza,2025-10-08,2025-10-08 08:15:00
+RFID001234567909,Bath Mats,Received Into Laundry,Average,Laundry Facility,Emma Davis,52,48,Cozy Bed & Breakfast,2025-09-05,2025-10-08 14:25:00
+RFID001234567910,Bed Sheets,Issued to Customer,Good,Luxury Resort,John Smith,14,86,Luxury Resort,2025-10-02,2025-10-02 11:45:00
+RFID001234567911,Napkins,Issued to Customer,Stained,Trade Boutique Hotel,Sarah Johnson,81,19,Trade Boutique Hotel,2025-08-20,2025-08-20 09:30:00
+RFID001234567912,Bath Towels,Procured,Good,Warehouse,Mike Chen,0,100,91 Loop Hostel,2025-10-08,2025-10-08 07:45:00
+RFID001234567913,Duvet Covers,Issued to Customer,Good,Hotel Grand Plaza,Emma Davis,7,93,Hotel Grand Plaza,2025-10-04,2025-10-04 13:20:00
+RFID001234567914,Hand Towels,To be Stitched/Fix,Teared,Repair Station,John Smith,43,57,Trade Boutique Hotel,2025-09-12,2025-10-08 10:55:00
+RFID001234567946,Bed Sheets,Disposed,Bad,Warehouse,Emma Davis,98,0,,2025-06-15,2025-10-08 14:00:00
+RFID001234567947,Bath Towels,Damaged,Bad,Warehouse,Mike Chen,87,0,,2025-07-22,2025-10-08 13:30:00
+RFID001234567948,Pillow Cases,Lost/Stolen,Unknown,Unknown,Sarah Johnson,31,69,Luxury Resort,2025-09-18,2025-10-04 11:00:00
+RFID001234567949,Napkins,To be Stitched/Fix,Teared,Repair Station,John Smith,42,58,Hotel Grand Plaza,2025-09-25,2025-10-08 15:20:00
+RFID001234567915,Bed Sheets,Issued to Customer,Average,Cozy Bed & Breakfast,Sarah Johnson,36,64,Cozy Bed & Breakfast,2025-09-25,2025-09-25 14:40:00
+RFID001234567916,Pillow Cases,Procured,Good,Warehouse,Mike Chen,0,100,Luxury Resort,2025-10-07,2025-10-07 08:30:00
+RFID001234567917,Bath Towels,Damaged,Teared,Warehouse,Emma Davis,88,0,,2025-07-28,2025-10-08 09:10:00
+RFID001234567918,Tablecloths,Issued to Customer,Good,Trade Boutique Hotel,John Smith,22,78,Trade Boutique Hotel,2025-09-27,2025-09-27 12:15:00
+RFID001234567919,Bath Mats,Procured,Good,Warehouse,Sarah Johnson,0,100,91 Loop Hostel,2025-10-08,2025-10-08 08:00:00
+RFID001234567920,Bed Sheets,Received Into Laundry,Good,Laundry Facility,Mike Chen,61,39,Hotel Grand Plaza,2025-09-08,2025-10-08 11:30:00
+RFID001234567921,Napkins,Issued to Customer,Average,Luxury Resort,Emma Davis,74,26,Luxury Resort,2025-08-30,2025-08-30 10:20:00
+RFID001234567922,Bath Towels,Issued to Customer,Good,Trade Boutique Hotel,John Smith,31,69,Trade Boutique Hotel,2025-09-19,2025-09-19 15:10:00
+RFID001234567923,Duvet Covers,Procured,Good,Warehouse,Sarah Johnson,0,100,Cozy Bed & Breakfast,2025-10-06,2025-10-06 09:30:00
+RFID001234567924,Hand Towels,Received Into Laundry,Stained,Laundry Facility,Mike Chen,58,42,91 Loop Hostel,2025-09-03,2025-10-08 13:05:00
+RFID001234567951,Tablecloths,Damaged,Teared,Warehouse,Emma Davis,76,0,,2025-08-05,2025-10-08 11:10:00
+RFID001234567952,Bath Mats,Disposed,Bad,Warehouse,John Smith,93,0,,2025-07-10,2025-10-08 10:25:00
+RFID001234567925,Bed Sheets,Issued to Customer,Good,91 Loop Hostel,Emma Davis,11,89,91 Loop Hostel,2025-10-01,2025-10-01 11:50:00
+RFID001234567926,Pillow Cases,Lost/Stolen,Unknown,Unknown,John Smith,25,75,Trade Boutique Hotel,2025-09-15,2025-10-05 14:00:00
+RFID001234567927,Bath Towels,Procured,Good,Warehouse,Sarah Johnson,0,100,Hotel Grand Plaza,2025-10-08,2025-10-08 07:20:00
+RFID001234567928,Tablecloths,Issued to Customer,Good,Hotel Grand Plaza,Mike Chen,17,83,Hotel Grand Plaza,2025-09-29,2025-09-29 12:45:00
+RFID001234567929,Bath Mats,Received Into Laundry,Average,Laundry Facility,Emma Davis,49,51,Luxury Resort,2025-09-11,2025-10-08 10:15:00
+RFID001234567930,Bed Sheets,Issued to Customer,Good,Cozy Bed & Breakfast,John Smith,9,91,Cozy Bed & Breakfast,2025-10-03,2025-10-03 09:25:00
+RFID001234567931,Napkins,Damaged,Bad,Warehouse,Sarah Johnson,92,0,,2025-07-20,2025-10-08 14:50:00
+RFID001234567932,Bath Towels,Issued to Customer,Good,Trade Boutique Hotel,Mike Chen,38,62,Trade Boutique Hotel,2025-09-24,2025-09-24 11:15:00
+RFID001234567933,Duvet Covers,Procured,Good,Warehouse,Emma Davis,0,100,91 Loop Hostel,2025-10-07,2025-10-07 08:45:00
+RFID001234567934,Hand Towels,To be Stitched/Fix,Stained,Repair Station,John Smith,66,34,Hotel Grand Plaza,2025-09-06,2025-10-08 12:40:00
+RFID001234567950,Duvet Covers,Lost/Stolen,Unknown,Unknown,Sarah Johnson,18,82,Cozy Bed & Breakfast,2025-09-22,2025-10-06 09:30:00
+RFID001234567935,Bed Sheets,Issued to Customer,Average,Luxury Resort,Sarah Johnson,20,80,Luxury Resort,2025-09-26,2025-09-26 13:55:00
+RFID001234567936,Pillow Cases,Procured,Good,Warehouse,Mike Chen,0,100,Trade Boutique Hotel,2025-10-08,2025-10-08 08:10:00
+RFID001234567937,Bath Towels,Issued to Customer,Stained,Cozy Bed & Breakfast,Emma Davis,83,17,Cozy Bed & Breakfast,2025-08-15,2025-08-15 10:35:00
+RFID001234567938,Tablecloths,Received Into Laundry,Good,Laundry Facility,John Smith,54,46,Trade Boutique Hotel,2025-09-09,2025-10-08 09:50:00
+RFID001234567939,Bath Mats,Issued to Customer,Good,91 Loop Hostel,Sarah Johnson,27,73,91 Loop Hostel,2025-09-21,2025-09-21 14:20:00
+
