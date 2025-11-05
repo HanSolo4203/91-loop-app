@@ -9,7 +9,7 @@ DELETE FROM linen_categories;
 
 -- Insert Front of House items
 INSERT INTO linen_categories (name, price_per_item, section, is_active) VALUES
-('Nappins', 2.73, 'Front of House', true),
+('Napkins', 2.73, 'Front of House', true),
 ('Waiter Aprons', 4.40, 'Front of House', true),
 ('Waiter Bibs', 4.40, 'Front of House', true),
 ('Round Tablecloths - Small', 5.28, 'Front of House', true),

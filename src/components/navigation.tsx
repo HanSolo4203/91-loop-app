@@ -14,7 +14,8 @@ import {
   X,
   FileSpreadsheet,
   LogOut,
-  Calculator
+  Calculator,
+  Radio
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,6 +34,11 @@ const navigation = [
     name: 'Quick Calculator',
     href: '/calculator',
     icon: Calculator,
+  },
+  {
+    name: 'RFID Tracking',
+    href: '/dashboard/rfid',
+    icon: Radio,
   },
   {
     name: 'Reports',

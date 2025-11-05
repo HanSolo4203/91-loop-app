@@ -179,6 +179,58 @@ export interface Database {
           updated_at?: string;
         };
       };
+
+      // RFID Data table
+      rfid_data: {
+        Row: {
+          id: string;
+          rfid_number: string;
+          category: string;
+          status: string;
+          condition: string | null;
+          location: string | null;
+          user_name: string | null;
+          qty_washed: number;
+          washes_remaining: number;
+          assigned_location: string | null;
+          date_assigned: string | null;
+          date_time: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          rfid_number: string;
+          category: string;
+          status: string;
+          condition?: string | null;
+          location?: string | null;
+          user_name?: string | null;
+          qty_washed?: number;
+          washes_remaining?: number;
+          assigned_location?: string | null;
+          date_assigned?: string | null;
+          date_time?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          rfid_number?: string;
+          category?: string;
+          status?: string;
+          condition?: string | null;
+          location?: string | null;
+          user_name?: string | null;
+          qty_washed?: number;
+          washes_remaining?: number;
+          assigned_location?: string | null;
+          date_assigned?: string | null;
+          date_time?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
 
     Views: {
@@ -336,6 +388,7 @@ export type LinenCategory = Tables<'linen_categories'>;
 export type Client = Tables<'clients'>;
 export type Batch = Tables<'batches'>;
 export type BatchItem = Tables<'batch_items'>;
+export type RFIDData = Tables<'rfid_data'>;
 
 // View types
 export type BatchReportView = Views<'batch_report_view'>;
@@ -347,6 +400,7 @@ export type LinenCategoryInsert = Database['public']['Tables']['linen_categories
 export type ClientInsert = Database['public']['Tables']['clients']['Insert'];
 export type BatchInsert = Database['public']['Tables']['batches']['Insert'];
 export type BatchItemInsert = Database['public']['Tables']['batch_items']['Insert'];
+export type RFIDDataInsert = Database['public']['Tables']['rfid_data']['Insert'];
 
 // Update types
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
@@ -354,6 +408,7 @@ export type LinenCategoryUpdate = Database['public']['Tables']['linen_categories
 export type ClientUpdate = Database['public']['Tables']['clients']['Update'];
 export type BatchUpdate = Database['public']['Tables']['batches']['Update'];
 export type BatchItemUpdate = Database['public']['Tables']['batch_items']['Update'];
+export type RFIDDataUpdate = Database['public']['Tables']['rfid_data']['Update'];
 
 // Enum types
 export type BatchStatus = Enums<'batch_status'>;
