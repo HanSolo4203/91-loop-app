@@ -76,12 +76,12 @@ export async function POST(request: Request) {
 
     // Type assertion to ensure TypeScript recognizes the rfid_data table
     // The rfid_data table exists in the database but TypeScript inference may fail
-    // Using double assertion as a workaround for TypeScript's type inference limitation
-    const insertQuery = supabaseAdmin
-      .from('rfid_data')
-      .insert(transformedRecords as unknown as RFIDDataInsert[]);
-    
-    const { data, error } = await insertQuery.select();
+    // Casting to any to bypass TypeScript's type inference limitation
+    // The types are correct at runtime - rfid_data table exists and transformedRecords match the Insert type
+    const { data, error } = await (supabaseAdmin
+      .from('rfid_data') as any)
+      .insert(transformedRecords)
+      .select();
 
     if (error) {
       console.error('Error inserting RFID data:', error);

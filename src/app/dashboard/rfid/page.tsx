@@ -69,8 +69,8 @@ interface DatabaseRFIDRecord {
   condition: string | null;
   location: string | null;
   user_name: string | null;
-  qty_washed: number;
-  washes_remaining: number;
+  qty_washed: number | null | undefined;
+  washes_remaining: number | null | undefined;
   assigned_location: string | null;
   date_assigned: string | null;
   date_time: string | null;
@@ -415,8 +415,8 @@ function RFIDDashboardContent() {
           'Condition': record.condition || '',
           'Location': record.location || '',
           'User': record.user_name || '',
-          'QTY Washed': record.qty_washed.toString(),
-          'Washes Remaining': record.washes_remaining.toString(),
+          'QTY Washed': (record.qty_washed ?? 0).toString(),
+          'Washes Remaining': (record.washes_remaining ?? 0).toString(),
           'Assigned Location': record.assigned_location || '',
           'Date Assigned': record.date_assigned || '',
           'Date/Time': record.date_time || '',
@@ -463,6 +463,50 @@ function RFIDDashboardContent() {
     } catch (err) {
       console.error('Error saving RFID data:', err);
       setError('Failed to save RFID data to database');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleManualEntry = async (data: RFIDDataInsert) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Transform database format to CSV format for API
+      const csvFormatRecord: RFIDRecord = {
+        'RFID Number': data.rfid_number,
+        'Category': data.category,
+        'Status': data.status,
+        'Condition': data.condition || '',
+        'Location': data.location || '',
+        'User': data.user_name || '',
+        'QTY Washed': (data.qty_washed ?? 0).toString(),
+        'Washes Remaining': (data.washes_remaining ?? 0).toString(),
+        'Assigned Location': data.assigned_location || '',
+        'Date Assigned': data.date_assigned ? new Date(data.date_assigned).toLocaleString() : '',
+        'Date/Time': data.date_time ? new Date(data.date_time).toLocaleString() : '',
+      };
+      
+      // Save to database as single record
+      const response = await fetch('/api/rfid-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ rfidRecords: [csvFormatRecord] }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save RFID data to database');
+      }
+
+      // Reload database data to refresh the view
+      await loadDatabaseData();
+    } catch (err) {
+      console.error('Error saving RFID data:', err);
+      setError('Failed to save RFID data to database');
+      throw err; // Re-throw so the form can handle it
     } finally {
       setIsLoading(false);
     }
@@ -869,16 +913,19 @@ function RFIDDashboardContent() {
                 Upload and analyze RFID tag data from your laundry operations
               </p>
             </div>
-            {processedData && (
-              <Button
-                onClick={exportData}
-                variant="outline"
-                className="flex items-center space-x-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Export Analysis</span>
-              </Button>
-            )}
+            <div className="flex items-center space-x-2">
+              <ManualEntryForm onSave={handleManualEntry} isLoading={isLoading} />
+              {processedData && (
+                <Button
+                  onClick={exportData}
+                  variant="outline"
+                  className="flex items-center space-x-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Export Analysis</span>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
