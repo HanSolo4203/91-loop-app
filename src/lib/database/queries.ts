@@ -1,18 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabaseAdmin } from '@/lib/supabase';
-import type { 
-  Batch, 
-  Client, 
-  BatchStatus 
+import type {
+  Batch,
+  Client,
+  BatchStatus
 } from '@/types/database';
 
-interface BatchWithItems {
+type BatchWithItems = Batch & {
   batch_items: Array<{
     quantity_sent: number;
     quantity_received: number;
     price_per_item: number;
-  }>;
-}
+  }> | null;
+  clients: Client | null;
+};
 
 // Custom error class for query errors
 export class QueryError extends Error {
@@ -187,7 +188,9 @@ export async function getBatchesWithFilters(
 
     // Process and enrich the data
     const enrichedData: BatchQueryResult[] = (data || []).map(batch => {
-      const items = (batch as BatchWithItems).batch_items || [];
+      const typedBatch = batch as unknown as BatchWithItems;
+      const { batch_items, clients, ...batchRest } = typedBatch;
+      const items = batch_items || [];
       const totalItems = items.reduce((sum: number, item) => sum + item.quantity_sent, 0);
       const totalAmount = items.reduce((sum: number, item) => 
         sum + (item.quantity_sent * item.price_per_item), 0);
@@ -195,10 +198,9 @@ export async function getBatchesWithFilters(
       const discrepancies = items.filter((item) => 
         item.quantity_sent !== item.quantity_received).length;
       const discrepancyPercentage = totalItems > 0 ? (discrepancies / items.length) * 100 : 0;
-
       return {
-        ...(batch as any),
-        client: (batch as any).clients as Client,
+        ...(batchRest as Batch),
+        client: clients as Client,
         item_count: items.length,
         total_amount: totalAmount,
         has_discrepancy: discrepancies > 0,
@@ -282,8 +284,13 @@ export async function getRevenueAnalysis(
     // Group data by period
     const groupedData = new Map<string, RevenueResult>();
 
-    (data || []).forEach((batch: { pickup_date: string; total_amount: number; client_id: string; clients: { name: string } }) => {
-      const date = new Date(batch.pickup_date);
+    (data || []).forEach((batch) => {
+      const { pickup_date, total_amount, client_id } = batch as {
+        pickup_date: string;
+        total_amount: number;
+        client_id: string;
+      };
+      const date = new Date(pickup_date);
       let period: string;
 
       switch (groupBy) {
@@ -316,13 +323,13 @@ export async function getRevenueAnalysis(
       }
 
       const existing = groupedData.get(period)!;
-      existing.total_revenue += batch.total_amount || 0;
+      existing.total_revenue += total_amount || 0;
       existing.batch_count += 1;
       existing.client_count = new Set([
         ...(existing as any).clients || [],
-        batch.client_id
+        client_id
       ]).size;
-      (existing as any).clients = [...((existing as any).clients || []), batch.client_id];
+      (existing as any).clients = [...((existing as any).clients || []), client_id];
     });
 
     // Calculate averages and clean up

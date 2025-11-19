@@ -44,7 +44,7 @@ interface BatchesTableProps {
   loading?: boolean;
   onBatchClick?: (batch: Batch) => void;
   selectedMonth?: {
-    month: number;
+    month: number | null;
     year: number;
   };
 }
@@ -186,7 +186,13 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
             </CardTitle>
             <CardDescription>
               {filteredBatches.length} batch{filteredBatches.length !== 1 ? 'es' : ''} found
-              {selectedMonth && ` for ${new Date(selectedMonth.year, selectedMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
+              {selectedMonth &&
+                (selectedMonth.month === null
+                  ? ` for ${selectedMonth.year} (All months)`
+                  : ` for ${new Date(
+                      selectedMonth.year,
+                      selectedMonth.month
+                    ).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`)}
               {statusFilter !== 'all' && (
                 <span className="text-blue-600">
                   {statusFilter === 'washing,completed,delivered' 
