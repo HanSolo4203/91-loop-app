@@ -431,6 +431,9 @@ export async function updateBatchItems(
     const totalAmount = preparedItems.reduce((sum, item) => {
       return sum + item.quantity_received * item.price_per_item;
     }, 0);
+    const hasDiscrepancy = preparedItems.some(
+      (item) => item.quantity_sent !== item.quantity_received
+    );
 
     // Ensure batch exists
     const { data: existingBatch, error: batchError } = await supabaseAdmin
@@ -516,7 +519,7 @@ export async function updateBatchItems(
 
     const batchUpdatePayload: Record<string, unknown> = {
       total_amount: Math.round(totalAmount * 100) / 100,
-      has_discrepancy,
+      has_discrepancy: hasDiscrepancy,
       updated_at: new Date().toISOString(),
     };
 
@@ -757,7 +760,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
     }
 
     return {
-      data: completeBatch as BatchWithDetails,
+      data: completeBatch as unknown as BatchWithDetails,
       error: null,
       success: true,
     };
@@ -842,7 +845,7 @@ export async function getBatches(filters: BatchSearchFilters = {}): Promise<Batc
 
     return {
       data: {
-        batches: (data as BatchWithDetails[]) || [],
+        batches: ((data as unknown) as BatchWithDetails[]) || [],
         total: count || 0,
         page,
         pageSize,
@@ -913,7 +916,7 @@ export async function getBatchById(id: string): Promise<BatchServiceResponse<Bat
     }
 
     return {
-      data: data as BatchWithDetails,
+      data: data as unknown as BatchWithDetails,
       error: null,
       success: true,
     };

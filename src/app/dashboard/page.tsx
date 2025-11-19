@@ -37,7 +37,7 @@ function Breadcrumb() {
 
 // Main dashboard content
 function DashboardContent() {
-  const [selectedMonth, setSelectedMonth] = useState({
+  const [selectedMonth, setSelectedMonth] = useState<{ month: number | null; year: number }>({
     month: new Date().getMonth(), // Current month (0-based index)
     year: new Date().getFullYear() // Current year
   });
@@ -56,80 +56,180 @@ function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch dashboard data
-  const fetchDashboardData = async (month: number, year: number) => {
+  const fetchDashboardData = async (month: number | null, year: number) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Format month for API (convert from 0-based to 1-based and format as YYYY-MM)
-      const formattedMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-      
-      console.log('🔍 Fetching data for:', formattedMonth);
-      
-      // Calculate date range for the selected month
-      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]; // Last day of the month
-      
-      console.log('📅 Date range:', { startDate, endDate });
-      
-      // Fetch metrics and batches in parallel
-      const [metricsResponse, batchesResponse] = await Promise.all([
-        fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`),
-        fetch(`/api/dashboard/batches?limit=20&date_from=${startDate}&date_to=${endDate}`)
-      ]);
+      const isYearlyView = month === null;
+      let startDate: string;
+      let endDate: string;
+      let batchesResponse: Response | null = null;
 
-      console.log('📊 Responses:', {
-        metrics: metricsResponse.status,
-        batches: batchesResponse.status
-      });
+      type MetricsSummary = {
+        totalBatches: number;
+        totalRevenue: number;
+        totalItemsProcessed: number;
+        averageBatchValue: number;
+        completedBatches: number;
+        discrepancyCount: number;
+      };
 
-      // Check for HTTP errors
-      if (!metricsResponse.ok || !batchesResponse.ok) {
-        throw new Error('Failed to fetch dashboard data from server');
+      let metricsSummary: MetricsSummary = {
+        totalBatches: 0,
+        totalRevenue: 0,
+        totalItemsProcessed: 0,
+        averageBatchValue: 0,
+        completedBatches: 0,
+        discrepancyCount: 0
+      };
+
+      if (isYearlyView) {
+        startDate = `${year}-01-01`;
+        endDate = `${year}-12-31`;
+
+        console.log('🔍 Fetching yearly data for:', year);
+
+        const monthlyRequests = Array.from({ length: 12 }, (_, index) => {
+          const formattedMonth = `${year}-${String(index + 1).padStart(2, '0')}`;
+          return fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`);
+        });
+
+        const monthResponses = await Promise.all(monthlyRequests);
+        if (monthResponses.some((response) => !response.ok)) {
+          throw new Error('Failed to fetch yearly dashboard data from server');
+        }
+
+        const monthPayloads = await Promise.all(monthResponses.map((response) => response.json()));
+
+        monthPayloads.forEach((payload, index) => {
+          if (!payload.success) {
+            throw new Error(payload.error || `Failed to fetch metrics for month ${index + 1}`);
+          }
+        });
+
+        const aggregated = monthPayloads.reduce(
+          (acc: Omit<MetricsSummary, 'averageBatchValue'>, payload) => {
+            if (!payload.data) {
+              return acc;
+            }
+
+            return {
+              totalBatches: acc.totalBatches + (payload.data.totalBatches || 0),
+              totalRevenue: acc.totalRevenue + (payload.data.totalRevenue || 0),
+              totalItemsProcessed: acc.totalItemsProcessed + (payload.data.totalItemsProcessed || 0),
+              completedBatches: acc.completedBatches + (payload.data.completedBatches || 0),
+              discrepancyCount: acc.discrepancyCount + (payload.data.discrepancyCount || 0)
+            };
+          },
+          {
+            totalBatches: 0,
+            totalRevenue: 0,
+            totalItemsProcessed: 0,
+            completedBatches: 0,
+            discrepancyCount: 0
+          }
+        );
+
+        metricsSummary = {
+          ...aggregated,
+          averageBatchValue:
+            aggregated.totalBatches > 0
+              ? aggregated.totalRevenue / aggregated.totalBatches
+              : 0
+        };
+
+        batchesResponse = await fetch(
+          `/api/dashboard/batches?limit=20&date_from=${startDate}&date_to=${endDate}`
+        );
+      } else {
+        const formattedMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+        startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]; // Last day of the month
+
+        console.log('🔍 Fetching data for:', formattedMonth);
+        console.log('📅 Date range:', { startDate, endDate });
+
+        const [metricsResponse, batchesFetchResponse] = await Promise.all([
+          fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`),
+          fetch(`/api/dashboard/batches?limit=20&date_from=${startDate}&date_to=${endDate}`)
+        ]);
+
+        console.log('📊 Responses:', {
+          metrics: metricsResponse.status,
+          batches: batchesFetchResponse.status
+        });
+
+        if (!metricsResponse.ok || !batchesFetchResponse.ok) {
+          throw new Error('Failed to fetch dashboard data from server');
+        }
+
+        const metricsResult = await metricsResponse.json();
+
+        console.log('📊 Metrics data:', metricsResult);
+
+        if (!metricsResult.success) {
+          throw new Error(metricsResult.error || 'Failed to fetch metrics');
+        }
+
+        if (metricsResult.data) {
+          const data = metricsResult.data;
+          metricsSummary = {
+            totalBatches: data.totalBatches || 0,
+            totalRevenue: data.totalRevenue || 0,
+            totalItemsProcessed: data.totalItemsProcessed || 0,
+            averageBatchValue: data.averageBatchValue || 0,
+            completedBatches: data.completedBatches || 0,
+            discrepancyCount: data.discrepancyCount || 0
+          };
+        }
+
+        batchesResponse = batchesFetchResponse;
       }
 
-      const [metricsResult, batchesResult] = await Promise.all([
-        metricsResponse.json(),
-        batchesResponse.json()
-      ]);
-
-      console.log('📊 Data:', { metricsResult, batchesResult });
-
-      if (!metricsResult.success) {
-        throw new Error(metricsResult.error || 'Failed to fetch metrics');
+      if (!batchesResponse || !batchesResponse.ok) {
+        throw new Error('Failed to fetch batches');
       }
+
+      const batchesResult = await batchesResponse.json();
 
       if (!batchesResult.success) {
         throw new Error(batchesResult.error || 'Failed to fetch batches');
       }
 
-      // Update metrics
-      if (metricsResult.data) {
-        const data = metricsResult.data;
-        console.log('📊 Setting metrics:', data);
-        setMetrics({
-          totalBatches: data.totalBatches || 0,
-          totalRevenue: data.totalRevenue || 0,
-          totalItems: data.totalItemsProcessed || 0,
-          avgBatchValue: data.averageBatchValue || 0,
-          completedBatches: data.completedBatches || 0,
-          discrepancies: data.discrepancyCount || 0
-        });
-      }
+      console.log('📊 Aggregated metrics:', metricsSummary);
+      setMetrics({
+        totalBatches: metricsSummary.totalBatches,
+        totalRevenue: metricsSummary.totalRevenue,
+        totalItems: metricsSummary.totalItemsProcessed,
+        avgBatchValue: metricsSummary.averageBatchValue,
+        completedBatches: metricsSummary.completedBatches,
+        discrepancies: metricsSummary.discrepancyCount
+      });
 
-      // Update batches
       if (batchesResult.data) {
-        const transformedBatches = batchesResult.data.batches?.map((batch: { id: string; paper_batch_id: string; client_name: string; pickup_date: string; status: string; total_amount: number; created_at: string }) => ({
-          id: batch.id,
-          paper_batch_id: batch.paper_batch_id,
-          client: {
-            name: batch.client_name
-          },
-          pickup_date: batch.pickup_date,
-          status: batch.status,
-          total_amount: batch.total_amount,
-          created_at: batch.created_at
-        })) || [];
+        const transformedBatches =
+          batchesResult.data.batches?.map(
+            (batch: {
+              id: string;
+              paper_batch_id: string;
+              client_name: string;
+              pickup_date: string;
+              status: string;
+              total_amount: number;
+              created_at: string;
+            }) => ({
+              id: batch.id,
+              paper_batch_id: batch.paper_batch_id,
+              client: {
+                name: batch.client_name
+              },
+              pickup_date: batch.pickup_date,
+              status: batch.status,
+              total_amount: batch.total_amount,
+              created_at: batch.created_at
+            })
+          ) || [];
         console.log('📦 Setting batches:', transformedBatches);
         setBatches(transformedBatches);
       }
@@ -146,7 +246,7 @@ function DashboardContent() {
     fetchDashboardData(selectedMonth.month, selectedMonth.year);
   }, [selectedMonth.month, selectedMonth.year]);
 
-  const handleMonthChange = (month: number, year: number) => {
+  const handleMonthChange = (month: number | null, year: number) => {
     setSelectedMonth({ month, year });
   };
 

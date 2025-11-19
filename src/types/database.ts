@@ -30,6 +30,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
 
       // Linen Categories table
@@ -58,6 +59,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
 
       // Clients table
@@ -95,6 +97,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
 
       // Business Settings table
@@ -132,6 +135,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
 
       // Batches table
@@ -175,6 +179,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
 
       // Batch Items table
@@ -215,6 +220,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
 
       // RFID Data table
@@ -267,6 +273,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
 
@@ -291,6 +298,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
+        Relationships: [];
       };
 
       // Batch Items Detail View
@@ -312,6 +320,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
+        Relationships: [];
       };
     };
 
@@ -383,6 +392,12 @@ export interface Database {
         }[];
       };
 
+      // Generate system batch ID
+      generate_system_batch_id: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+
       // Search batches by various criteria
       search_batches: {
         Args: {
@@ -409,6 +424,9 @@ export interface Database {
 
     Enums: {
       batch_status: 'pickup' | 'washing' | 'completed' | 'delivered';
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
 }
