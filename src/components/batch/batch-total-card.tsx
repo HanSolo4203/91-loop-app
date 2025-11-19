@@ -12,18 +12,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
-
-interface LinenCountItem {
-  category: {
-    id: string;
-    name: string;
-    price_per_item: number;
-  };
-  quantity_sent: number;
-  quantity_received: number;
-  price_per_item: number;
-  subtotal: number;
-}
+import type { LinenCountItem } from '@/components/batch/linen-count-grid';
 
 interface BatchTotalCardProps {
   items: LinenCountItem[];
@@ -33,6 +22,7 @@ interface BatchTotalCardProps {
   status?: 'draft' | 'ready' | 'creating' | 'success' | 'error';
   errorMessage?: string;
   onStatusChange?: (status: 'draft' | 'ready' | 'creating' | 'success' | 'error') => void;
+  mode?: 'create' | 'edit';
 }
 
 export default function BatchTotalCard({
@@ -41,8 +31,37 @@ export default function BatchTotalCard({
   clientName,
   pickupDate,
   status = 'draft',
-  errorMessage
+  errorMessage,
+  mode = 'create'
 }: BatchTotalCardProps) {
+  const copy = mode === 'edit'
+    ? {
+        description: 'Review batch details and totals before amending',
+        readyMessage: 'Batch is ready to be amended. All required information has been provided.',
+        successMessage: 'Batch updated successfully! Redirecting to batch details...',
+        mainHeading: 'Batch Summary',
+        totalLabel: 'Total Amount',
+        totalSubTextPrefix: '',
+        draftLabel: 'Pending Changes',
+        readyLabel: 'Ready to Amend',
+        creatingLabel: 'Updating...',
+        successLabel: 'Amended',
+        errorLabel: 'Error',
+      }
+    : {
+        description: 'Review batch details and totals before creating',
+        readyMessage: 'Batch is ready to be created. All required information has been provided.',
+        successMessage: 'Batch created successfully! Redirecting to batch details...',
+        mainHeading: 'Batch Summary',
+        totalLabel: 'Total Amount',
+        totalSubTextPrefix: '',
+        draftLabel: 'Draft',
+        readyLabel: 'Ready to Create',
+        creatingLabel: 'Creating...',
+        successLabel: 'Created Successfully',
+        errorLabel: 'Error',
+      };
+
   // Calculate totals and statistics
   const calculateTotals = () => {
     const totalSent = items.reduce((sum, item) => sum + item.quantity_sent, 0);
@@ -86,17 +105,17 @@ export default function BatchTotalCard({
   const getStatusBadge = () => {
     switch (status) {
       case 'draft':
-        return <Badge variant="secondary" className="text-xs">Draft</Badge>;
+        return <Badge variant="secondary" className="text-xs">{copy.draftLabel}</Badge>;
       case 'ready':
-        return <Badge variant="default" className="text-xs bg-green-600">Ready to Create</Badge>;
+        return <Badge variant="default" className="text-xs bg-green-600">{copy.readyLabel}</Badge>;
       case 'creating':
-        return <Badge variant="default" className="text-xs bg-blue-600">Creating...</Badge>;
+        return <Badge variant="default" className="text-xs bg-blue-600">{copy.creatingLabel}</Badge>;
       case 'success':
-        return <Badge variant="default" className="text-xs bg-green-600">Created Successfully</Badge>;
+        return <Badge variant="default" className="text-xs bg-green-600">{copy.successLabel}</Badge>;
       case 'error':
-        return <Badge variant="destructive" className="text-xs">Error</Badge>;
+        return <Badge variant="destructive" className="text-xs">{copy.errorLabel}</Badge>;
       default:
-        return <Badge variant="secondary" className="text-xs">Draft</Badge>;
+        return <Badge variant="secondary" className="text-xs">{copy.draftLabel}</Badge>;
     }
   };
 
@@ -117,12 +136,12 @@ export default function BatchTotalCard({
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Calculator className="w-5 h-5 text-blue-600" />
-            <span>Batch Summary</span>
+            <span>{copy.mainHeading}</span>
           </div>
           {getStatusBadge()}
         </CardTitle>
         <CardDescription>
-          Review batch details and totals before creating
+          {copy.description}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -155,7 +174,7 @@ export default function BatchTotalCard({
           <div className="text-center">
             <div className="flex items-center justify-center space-x-2 mb-2">
               <DollarSign className="w-6 h-6 text-blue-600" />
-              <span className="text-sm font-medium text-blue-600">Total Amount</span>
+              <span className="text-sm font-medium text-blue-600">{copy.totalLabel}</span>
             </div>
             <p className="text-4xl font-bold text-blue-900">{formatCurrency(totals.totalAmount)}</p>
             <p className="text-sm text-blue-600 mt-1">
@@ -246,7 +265,7 @@ export default function BatchTotalCard({
             <div className="flex items-center space-x-2">
               <CheckCircle className="w-5 h-5 text-green-600" />
               <p className="text-sm text-green-800">
-                Batch created successfully! Redirecting to batch details...
+                {copy.successMessage}
               </p>
             </div>
           </div>
@@ -258,7 +277,7 @@ export default function BatchTotalCard({
             <div className="flex items-center space-x-2">
               <CheckCircle className="w-5 h-5 text-green-600" />
               <p className="text-sm text-green-800">
-                Batch is ready to be created. All required information has been provided.
+                {copy.readyMessage}
               </p>
             </div>
           </div>

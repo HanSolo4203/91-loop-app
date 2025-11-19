@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import MonthSelector from '@/components/dashboard/month-selector';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
-import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, Download, FileText } from 'lucide-react';
+import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, Download, FileText, Printer } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
@@ -49,9 +49,16 @@ interface InvoiceData {
   items: InvoiceItem[];
 }
 
+const buildMonthParam = (monthValue: number | null, yearValue: number) => {
+  if (monthValue === null) {
+    return `${yearValue}-all`;
+  }
+  return `${yearValue}-${String(monthValue + 1).padStart(2, '0')}`;
+};
+
 export default function ReportsTable() {
   const now = new Date();
-  const [month, setMonth] = useState<number>(now.getMonth());
+  const [month, setMonth] = useState<number | null>(now.getMonth());
   const [year, setYear] = useState<number>(now.getFullYear());
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,11 +72,11 @@ export default function ReportsTable() {
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
   const [exportLoading, setExportLoading] = useState<boolean>(false);
 
-  const fetchData = async (m: number, y: number) => {
+  const fetchData = async (m: number | null, y: number) => {
     try {
       setLoading(true);
       setError(null);
-      const ym = `${y}-${String(m + 1).padStart(2, '0')}`;
+      const ym = buildMonthParam(m, y);
       const res = await fetch(`/api/dashboard/reports?month=${ym}`);
       const json = await res.json();
       if (!json.success) {
@@ -90,7 +97,7 @@ export default function ReportsTable() {
     fetchData(month, year);
   }, [month, year]);
 
-  const handleChange = (m: number, y: number) => {
+  const handleChange = (m: number | null, y: number) => {
     setMonth(m);
     setYear(y);
     fetchData(m, y);
@@ -115,7 +122,7 @@ export default function ReportsTable() {
     if (!isOpen && !batchRows[clientId]) {
       try {
         setLoadingClient(prev => ({ ...prev, [clientId]: true }));
-        const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+        const ym = buildMonthParam(month, year);
         const res = await fetch(`/api/dashboard/reports/client-batches?clientId=${clientId}&month=${ym}`);
         const json = await res.json();
         if (!json.success) {
@@ -147,7 +154,7 @@ export default function ReportsTable() {
   const handleExportExcel = async () => {
     try {
       setExportLoading(true);
-      const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const ym = buildMonthParam(month, year);
       const response = await fetch(`/api/dashboard/reports/export-excel?month=${ym}`);
       
       if (response.ok) {
@@ -155,7 +162,10 @@ export default function ReportsTable() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `RSL_Express_Report_${new Date(year, month).toLocaleDateString('en-US', { year: 'numeric', month: 'long' }).replace(/\s+/g, '_')}.xlsx`;
+        const monthLabel = month === null
+          ? `${year} All Months`
+          : new Date(year, month).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        a.download = `RSL_Express_Report_${monthLabel.replace(/\s+/g, '_')}.xlsx`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -172,7 +182,7 @@ export default function ReportsTable() {
   };
 
   const handleViewStatistics = () => {
-    const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+    const ym = buildMonthParam(month, year);
     window.open(`/reports/statistics?month=${ym}`, '_blank');
   };
 
@@ -331,7 +341,19 @@ export default function ReportsTable() {
                                         <td className="py-2 pr-4 text-right">{b.total_items_received}</td>
                                         <td className="py-2 pr-0 text-right">{formatCurrencySSR(b.total_amount)}</td>
                                         <td className="py-2 pl-4 text-right">
-                                          <Button size="sm" variant="outline" onClick={() => openInvoice(b)}>View Invoice</Button>
+                                          <div className="flex justify-end gap-2">
+                                            <Button size="sm" variant="outline" onClick={() => openInvoice(b)}>
+                                              View Invoice
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              className="flex items-center space-x-1"
+                                              onClick={() => window.open(`/invoice/${b.id}`, '_blank')}
+                                            >
+                                              <Printer className="w-3 h-3" />
+                                              <span>Open</span>
+                                            </Button>
+                                          </div>
                                         </td>
                                       </tr>
                                     ))}

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { getClientBatchesByMonth } from '@/lib/services/analytics';
+import { getClientBatchesByMonth, getClientBatchesByYear } from '@/lib/services/analytics';
 import type { AnalyticsServiceResponse } from '@/lib/services/analytics';
 
 // GET /api/dashboard/reports/client-batches?clientId=...&month=YYYY-MM
@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
     }
 
     let targetYear: number;
-    let targetMonth: number;
+    let targetMonth: number | null = null;
+    let isAllMonths = false;
 
     if (monthParam) {
       const parts = monthParam.split('-');
@@ -37,8 +38,13 @@ export async function GET(request: NextRequest) {
         );
       }
       targetYear = parseInt(parts[0], 10);
-      targetMonth = parseInt(parts[1], 10);
-      if (isNaN(targetYear) || isNaN(targetMonth)) {
+      const monthPart = parts[1].toLowerCase();
+      if (monthPart === 'all') {
+        isAllMonths = true;
+      } else {
+        targetMonth = parseInt(monthPart, 10);
+      }
+      if (isNaN(targetYear) || (!isAllMonths && (targetMonth === null || isNaN(targetMonth)))) {
         return NextResponse.json(
           {
             success: false,
@@ -54,7 +60,9 @@ export async function GET(request: NextRequest) {
       targetMonth = now.getMonth() + 1;
     }
 
-    const result = await getClientBatchesByMonth(clientId, targetYear, targetMonth);
+    const result = isAllMonths
+      ? await getClientBatchesByYear(clientId, targetYear)
+      : await getClientBatchesByMonth(clientId, targetYear, targetMonth as number);
     if (!result.success) {
       return NextResponse.json(
         {

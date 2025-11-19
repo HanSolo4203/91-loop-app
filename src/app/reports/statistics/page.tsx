@@ -21,8 +21,9 @@ import Link from 'next/link';
 interface StatisticsData {
   period: {
     year: number;
-    month: number;
+    month: number | null;
     month_name: string;
+    is_all_months?: boolean;
   };
   summary: {
     total_clients: number;
@@ -39,7 +40,7 @@ interface StatisticsData {
   top_client: {
     client_name: string;
     total_amount: number;
-  };
+  } | null;
   client_details: Array<{
     client_name: string;
     total_amount: number;
@@ -154,8 +155,12 @@ function StatisticsPageContent() {
             height={80}
             className="h-20 w-auto object-contain mx-auto mb-4"
           />
-          <h1 className="text-3xl font-bold text-blue-900 mb-2">Monthly Statistics Report</h1>
-          <p className="text-xl text-slate-700">{data.period.month_name}</p>
+          <h1 className="text-3xl font-bold text-blue-900 mb-2">
+            {data.period.is_all_months ? 'Annual Statistics Report' : 'Monthly Statistics Report'}
+          </h1>
+          <p className="text-xl text-slate-700">
+            {data.period.is_all_months ? `${data.period.year} • All Months` : data.period.month_name}
+          </p>
           <p className="text-sm text-slate-500 mt-2">
             Generated on {new Date(data.generated_at).toLocaleDateString()}
           </p>
@@ -264,21 +269,23 @@ function StatisticsPageContent() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2" />
-                Top Client
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-slate-900 mb-2">{data.top_client.client_name}</div>
-                <div className="text-2xl font-bold text-blue-600">{formatCurrencySSR(data.top_client.total_amount)}</div>
-                <div className="text-sm text-slate-500 mt-2">Highest Revenue Client</div>
-              </div>
-            </CardContent>
-          </Card>
+          {data.top_client && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <TrendingUp className="w-5 h-5 mr-2" />
+                  Top Client
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-slate-900 mb-2">{data.top_client.client_name}</div>
+                  <div className="text-2xl font-bold text-blue-600">{formatCurrencySSR(data.top_client.total_amount)}</div>
+                  <div className="text-sm text-slate-500 mt-2">Highest Revenue Client</div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Client Breakdown */}

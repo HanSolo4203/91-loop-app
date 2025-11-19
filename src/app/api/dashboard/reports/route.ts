@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { getInvoiceSummaryByMonth } from '@/lib/services/analytics';
+import { getInvoiceSummaryByMonth, getInvoiceSummaryByYear } from '@/lib/services/analytics';
 import type { AnalyticsServiceResponse } from '@/lib/services/analytics';
 
 // GET /api/dashboard/reports?month=YYYY-MM
@@ -10,7 +10,8 @@ export async function GET(request: NextRequest) {
     const monthParam = searchParams.get('month'); // YYYY-MM
 
     let targetYear: number;
-    let targetMonth: number;
+    let targetMonth: number | null = null;
+    let isAllMonths = false;
 
     if (monthParam) {
       const parts = monthParam.split('-');
@@ -25,8 +26,13 @@ export async function GET(request: NextRequest) {
         );
       }
       targetYear = parseInt(parts[0], 10);
-      targetMonth = parseInt(parts[1], 10);
-      if (isNaN(targetYear) || isNaN(targetMonth)) {
+      const monthPart = parts[1].toLowerCase();
+      if (monthPart === 'all') {
+        isAllMonths = true;
+      } else {
+        targetMonth = parseInt(monthPart, 10);
+      }
+      if (isNaN(targetYear) || (!isAllMonths && (targetMonth === null || isNaN(targetMonth)))) {
         return NextResponse.json(
           {
             success: false,
@@ -42,7 +48,9 @@ export async function GET(request: NextRequest) {
       targetMonth = now.getMonth() + 1;
     }
 
-    const result = await getInvoiceSummaryByMonth(targetYear, targetMonth);
+    const result = isAllMonths
+      ? await getInvoiceSummaryByYear(targetYear)
+      : await getInvoiceSummaryByMonth(targetYear, targetMonth as number);
     if (!result.success) {
       return NextResponse.json(
         {

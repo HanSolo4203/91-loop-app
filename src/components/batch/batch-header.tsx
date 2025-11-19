@@ -20,7 +20,7 @@ interface BatchHeaderProps {
     delivery_date?: string;
     created_at: string;
     updated_at: string;
-    notes?: string;
+    notes?: string | null;
   };
   client: {
     id: string;

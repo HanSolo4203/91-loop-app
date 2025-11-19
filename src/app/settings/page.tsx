@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Navigation from '@/components/navigation';
@@ -22,6 +22,7 @@ import {
   AlertCircle,
   CheckCircle,
   Users,
+  Building,
   Plus as PlusIcon
 } from 'lucide-react';
 import Link from 'next/link';
@@ -71,6 +72,28 @@ function SettingsLoading() {
   );
 }
 
+const BUSINESS_SETTINGS_DEFAULT = {
+  id: '',
+  company_name: 'RSL Express',
+  email: 'info@rslexpress.co.za',
+  phone: '+27 (0) 21 XXX XXXX',
+  address: '',
+  website: '',
+  logo_url: '',
+};
+
+type BusinessSettingsFormState = typeof BUSINESS_SETTINGS_DEFAULT;
+
+const mapBusinessSettingsResponse = (data: Partial<BusinessSettingsFormState> | null | undefined): BusinessSettingsFormState => ({
+  id: data?.id || '',
+  company_name: data?.company_name || BUSINESS_SETTINGS_DEFAULT.company_name,
+  email: data?.email || BUSINESS_SETTINGS_DEFAULT.email,
+  phone: data?.phone || BUSINESS_SETTINGS_DEFAULT.phone,
+  address: data?.address || '',
+  website: data?.website || '',
+  logo_url: data?.logo_url || '',
+});
+
 
 // Breadcrumb component
 function Breadcrumb() {
@@ -112,6 +135,15 @@ function SettingsContent() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
   const [clientSuccess, setClientSuccess] = useState<string | null>(null);
+
+  // Business settings state
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettingsFormState>(() => ({
+    ...BUSINESS_SETTINGS_DEFAULT,
+  }));
+  const [businessLoading, setBusinessLoading] = useState(false);
+  const [businessSaving, setBusinessSaving] = useState(false);
+  const [businessStatus, setBusinessStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [businessMessage, setBusinessMessage] = useState('');
 
   // Load categories from API
   useEffect(() => {
@@ -347,6 +379,83 @@ function SettingsContent() {
       setIsAddingCategory(false);
     }
   };
+
+  const loadBusinessSettings = useCallback(async () => {
+    setBusinessLoading(true);
+    setBusinessStatus('idle');
+    setBusinessMessage('');
+    try {
+      const response = await fetch('/api/business-settings');
+      const result = await response.json();
+
+      if (result.success) {
+        setBusinessSettings(mapBusinessSettingsResponse(result.data));
+      } else {
+        setBusinessSettings(mapBusinessSettingsResponse(result.data));
+        setBusinessStatus('error');
+        setBusinessMessage(result.error || 'Failed to load business information.');
+      }
+    } catch {
+      setBusinessSettings(mapBusinessSettingsResponse(null));
+      setBusinessStatus('error');
+      setBusinessMessage('Failed to load business information.');
+    } finally {
+      setBusinessLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBusinessSettings();
+  }, [loadBusinessSettings]);
+
+  const handleBusinessFieldChange = (field: keyof BusinessSettingsFormState, value: string) => {
+    setBusinessSettings(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+    setBusinessStatus('idle');
+    setBusinessMessage('');
+  };
+
+  const handleBusinessSave = async () => {
+    if (!businessSettings.company_name.trim()) {
+      setBusinessStatus('error');
+      setBusinessMessage('Company name is required.');
+      return;
+    }
+
+    setBusinessSaving(true);
+    setBusinessStatus('idle');
+    setBusinessMessage('');
+
+    try {
+      const response = await fetch('/api/business-settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(businessSettings),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setBusinessSettings(mapBusinessSettingsResponse(result.data));
+        setBusinessStatus('success');
+        setBusinessMessage('Business information updated successfully.');
+      } else {
+        setBusinessStatus('error');
+        setBusinessMessage(result.error || 'Failed to update business information.');
+      }
+    } catch {
+      setBusinessStatus('error');
+      setBusinessMessage('Failed to update business information. Please try again.');
+    } finally {
+      setBusinessSaving(false);
+    }
+  };
+
+  const isBusinessFormDisabled = businessLoading || businessSaving;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -630,6 +739,160 @@ function SettingsContent() {
         {/* Other Settings Sections */}
         {activeTab !== 'pricing' && activeTab !== 'clients' && (
           <div className="space-y-6">
+            {/* Business Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Building className="w-5 h-5" />
+                  <span>Business Profile</span>
+                </CardTitle>
+                <CardDescription>
+                  Configure the company information that appears on invoices and reports
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {businessStatus !== 'idle' && businessMessage && (
+                  <div
+                    className={`p-3 rounded-lg text-sm flex items-center space-x-2 ${
+                      businessStatus === 'success'
+                        ? 'bg-green-50 border border-green-200 text-green-800'
+                        : 'bg-red-50 border border-red-200 text-red-800'
+                    }`}
+                  >
+                    {businessStatus === 'success' ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4" />
+                    )}
+                    <span>{businessMessage}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="company_name" className="text-sm font-medium text-slate-700">
+                      Company Name *
+                    </label>
+                    <input
+                      type="text"
+                      id="company_name"
+                      value={businessSettings.company_name}
+                      onChange={(e) => handleBusinessFieldChange('company_name', e.target.value)}
+                      disabled={isBusinessFormDisabled}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="business_email" className="text-sm font-medium text-slate-700">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      id="business_email"
+                      value={businessSettings.email}
+                      onChange={(e) => handleBusinessFieldChange('email', e.target.value)}
+                      disabled={isBusinessFormDisabled}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="business_phone" className="text-sm font-medium text-slate-700">
+                      Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      id="business_phone"
+                      value={businessSettings.phone}
+                      onChange={(e) => handleBusinessFieldChange('phone', e.target.value)}
+                      disabled={isBusinessFormDisabled}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="business_website" className="text-sm font-medium text-slate-700">
+                      Website
+                    </label>
+                    <input
+                      type="text"
+                      id="business_website"
+                      value={businessSettings.website}
+                      onChange={(e) => handleBusinessFieldChange('website', e.target.value)}
+                      disabled={isBusinessFormDisabled}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="business_address" className="text-sm font-medium text-slate-700">
+                    Company Address
+                  </label>
+                  <textarea
+                    id="business_address"
+                    rows={3}
+                    value={businessSettings.address}
+                    onChange={(e) => handleBusinessFieldChange('address', e.target.value)}
+                    disabled={isBusinessFormDisabled}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 resize-y"
+                    placeholder="Street, City, Postal Code"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="business_logo" className="text-sm font-medium text-slate-700">
+                    Logo URL
+                  </label>
+                  <input
+                    type="text"
+                    id="business_logo"
+                    value={businessSettings.logo_url}
+                    onChange={(e) => handleBusinessFieldChange('logo_url', e.target.value)}
+                    disabled={isBusinessFormDisabled}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                    placeholder="https://..."
+                  />
+                  {businessSettings.logo_url && (
+                    <div className="flex items-center space-x-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={businessSettings.logo_url}
+                        alt={`${businessSettings.company_name} logo`}
+                        className="h-12 w-auto object-contain border border-slate-200 rounded-md bg-white px-2 py-1"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="text-xs text-slate-500">Logo preview</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    onClick={handleBusinessSave}
+                    disabled={isBusinessFormDisabled}
+                    className="flex items-center space-x-2"
+                  >
+                    {businessSaving ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span>{businessSaving ? 'Saving...' : 'Save Business Profile'}</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => loadBusinessSettings()}
+                    disabled={isBusinessFormDisabled}
+                    className="flex items-center space-x-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${businessLoading ? 'animate-spin' : ''}`} />
+                    <span>Reload</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Profile Settings */}
             <Card>
               <CardHeader>
