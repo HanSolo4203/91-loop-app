@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import type { Database, RFIDDataInsert } from '@/types/database';
+import type { Database } from '@/types/database';
 
 interface RFIDRecord {
   'RFID Number'?: string;
@@ -74,12 +74,8 @@ export async function POST(request: Request) {
       date_time: parseDate(record['Date/Time']),
     }));
 
-    // Type assertion to ensure TypeScript recognizes the rfid_data table
-    // The rfid_data table exists in the database but TypeScript inference may fail
-    // Casting to any to bypass TypeScript's type inference limitation
-    // The types are correct at runtime - rfid_data table exists and transformedRecords match the Insert type
-    const { data, error } = await (supabaseAdmin
-      .from('rfid_data') as any)
+    const { data, error } = await supabaseAdmin
+      .from('rfid_data')
       .insert(transformedRecords)
       .select();
 

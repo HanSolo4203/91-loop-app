@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import type { LinenCategoryInsert } from '@/types/database';
+import type { LinenCategory, LinenCategoryInsert } from '@/types/database';
 
 // GET /api/categories - Get all linen categories
 export async function GET() {
@@ -88,11 +88,11 @@ export async function POST(request: NextRequest) {
       is_active
     };
 
-    const { data: category, error } = await (supabaseAdmin as any)
+    const { data: category, error } = await supabaseAdmin
       .from('linen_categories')
       .insert(newCategory)
       .select()
-      .single();
+      .single<LinenCategory>();
 
     if (error) {
       console.error('Error creating category:', error);

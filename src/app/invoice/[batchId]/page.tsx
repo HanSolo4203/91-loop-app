@@ -46,6 +46,18 @@ interface InvoiceItem {
   discrepancy_value: number;
 }
 
+interface BusinessInfo {
+  id?: string;
+  company_name?: string | null;
+  logo_url?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+}
+
+const INVOICE_LOGO_SRC = '/rsllogo.png';
+
 export default function InvoicePage() {
   const params = useParams();
   const batchId = params.batchId as string;
@@ -53,18 +65,41 @@ export default function InvoicePage() {
   const [batchDetails, setBatchDetails] = useState<BatchDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null);
 
   useEffect(() => {
-    const fetchBatchDetails = async () => {
+    const fetchInvoiceData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/batches/${batchId}`);
-        const result = await response.json();
+        setError('');
 
-        if (result.success) {
-          setBatchDetails(result.data);
+        const [batchResult, businessResult] = await Promise.allSettled([
+          fetch(`/api/batches/${batchId}`).then((res) => res.json()),
+          fetch('/api/business-settings').then((res) => res.json()),
+        ]);
+
+        if (
+          batchResult.status !== 'fulfilled' ||
+          !batchResult.value?.success
+        ) {
+          const message =
+            batchResult.status === 'fulfilled'
+              ? batchResult.value.error || 'Failed to load invoice data'
+              : 'Failed to load invoice data. Please try again.';
+          setBatchDetails(null);
+          setError(message);
+          return;
+        }
+
+        setBatchDetails(batchResult.value.data);
+
+        if (
+          businessResult.status === 'fulfilled' &&
+          businessResult.value?.success
+        ) {
+          setBusinessInfo(businessResult.value.data);
         } else {
-          setError(result.error || 'Failed to load invoice data');
+          setBusinessInfo(null);
         }
       } catch {
         setError('Failed to load invoice data. Please try again.');
@@ -74,7 +109,7 @@ export default function InvoicePage() {
     };
 
     if (batchId) {
-      fetchBatchDetails();
+      fetchInvoiceData();
     }
   }, [batchId]);
 
@@ -133,8 +168,13 @@ export default function InvoicePage() {
   const vat = Math.round(adjustedSubtotal * vatRate * 100) / 100;
   const total = Math.round((adjustedSubtotal + vat) * 100) / 100;
 
-  // Get logo URL from Supabase storage
-  const logoUrl = `https://bwuslachnnapmtenbdgq.supabase.co/storage/v1/object/public/business-logos/rsl_dynamic_italic_final444.svg`;
+  const businessDetails = {
+    company_name: businessInfo?.company_name || 'RSL Express',
+    email: businessInfo?.email || 'info@rslexpress.co.za',
+    phone: businessInfo?.phone || '+27 (0) 21 XXX XXXX',
+    address: businessInfo?.address || 'Cape Town, South Africa',
+    website: businessInfo?.website || '',
+  };
 
   return (
     <div className="min-h-screen bg-white p-8 print:p-4">
@@ -153,30 +193,31 @@ export default function InvoicePage() {
         <div className="flex items-start justify-between mb-8 border-b-2 border-blue-100 pb-8">
           <div className="flex flex-col">
             <Image 
-              src={logoUrl} 
-              alt="RSL Express Logo" 
+              src={INVOICE_LOGO_SRC}
+              alt="RSL Express Laundry logo"
               width={256}
               height={128}
-              className="h-32 w-auto object-contain mb-4"
-              onError={(e) => {
-                // Fallback to text if image fails to load
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                target.nextElementSibling?.classList.remove('hidden');
-              }}
+              priority
+              quality={100}
+              className="h-12 w-auto object-contain mb-4"
+              sizes="(max-width: 768px) 96px, 192px"
             />
-            <div className="hidden">
-              <h1 className="text-3xl font-bold text-blue-900">RSL Express</h1>
-              <p className="text-blue-700 font-medium">Professional Laundry Services</p>
-            </div>
             
             {/* Company Details */}
             <div className="text-slate-700 space-y-1">
-              <p className="font-semibold text-lg text-slate-900">RSL Express</p>
-              <p className="text-sm">Professional Laundry Services</p>
-              <p className="text-sm">Cape Town, South Africa</p>
-              <p className="text-sm">Email: info@rslexpress.co.za</p>
-              <p className="text-sm">Phone: +27 (0) 21 XXX XXXX</p>
+              <p className="font-semibold text-lg text-slate-900">{businessDetails.company_name}</p>
+              {businessDetails.address && (
+                <p className="text-sm whitespace-pre-line">{businessDetails.address}</p>
+              )}
+              {businessDetails.email && (
+                <p className="text-sm">Email: {businessDetails.email}</p>
+              )}
+              {businessDetails.phone && (
+                <p className="text-sm">Phone: {businessDetails.phone}</p>
+              )}
+              {businessDetails.website && (
+                <p className="text-sm">Website: {businessDetails.website}</p>
+              )}
             </div>
           </div>
           

@@ -14,7 +14,8 @@ import {
   ArrowLeft, 
   RefreshCw, 
   AlertCircle, 
-  Package
+  Package,
+  FileEdit
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -266,6 +267,16 @@ function BatchDetailsContent() {
               </Link>
             </div>
             <div className="flex items-center space-x-3">
+              <Button
+                size="sm"
+                className="flex items-center space-x-2"
+                asChild
+              >
+                <Link href={`/batch/${batchDetails.id}/edit`}>
+                  <FileEdit className="w-4 h-4" />
+                  <span>Amend Invoice</span>
+                </Link>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

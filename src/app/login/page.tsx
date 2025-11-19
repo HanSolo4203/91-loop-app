@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+
+type ProfileRole = { role: 'admin' | 'user' };
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,7 +79,7 @@ export default function LoginPage() {
           .from('profiles')
           .select('role')
           .eq('id', data.user.id)
-          .single() as { data: { role: 'admin' | 'user' } | null; error: any };
+          .single<ProfileRole>();
 
         console.log('Profile check:', { profile, profileError });
 

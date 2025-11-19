@@ -2,9 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   getBatchItems
 } from '@/lib/services/batch-details';
+import { updateBatchItems as updateBatchItemsService } from '@/lib/services/batches';
 import type { 
-  BatchDetailsServiceResponse
+  BatchDetailsServiceResponse,
+  BatchItemWithDetails
 } from '@/lib/services/batch-details';
+import type { Batch, BatchItem } from '@/types/database';
+
+interface BatchItemsSummary {
+  total_items: number;
+  total_sent: number;
+  total_received: number;
+  total_sent_value: number;
+  total_received_value: number;
+  total_discrepancy_value: number;
+  items_with_discrepancy: number;
+  discrepancy_percentage: number;
+}
+
+interface BatchItemsApiResponse {
+  items: BatchItemWithDetails[];
+  summary: BatchItemsSummary;
+  batch_id: string;
+}
+
+type UpdateBatchItemsResponse = {
+  batch: Batch;
+  items: BatchItem[];
+};
 
 // GET /api/batches/[id]/items - Get batch items with pricing calculations
 export async function GET(
@@ -56,7 +81,7 @@ export async function GET(
         : 0
     };
 
-    const response = {
+    const response: BatchItemsApiResponse = {
       items,
       summary,
       batch_id: id
@@ -67,8 +92,7 @@ export async function GET(
         success: true,
         error: null,
         data: response,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as BatchDetailsServiceResponse<any>,
+      } as BatchDetailsServiceResponse<BatchItemsApiResponse>,
       { status: 200 }
     );
   } catch (error) {
@@ -97,15 +121,85 @@ export async function POST() {
   );
 }
 
-export async function PUT() {
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'Method not allowed. Use GET to retrieve batch items.',
-      data: null,
-    } as BatchDetailsServiceResponse<null>,
-    { status: 405 }
-  );
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    if (!id || typeof id !== 'string') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Batch ID is required and must be a string',
+          data: null,
+        } as BatchDetailsServiceResponse<null>,
+        { status: 400 }
+      );
+    }
+
+    let payload: { items?: unknown; notes?: string };
+    try {
+      payload = await request.json();
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid JSON in request body',
+          data: null,
+        } as BatchDetailsServiceResponse<null>,
+        { status: 400 }
+      );
+    }
+
+    if (!payload.items || !Array.isArray(payload.items)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Request must include an items array',
+          data: null,
+        } as BatchDetailsServiceResponse<null>,
+        { status: 400 }
+      );
+    }
+
+    const result = await updateBatchItemsService(id, {
+      items: payload.items,
+      notes: payload.notes ?? undefined,
+    });
+
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error,
+          data: null,
+        } as BatchDetailsServiceResponse<null>,
+        { status: result.statusCode || (result.error?.includes('not found') ? 404 : 400) }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        error: null,
+        data: result.data,
+      } as BatchDetailsServiceResponse<UpdateBatchItemsResponse>,
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('PUT /api/batches/[id]/items error:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Internal server error',
+        data: null,
+      } as BatchDetailsServiceResponse<null>,
+      { status: 500 }
+    );
+  }
 }
 
 export async function PATCH() {

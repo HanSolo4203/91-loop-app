@@ -26,6 +26,7 @@ export interface BatchServiceResponse<T> {
   data: T | null;
   error: string | null;
   success: boolean;
+  statusCode?: number;
 }
 
 // Request/response types
@@ -44,6 +45,11 @@ export interface CreateBatchRequest {
   status?: BatchStatus;
   notes?: string;
   items: BatchItemData[];
+}
+
+export interface UpdateBatchItemsRequest {
+  items: BatchItemData[];
+  notes?: string | null;
 }
 
 export interface BatchWithDetails extends Batch {
@@ -275,6 +281,306 @@ export async function calculateBatchTotal(items: BatchItemData[]): Promise<numbe
       'CALCULATE_TOTAL_ERROR',
       500
     );
+  }
+}
+
+interface PreparedBatchItem {
+  linen_category_id: string;
+  quantity_sent: number;
+  quantity_received: number;
+  price_per_item: number;
+  discrepancy_details?: string | null;
+}
+
+/**
+ * Update the items that belong to an existing batch
+ * @param batchId - Batch UUID
+ * @param payload - Items payload
+ * @returns Promise<BatchServiceResponse<{ batch: Batch; items: BatchItem[] }>>
+ */
+export async function updateBatchItems(
+  batchId: string,
+  payload: UpdateBatchItemsRequest
+): Promise<BatchServiceResponse<{ batch: Batch; items: BatchItem[] }>> {
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(batchId)) {
+      throw new BatchServiceError(
+        'Invalid batch ID format',
+        'INVALID_ID',
+        400
+      );
+    }
+
+    if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) {
+      throw new BatchServiceError(
+        'At least one item is required to amend a batch',
+        'INVALID_ITEMS',
+        400
+      );
+    }
+
+    const errors: string[] = [];
+    const seenCategories = new Set<string>();
+
+    payload.items.forEach((item, index) => {
+      const prefix = `Item ${index + 1}:`;
+
+      if (!item.linen_category_id || item.linen_category_id.trim().length === 0) {
+        errors.push(`${prefix} Linen category ID is required`);
+      } else if (seenCategories.has(item.linen_category_id)) {
+        errors.push(`${prefix} Duplicate linen category detected`);
+      } else {
+        seenCategories.add(item.linen_category_id);
+      }
+
+      if (typeof item.quantity_sent !== 'number' || item.quantity_sent < 0 || !Number.isInteger(item.quantity_sent)) {
+        errors.push(`${prefix} Quantity sent must be a non-negative integer`);
+      } else if (item.quantity_sent > 10000) {
+        errors.push(`${prefix} Quantity sent cannot exceed 10,000`);
+      }
+
+      if (item.quantity_received !== undefined) {
+        if (typeof item.quantity_received !== 'number' || item.quantity_received < 0 || !Number.isInteger(item.quantity_received)) {
+          errors.push(`${prefix} Quantity received must be a non-negative integer`);
+        } else if (item.quantity_received > 10000) {
+          errors.push(`${prefix} Quantity received cannot exceed 10,000`);
+        }
+      }
+
+      if (item.price_per_item !== undefined) {
+        if (typeof item.price_per_item !== 'number' || item.price_per_item < 0) {
+          errors.push(`${prefix} Price per item must be a non-negative number`);
+        } else if (item.price_per_item > 1000) {
+          errors.push(`${prefix} Price per item cannot exceed R1000`);
+        }
+      }
+    });
+
+    if (errors.length > 0) {
+      throw new BatchServiceError(
+        `Validation failed: ${errors.join(', ')}`,
+        'VALIDATION_ERROR',
+        400
+      );
+    }
+
+    const uniqueCategoryIds = Array.from(seenCategories);
+    const { data: categories, error: categoriesError } = await supabaseAdmin
+      .from('linen_categories')
+      .select('id, price_per_item, is_active')
+      .in('id', uniqueCategoryIds);
+
+    if (categoriesError) {
+      throw new BatchServiceError(
+        `Failed to load linen categories: ${categoriesError.message}`,
+        'CATEGORY_LOOKUP_ERROR',
+        500
+      );
+    }
+
+    if (!categories || categories.length !== uniqueCategoryIds.length) {
+      throw new BatchServiceError(
+        'One or more linen categories could not be found',
+        'CATEGORY_NOT_FOUND',
+        400
+      );
+    }
+
+    const categoryMap = new Map<string, { price_per_item: number; is_active: boolean }>();
+    categories.forEach((category: any) => {
+      categoryMap.set(category.id, {
+        price_per_item: category.price_per_item,
+        is_active: category.is_active,
+      });
+    });
+
+    for (const categoryId of uniqueCategoryIds) {
+      const category = categoryMap.get(categoryId);
+      if (!category) {
+        throw new BatchServiceError(
+          `Linen category ${categoryId} does not exist`,
+          'CATEGORY_NOT_FOUND',
+          400
+        );
+      }
+
+      if (!category.is_active) {
+        throw new BatchServiceError(
+          `Linen category ${categoryId} is inactive`,
+          'CATEGORY_INACTIVE',
+          400
+        );
+      }
+    }
+
+    const preparedItems: PreparedBatchItem[] = payload.items.map((item) => {
+      const category = categoryMap.get(item.linen_category_id);
+      const pricePerItem = item.price_per_item ?? category?.price_per_item ?? 0;
+      const quantityReceived = item.quantity_received !== undefined ? item.quantity_received : item.quantity_sent;
+
+      return {
+        linen_category_id: item.linen_category_id,
+        quantity_sent: item.quantity_sent,
+        quantity_received: quantityReceived,
+        price_per_item: pricePerItem,
+        discrepancy_details: item.discrepancy_details || null,
+      };
+    });
+
+    const totalAmount = preparedItems.reduce((sum, item) => {
+      return sum + item.quantity_received * item.price_per_item;
+    }, 0);
+
+    // Ensure batch exists
+    const { data: existingBatch, error: batchError } = await supabaseAdmin
+      .from('batches')
+      .select('id, notes')
+      .eq('id', batchId)
+      .single();
+
+    if (batchError || !existingBatch) {
+      throw new BatchServiceError(
+        'Batch not found',
+        'NOT_FOUND',
+        404
+      );
+    }
+
+    const { data: existingItems, error: existingItemsError } = await supabaseAdmin
+      .from('batch_items')
+      .select('id, linen_category_id')
+      .eq('batch_id', batchId);
+
+    if (existingItemsError) {
+      throw new BatchServiceError(
+        `Failed to load existing batch items: ${existingItemsError.message}`,
+        'ITEMS_FETCH_ERROR',
+        500
+      );
+    }
+
+    const existingItemsMap = new Map<string, { id: string }>();
+    (existingItems || []).forEach((item) => {
+      existingItemsMap.set(item.linen_category_id, { id: item.id });
+    });
+
+    const upsertPayload = preparedItems.map((item) => {
+      const existing = existingItemsMap.get(item.linen_category_id);
+      return {
+        ...(existing ? { id: existing.id } : {}),
+        batch_id: batchId,
+        linen_category_id: item.linen_category_id,
+        quantity_sent: item.quantity_sent,
+        quantity_received: item.quantity_received,
+        price_per_item: item.price_per_item,
+        discrepancy_details: item.discrepancy_details || null,
+        subtotal: item.quantity_received * item.price_per_item,
+      };
+    });
+
+    if (upsertPayload.length > 0) {
+      const { error: upsertError } = await (supabaseAdmin as any)
+        .from('batch_items')
+        .upsert(upsertPayload, { onConflict: 'id' });
+
+      if (upsertError) {
+        throw new BatchServiceError(
+          `Failed to update batch items: ${upsertError.message}`,
+          'ITEMS_UPSERT_ERROR',
+          500
+        );
+      }
+    }
+
+    const newCategoryIds = new Set(preparedItems.map((item) => item.linen_category_id));
+    const idsToDelete =
+      existingItems
+        ?.filter((item) => !newCategoryIds.has(item.linen_category_id))
+        .map((item) => item.id) || [];
+
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabaseAdmin
+        .from('batch_items')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (deleteError) {
+        throw new BatchServiceError(
+          `Failed to remove old batch items: ${deleteError.message}`,
+          'ITEMS_DELETE_ERROR',
+          500
+        );
+      }
+    }
+
+    const batchUpdatePayload: Record<string, unknown> = {
+      total_amount: Math.round(totalAmount * 100) / 100,
+      has_discrepancy,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (payload.notes !== undefined) {
+      batchUpdatePayload.notes = payload.notes?.trim() || null;
+    }
+
+    const { data: updatedBatch, error: batchUpdateError } = await (supabaseAdmin as any)
+      .from('batches')
+      .update(batchUpdatePayload)
+      .eq('id', batchId)
+      .select()
+      .single();
+
+    if (batchUpdateError) {
+      throw new BatchServiceError(
+        `Failed to update batch totals: ${batchUpdateError.message}`,
+        'BATCH_UPDATE_ERROR',
+        500
+      );
+    }
+
+    const { data: refreshedItems, error: refreshedItemsError } = await supabaseAdmin
+      .from('batch_items')
+      .select(`
+        *,
+        linen_category:linen_categories(id, name, price_per_item, is_active, created_at, updated_at)
+      `)
+      .eq('batch_id', batchId)
+      .order('created_at', { ascending: true });
+
+    if (refreshedItemsError) {
+      throw new BatchServiceError(
+        `Failed to fetch updated batch items: ${refreshedItemsError.message}`,
+        'ITEMS_FETCH_ERROR',
+        500
+      );
+    }
+
+    return {
+      data: {
+        batch: updatedBatch as Batch,
+        items: (refreshedItems as BatchItem[]) || [],
+      },
+      error: null,
+      success: true,
+      statusCode: 200,
+    };
+  } catch (error) {
+    if (error instanceof BatchServiceError) {
+      return {
+        data: null,
+        error: error.message,
+        success: false,
+        statusCode: error.statusCode,
+      };
+    }
+
+    return {
+      data: null,
+      error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      success: false,
+      statusCode: 500,
+    };
   }
 }
 

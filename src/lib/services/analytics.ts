@@ -161,7 +161,41 @@ export interface ClientBatchSummaryItem {
   status: BatchStatus;
   total_amount: number;
   has_discrepancy: boolean;
+  total_items_sent: number;
   total_items_received: number;
+}
+
+const REPORT_YEAR_MIN = 2020;
+const REPORT_YEAR_MAX = 2030;
+
+function getDateRange(year: number, month?: number) {
+  if (year < REPORT_YEAR_MIN || year > REPORT_YEAR_MAX) {
+    throw new AnalyticsServiceError(
+      `Year must be between ${REPORT_YEAR_MIN} and ${REPORT_YEAR_MAX}`,
+      'INVALID_YEAR',
+      400
+    );
+  }
+
+  if (typeof month === 'number') {
+    if (month < 1 || month > 12) {
+      throw new AnalyticsServiceError(
+        'Month must be between 1 and 12',
+        'INVALID_MONTH',
+        400
+      );
+    }
+
+    return {
+      startDate: new Date(year, month - 1, 1).toISOString().split('T')[0],
+      endDate: new Date(year, month, 0).toISOString().split('T')[0],
+    };
+  }
+
+  return {
+    startDate: new Date(year, 0, 1).toISOString().split('T')[0],
+    endDate: new Date(year, 11, 31).toISOString().split('T')[0],
+  };
 }
 
 export interface BatchInvoiceItem {
@@ -262,24 +296,17 @@ export async function getBatchInvoice(
 /**
  * Get batches for a specific client within a given month
  */
-export async function getClientBatchesByMonth(
+async function getClientBatchesByPeriod(
   clientId: string,
   year: number,
-  month: number
+  month?: number
 ): Promise<AnalyticsServiceResponse<ClientBatchSummaryItem[]>> {
   try {
     if (!clientId) {
       throw new AnalyticsServiceError('Client ID is required', 'INVALID_CLIENT', 400);
     }
-    if (year < 2020 || year > 2030) {
-      throw new AnalyticsServiceError('Year must be between 2020 and 2030', 'INVALID_YEAR', 400);
-    }
-    if (month < 1 || month > 12) {
-      throw new AnalyticsServiceError('Month must be between 1 and 12', 'INVALID_MONTH', 400);
-    }
 
-    const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+    const { startDate, endDate } = getDateRange(year, month);
 
     const { data, error } = await supabaseAdmin
       .from('batches')
@@ -291,7 +318,7 @@ export async function getClientBatchesByMonth(
         status,
         total_amount,
         has_discrepancy,
-        items:batch_items(quantity_received)
+        items:batch_items(quantity_received, quantity_sent)
       `)
       .eq('client_id', clientId)
       .gte('pickup_date', startDate)
@@ -309,6 +336,7 @@ export async function getClientBatchesByMonth(
       status: b.status,
       total_amount: b.total_amount || 0,
       has_discrepancy: !!b.has_discrepancy,
+      total_items_sent: (b.items || []).reduce((s: number, it: any) => s + (it.quantity_sent || 0), 0),
       total_items_received: (b.items || []).reduce((s: number, it: any) => s + (it.quantity_received || 0), 0),
     }));
 
@@ -324,36 +352,28 @@ export async function getClientBatchesByMonth(
     };
   }
 }
-/**
- * Get per-client invoicing summary for a given month
- * @param year - Year for the report
- * @param month - Month (1-12)
- */
-export async function getInvoiceSummaryByMonth(
+
+export async function getClientBatchesByMonth(
+  clientId: string,
   year: number,
   month: number
+) {
+  return getClientBatchesByPeriod(clientId, year, month);
+}
+
+export async function getClientBatchesByYear(
+  clientId: string,
+  year: number
+) {
+  return getClientBatchesByPeriod(clientId, year);
+}
+async function getInvoiceSummaryByPeriod(
+  year: number,
+  month?: number
 ): Promise<AnalyticsServiceResponse<ClientInvoiceSummary[]>> {
   try {
-    if (year < 2020 || year > 2030) {
-      throw new AnalyticsServiceError(
-        'Year must be between 2020 and 2030',
-        'INVALID_YEAR',
-        400
-      );
-    }
+    const { startDate, endDate } = getDateRange(year, month);
 
-    if (month < 1 || month > 12) {
-      throw new AnalyticsServiceError(
-        'Month must be between 1 and 12',
-        'INVALID_MONTH',
-        400
-      );
-    }
-
-    const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-
-    // Fetch batches within month with client and items
     const { data, error } = await supabaseAdmin
       .from('batches')
       .select(`
@@ -427,6 +447,19 @@ export async function getInvoiceSummaryByMonth(
       success: false,
     };
   }
+}
+
+export async function getInvoiceSummaryByMonth(
+  year: number,
+  month: number
+) {
+  return getInvoiceSummaryByPeriod(year, month);
+}
+
+export async function getInvoiceSummaryByYear(
+  year: number
+) {
+  return getInvoiceSummaryByPeriod(year);
 }
 
 /**

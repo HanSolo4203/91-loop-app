@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface MonthSelectorProps {
-  value: { month: number; year: number };
-  onChange: (month: number, year: number) => void;
+  value: { month: number | null; year: number };
+  onChange: (month: number | null, year: number) => void;
   loading?: boolean;
 }
 
-const months = [
+const monthOptions = [
   { value: 0, label: 'January' },
   { value: 1, label: 'February' },
   { value: 2, label: 'March' },
@@ -23,11 +23,12 @@ const months = [
   { value: 8, label: 'September' },
   { value: 9, label: 'October' },
   { value: 10, label: 'November' },
-  { value: 11, label: 'December' }
-];
+  { value: 11, label: 'December' },
+  { value: 'all', label: 'All Months (Year Total)' }
+] as const;
 
 export default function MonthSelector({ value, onChange, loading = false }: MonthSelectorProps) {
-  const [currentMonth, setCurrentMonth] = useState(value.month);
+  const [currentMonth, setCurrentMonth] = useState<number | null>(value.month);
   const [currentYear, setCurrentYear] = useState(value.year);
 
   useEffect(() => {
@@ -36,18 +37,27 @@ export default function MonthSelector({ value, onChange, loading = false }: Mont
   }, [value]);
 
   const handleMonthChange = (month: string) => {
-    const newMonth = parseInt(month);
+    if (month === 'all') {
+      setCurrentMonth(null);
+      onChange(null, currentYear);
+      return;
+    }
+
+    const newMonth = parseInt(month, 10);
     setCurrentMonth(newMonth);
     onChange(newMonth, currentYear);
   };
 
   const handleYearChange = (year: string) => {
-    const newYear = parseInt(year);
+    const newYear = parseInt(year, 10);
     setCurrentYear(newYear);
     onChange(currentMonth, newYear);
   };
 
   const goToPreviousMonth = () => {
+    if (currentMonth === null) {
+      return;
+    }
     let newMonth = currentMonth - 1;
     let newYear = currentYear;
     
@@ -62,6 +72,9 @@ export default function MonthSelector({ value, onChange, loading = false }: Mont
   };
 
   const goToNextMonth = () => {
+    if (currentMonth === null) {
+      return;
+    }
     let newMonth = currentMonth + 1;
     let newYear = currentYear;
     
@@ -86,7 +99,8 @@ export default function MonthSelector({ value, onChange, loading = false }: Mont
   const currentYearOption = new Date().getFullYear();
   const yearOptions = Array.from({ length: 11 }, (_, i) => currentYearOption - 5 + i);
 
-  const isCurrentMonth = currentMonth === new Date().getMonth() && currentYear === new Date().getFullYear();
+  const isCurrentMonth = currentMonth !== null && currentMonth === new Date().getMonth() && currentYear === new Date().getFullYear();
+  const isAllMonths = currentMonth === null;
 
   if (loading) {
     return (
@@ -107,17 +121,21 @@ export default function MonthSelector({ value, onChange, loading = false }: Mont
         size="sm"
         onClick={goToPreviousMonth}
         className="p-2"
-        disabled={loading}
+        disabled={loading || isAllMonths}
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
-      <Select value={currentMonth.toString()} onValueChange={handleMonthChange} disabled={loading}>
-        <SelectTrigger className="w-32">
-          <SelectValue />
+      <Select
+        value={isAllMonths ? 'all' : currentMonth?.toString() ?? ''}
+        onValueChange={handleMonthChange}
+        disabled={loading}
+      >
+        <SelectTrigger className="w-40 bg-white border border-slate-300 shadow-sm focus:ring-blue-500">
+          <SelectValue placeholder="Select month" />
         </SelectTrigger>
-        <SelectContent>
-          {months.map((month) => (
+        <SelectContent className="bg-white border border-slate-200 shadow-lg">
+          {monthOptions.map((month) => (
             <SelectItem key={month.value} value={month.value.toString()}>
               {month.label}
             </SelectItem>
@@ -126,10 +144,10 @@ export default function MonthSelector({ value, onChange, loading = false }: Mont
       </Select>
 
       <Select value={currentYear.toString()} onValueChange={handleYearChange} disabled={loading}>
-        <SelectTrigger className="w-20">
-          <SelectValue />
+        <SelectTrigger className="w-24 bg-white border border-slate-300 shadow-sm focus:ring-blue-500">
+          <SelectValue placeholder="Year" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="bg-white border border-slate-200 shadow-lg">
           {yearOptions.map((year) => (
             <SelectItem key={year} value={year.toString()}>
               {year}
@@ -143,12 +161,12 @@ export default function MonthSelector({ value, onChange, loading = false }: Mont
         size="sm"
         onClick={goToNextMonth}
         className="p-2"
-        disabled={loading}
+        disabled={loading || isAllMonths}
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
 
-      {!isCurrentMonth && (
+      {!isCurrentMonth && !isAllMonths && (
         <Button
           variant="outline"
           size="sm"

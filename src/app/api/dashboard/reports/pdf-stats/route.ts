@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { getInvoiceSummaryByMonth, getClientBatchesByMonth } from '@/lib/services/analytics';
+import { getInvoiceSummaryByMonth, getClientBatchesByMonth, getInvoiceSummaryByYear, getClientBatchesByYear } from '@/lib/services/analytics';
 
 // GET /api/dashboard/reports/pdf-stats?month=YYYY-MM
 export async function GET(request: NextRequest) {
@@ -9,7 +9,8 @@ export async function GET(request: NextRequest) {
     const monthParam = searchParams.get('month'); // YYYY-MM
 
     let targetYear: number;
-    let targetMonth: number;
+    let targetMonth: number | null = null;
+    let isAllMonths = false;
 
     if (monthParam) {
       const parts = monthParam.split('-');
@@ -24,8 +25,13 @@ export async function GET(request: NextRequest) {
         );
       }
       targetYear = parseInt(parts[0], 10);
-      targetMonth = parseInt(parts[1], 10);
-      if (isNaN(targetYear) || isNaN(targetMonth)) {
+      const monthPart = parts[1].toLowerCase();
+      if (monthPart === 'all') {
+        isAllMonths = true;
+      } else {
+        targetMonth = parseInt(monthPart, 10);
+      }
+      if (isNaN(targetYear) || (!isAllMonths && (targetMonth === null || isNaN(targetMonth)))) {
         return NextResponse.json(
           {
             success: false,
@@ -42,7 +48,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Get summary data
-    const summaryResult = await getInvoiceSummaryByMonth(targetYear, targetMonth);
+    const summaryResult = isAllMonths
+      ? await getInvoiceSummaryByYear(targetYear)
+      : await getInvoiceSummaryByMonth(targetYear, targetMonth as number);
     if (!summaryResult.success) {
       return NextResponse.json(
         {
@@ -69,7 +77,9 @@ export async function GET(request: NextRequest) {
     // Get detailed batch data for each client
     const detailedStats = [];
     for (const client of summaryData) {
-      const clientBatchesResult = await getClientBatchesByMonth(client.client_id, targetYear, targetMonth);
+      const clientBatchesResult = isAllMonths
+        ? await getClientBatchesByYear(client.client_id, targetYear)
+        : await getClientBatchesByMonth(client.client_id, targetYear, targetMonth as number);
       
       if (clientBatchesResult.success && clientBatchesResult.data) {
         const batches = clientBatchesResult.data;
@@ -113,14 +123,19 @@ export async function GET(request: NextRequest) {
       client.total_amount > (top?.total_amount || 0) ? client : top, null
     );
 
+    const periodLabel = isAllMonths
+      ? `${targetYear} (All Months)`
+      : new Date(targetYear, (targetMonth as number) - 1).toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long' 
+        });
+
     const statisticsData = {
       period: {
         year: targetYear,
-        month: targetMonth,
-        month_name: new Date(targetYear, targetMonth - 1).toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long' 
-        })
+        month: isAllMonths ? null : (targetMonth as number),
+        month_name: periodLabel,
+        is_all_months: isAllMonths,
       },
       summary: {
         total_clients: totalClients,

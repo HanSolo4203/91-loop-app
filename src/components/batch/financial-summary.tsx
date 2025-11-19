@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   CheckCircle,
   FileText,
+  Printer
 } from 'lucide-react';
 
 interface FinancialSummaryProps {
@@ -235,8 +236,8 @@ export default function FinancialSummary({
               className="flex items-center justify-center space-x-1"
               onClick={() => window.open(`/invoice/${batchId}`, '_blank')}
             >
-              <FileText className="w-3 h-3" />
-              <span className="text-xs">View Invoice</span>
+              <Printer className="w-3 h-3" />
+              <span className="text-xs">Open Invoice</span>
             </Button>
           </div>
           

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +11,7 @@ import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { categorizeBySections } from '@/lib/utils/category-sections';
 import type { LinenCategory } from '@/types/database';
 
-interface LinenCountItem {
+export interface LinenCountItem {
   category: LinenCategory;
   quantity_sent: number;
   quantity_received: number;
@@ -20,11 +20,20 @@ interface LinenCountItem {
   discrepancy_details?: string;
 }
 
+interface PrefilledItem {
+  linen_category_id: string;
+  quantity_sent: number;
+  quantity_received: number;
+  price_per_item?: number;
+  discrepancy_details?: string | null;
+}
+
 interface LinenCountGridProps {
   categories: LinenCategory[];
   onItemsChange: (items: LinenCountItem[]) => void;
   isLoading?: boolean;
   error?: string;
+  initialSelections?: PrefilledItem[];
 }
 
 export interface LinenCountGridRef {
@@ -35,13 +44,15 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
   categories,
   onItemsChange,
   isLoading = false,
-  error
+  error,
+  initialSelections,
 }, ref) => {
   const [items, setItems] = useState<LinenCountItem[]>([]);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
   const onItemsChangeRef = useRef(onItemsChange);
+  const normalizedInitialSelections = useMemo(() => initialSelections ?? [], [initialSelections]);
 
   // Update the ref when the callback changes
   useEffect(() => {
@@ -53,19 +64,36 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
     getItems: () => items
   }), [items]);
 
-  // Initialize items when categories change
+  // Initialize items when categories or initial selections change
   useEffect(() => {
-    const initialItems: LinenCountItem[] = categories.map(category => ({
-      category,
-      quantity_sent: 0,
-      quantity_received: 0,
-      price_per_item: category.price_per_item,
-      subtotal: 0,
-      discrepancy_details: '',
-    }));
+    if (categories.length === 0) {
+      setItems([]);
+      return;
+    }
+
+    const prefilledMap = new Map(
+      normalizedInitialSelections.map((selection) => [selection.linen_category_id, selection])
+    );
+
+    const initialItems: LinenCountItem[] = categories.map((category) => {
+      const existing = prefilledMap.get(category.id);
+      const quantitySent = existing ? existing.quantity_sent : 0;
+      const quantityReceived = existing ? existing.quantity_received : 0;
+      const pricePerItem = existing?.price_per_item ?? category.price_per_item;
+
+      return {
+        category,
+        quantity_sent: quantitySent,
+        quantity_received: quantityReceived,
+        price_per_item: pricePerItem,
+        subtotal: quantityReceived * pricePerItem,
+        discrepancy_details: existing?.discrepancy_details || '',
+      };
+    });
+
     setItems(initialItems);
     // Don't notify parent during initialization - only on user interaction
-  }, [categories]);
+  }, [categories, normalizedInitialSelections]);
 
   // Notify parent when items change (but not during initialization)
   useEffect(() => {

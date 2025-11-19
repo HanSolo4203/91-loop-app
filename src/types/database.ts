@@ -97,6 +97,43 @@ export interface Database {
         };
       };
 
+      // Business Settings table
+      business_settings: {
+        Row: {
+          id: string;
+          company_name: string | null;
+          logo_url: string | null;
+          address: string | null;
+          phone: string | null;
+          email: string | null;
+          website: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_name?: string | null;
+          logo_url?: string | null;
+          address?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          website?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_name?: string | null;
+          logo_url?: string | null;
+          address?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          website?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+
       // Batches table
       batches: {
         Row: {
@@ -386,6 +423,7 @@ export type Enums<T extends keyof Database['public']['Enums']> = Database['publi
 export type Profile = Tables<'profiles'>;
 export type LinenCategory = Tables<'linen_categories'>;
 export type Client = Tables<'clients'>;
+export type BusinessSettings = Tables<'business_settings'>;
 export type Batch = Tables<'batches'>;
 export type BatchItem = Tables<'batch_items'>;
 export type RFIDData = Tables<'rfid_data'>;

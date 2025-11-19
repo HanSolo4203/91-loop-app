@@ -1,6 +1,5 @@
 'use client';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import Navigation from '@/components/navigation';
 import ClientInfoForm from '@/components/batch/client-info-form';
 import LinenCountGrid, { LinenCountGridRef } from '@/components/batch/linen-count-grid';
+import type { LinenCountItem } from '@/components/batch/linen-count-grid';
 import BatchTotalCard from '@/components/batch/batch-total-card';
 import { 
   LayoutDashboard, 
@@ -101,7 +101,7 @@ function NewBatchContent() {
   const [isClient, setIsClient] = useState(false);
   const [notes, setNotes] = useState('');
   const [categories, setCategories] = useState<LinenCategory[]>([]);
-  const [linenItems, setLinenItems] = useState<any[]>([]);
+  const [linenItems, setLinenItems] = useState<LinenCountItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [createStatus, setCreateStatus] = useState<'draft' | 'ready' | 'creating' | 'success' | 'error'>('draft');
@@ -250,7 +250,7 @@ function NewBatchContent() {
   };
 
   // Handle linen items change
-  const handleLinenItemsChange = useCallback((items: any[]) => {
+  const handleLinenItemsChange = useCallback((items: LinenCountItem[]) => {
     setLinenItems(items);
   }, []);
 

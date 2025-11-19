@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import type { LinenCategory, LinenCategoryUpdate } from '@/types/database';
+import type { Database, LinenCategory, LinenCategoryUpdate } from '@/types/database';
 
 // GET /api/categories/[id] - Get a specific linen category
 export async function GET(
@@ -138,12 +138,14 @@ export async function PATCH(
     }
 
     // Update category
-    const { data: updatedCategory, error } = await (supabaseAdmin as any)
+    const updatePayload: Database['public']['Tables']['linen_categories']['Update'] = updateData;
+
+    const { data: updatedCategory, error } = await supabaseAdmin
       .from('linen_categories')
-      .update(updateData)
+      .update(updatePayload)
       .eq('id', id)
       .select()
-      .single();
+      .single<LinenCategory>();
 
     if (error) {
       console.error('Error updating category:', error);
