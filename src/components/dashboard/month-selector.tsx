@@ -5,8 +5,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
+interface MonthSelectorValue {
+  month: number | null;
+  year: number;
+}
+
 interface MonthSelectorProps {
-  value: { month: number | null; year: number };
+  value?: MonthSelectorValue;
   onChange: (month: number | null, year: number) => void;
   loading?: boolean;
 }
@@ -28,10 +33,21 @@ const monthOptions = [
 ] as const;
 
 export default function MonthSelector({ value, onChange, loading = false }: MonthSelectorProps) {
-  const [currentMonth, setCurrentMonth] = useState<number | null>(value.month);
-  const [currentYear, setCurrentYear] = useState(value.year);
+  const now = new Date();
+  const fallbackValue: MonthSelectorValue = {
+    month: now.getMonth(),
+    year: now.getFullYear(),
+  };
+
+  const initialValue = value ?? fallbackValue;
+
+  const [currentMonth, setCurrentMonth] = useState<number | null>(initialValue.month);
+  const [currentYear, setCurrentYear] = useState(initialValue.year);
 
   useEffect(() => {
+    if (!value) {
+      return;
+    }
     setCurrentMonth(value.month);
     setCurrentYear(value.year);
   }, [value]);

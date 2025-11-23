@@ -218,6 +218,7 @@ function NewBatchContent() {
             quantity_received: item.quantity_received,
             price_per_item: item.price_per_item,
             discrepancy_details: item.discrepancy_details || null,
+            express_delivery: item.express_delivery || false,
           }))
       };
 

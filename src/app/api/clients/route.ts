@@ -10,6 +10,10 @@ import type {
   CreateClientRequest,
   ClientSearchFilters 
 } from '@/lib/services/clients';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 5 minutes (300 seconds)
+export const revalidate = 300;
 
 // GET /api/clients - Fetch clients with pagination and filtering
 export async function GET(request: NextRequest) {
@@ -28,13 +32,14 @@ export async function GET(request: NextRequest) {
       
       if (isActive) {
         if (!['true', 'false'].includes(isActive)) {
-          return NextResponse.json(
+          return cachedJsonResponse(
             {
               success: false,
               error: 'is_active must be true or false',
               data: null,
             } as ClientServiceResponse<null>,
-            { status: 400 }
+            'noCache',
+            400
           );
         }
         filters.is_active = isActive === 'true';
@@ -43,13 +48,14 @@ export async function GET(request: NextRequest) {
       if (page) {
         const pageNum = parseInt(page, 10);
         if (isNaN(pageNum) || pageNum < 1) {
-          return NextResponse.json(
+          return cachedJsonResponse(
             {
               success: false,
               error: 'Page must be a positive integer',
               data: null,
             } as ClientServiceResponse<null>,
-            { status: 400 }
+            'noCache',
+            400
           );
         }
         filters.page = pageNum;
@@ -58,13 +64,14 @@ export async function GET(request: NextRequest) {
       if (pageSize) {
         const pageSizeNum = parseInt(pageSize, 10);
         if (isNaN(pageSizeNum) || pageSizeNum < 1 || pageSizeNum > 100) {
-          return NextResponse.json(
+          return cachedJsonResponse(
             {
               success: false,
               error: 'Page size must be between 1 and 100',
               data: null,
             } as ClientServiceResponse<null>,
-            { status: 400 }
+            'noCache',
+            400
           );
         }
         filters.page_size = pageSizeNum;
@@ -73,23 +80,24 @@ export async function GET(request: NextRequest) {
       const result = await searchClients(search, filters);
       
       if (!result.success) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: result.error,
             data: null,
           } as ClientServiceResponse<null>,
-          { status: 500 }
+          'noCache',
+          500
         );
       }
 
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: true,
           error: null,
           data: result.data,
         } as ClientServiceResponse<any>,
-        { status: 200 }
+        'semiStatic' // Search results can be cached briefly
       );
     }
 
@@ -98,13 +106,14 @@ export async function GET(request: NextRequest) {
     
     if (isActive) {
       if (!['true', 'false'].includes(isActive)) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'is_active must be true or false',
             data: null,
           } as ClientServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
       filters.is_active = isActive === 'true';
@@ -113,13 +122,14 @@ export async function GET(request: NextRequest) {
     if (page) {
       const pageNum = parseInt(page, 10);
       if (isNaN(pageNum) || pageNum < 1) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Page must be a positive integer',
             data: null,
           } as ClientServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
       filters.page = pageNum;
@@ -128,13 +138,14 @@ export async function GET(request: NextRequest) {
     if (pageSize) {
       const pageSizeNum = parseInt(pageSize, 10);
       if (isNaN(pageSizeNum) || pageSizeNum < 1 || pageSizeNum > 100) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Page size must be between 1 and 100',
             data: null,
           } as ClientServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
       filters.page_size = pageSizeNum;
@@ -143,34 +154,36 @@ export async function GET(request: NextRequest) {
     const result = await getAllClients(filters);
     
     if (!result.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as ClientServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as ClientServiceResponse<any>,
-      { status: 200 }
+      'semiStatic' // Clients change occasionally
     );
   } catch (error) {
     console.error('GET /api/clients error:', error);
     
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       } as ClientServiceResponse<null>,
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }

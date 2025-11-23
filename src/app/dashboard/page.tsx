@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Navigation from '@/components/navigation';
 import MetricCard from '@/components/dashboard/metric-card';
@@ -8,21 +8,47 @@ import MonthSelector from '@/components/dashboard/month-selector';
 import BatchesTable from '@/components/dashboard/batches-table';
 import { EmptyState, EmptyBatches } from '@/components/ui/empty-state';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { 
-  LayoutDashboard, 
-  Package, 
-  DollarSign, 
-  TrendingUp, 
-  CheckCircle, 
+import {
+  LayoutDashboard,
+  Package,
+  DollarSign,
+  TrendingUp,
+  CheckCircle,
   AlertTriangle,
   Calendar,
   Plus,
   RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
+import { BatchStatus } from '@/types/database';
 
-// Remove metadata export since this is now a client component
+type MetricsSummary = {
+  totalBatches: number;
+  totalRevenue: number;
+  totalItemsProcessed: number;
+  averageBatchValue: number;
+  completedBatches: number;
+  discrepancyCount: number;
+};
 
+type DashboardMetrics = {
+  totalBatches: number;
+  totalRevenue: number;
+  totalItems: number;
+  avgBatchValue: number;
+  completedBatches: number;
+  discrepancies: number;
+};
+
+type DashboardBatch = {
+  id: string;
+  paper_batch_id: string;
+  client: { name: string };
+  pickup_date: string;
+  status: BatchStatus;
+  total_amount: number;
+  created_at: string;
+};
 
 // Breadcrumb component
 function Breadcrumb() {
@@ -41,7 +67,8 @@ function DashboardContent() {
     month: new Date().getMonth(), // Current month (0-based index)
     year: new Date().getFullYear() // Current year
   });
-  const [metrics, setMetrics] = useState({
+
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalBatches: 0,
     totalRevenue: 0,
     totalItems: 0,
@@ -49,31 +76,23 @@ function DashboardContent() {
     completedBatches: 0,
     discrepancies: 0
   });
-  const [batches, setBatches] = useState([]);
-  
+
+  const [batches, setBatches] = useState<DashboardBatch[]>([]);
+
   // Simple loading and error states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch dashboard data
-  const fetchDashboardData = async (month: number | null, year: number) => {
+  const fetchDashboardData = useCallback(async (month: number | null, year: number) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const isYearlyView = month === null;
       let startDate: string;
       let endDate: string;
       let batchesResponse: Response | null = null;
-
-      type MetricsSummary = {
-        totalBatches: number;
-        totalRevenue: number;
-        totalItemsProcessed: number;
-        averageBatchValue: number;
-        completedBatches: number;
-        discrepancyCount: number;
-      };
 
       let metricsSummary: MetricsSummary = {
         totalBatches: 0,
@@ -88,8 +107,6 @@ function DashboardContent() {
         startDate = `${year}-01-01`;
         endDate = `${year}-12-31`;
 
-        console.log('🔍 Fetching yearly data for:', year);
-
         const monthlyRequests = Array.from({ length: 12 }, (_, index) => {
           const formattedMonth = `${year}-${String(index + 1).padStart(2, '0')}`;
           return fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`);
@@ -101,7 +118,6 @@ function DashboardContent() {
         }
 
         const monthPayloads = await Promise.all(monthResponses.map((response) => response.json()));
-
         monthPayloads.forEach((payload, index) => {
           if (!payload.success) {
             throw new Error(payload.error || `Failed to fetch metrics for month ${index + 1}`);
@@ -147,26 +163,16 @@ function DashboardContent() {
         startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
         endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]; // Last day of the month
 
-        console.log('🔍 Fetching data for:', formattedMonth);
-        console.log('📅 Date range:', { startDate, endDate });
-
         const [metricsResponse, batchesFetchResponse] = await Promise.all([
           fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`),
           fetch(`/api/dashboard/batches?limit=20&date_from=${startDate}&date_to=${endDate}`)
         ]);
-
-        console.log('📊 Responses:', {
-          metrics: metricsResponse.status,
-          batches: batchesFetchResponse.status
-        });
 
         if (!metricsResponse.ok || !batchesFetchResponse.ok) {
           throw new Error('Failed to fetch dashboard data from server');
         }
 
         const metricsResult = await metricsResponse.json();
-
-        console.log('📊 Metrics data:', metricsResult);
 
         if (!metricsResult.success) {
           throw new Error(metricsResult.error || 'Failed to fetch metrics');
@@ -192,12 +198,10 @@ function DashboardContent() {
       }
 
       const batchesResult = await batchesResponse.json();
-
       if (!batchesResult.success) {
         throw new Error(batchesResult.error || 'Failed to fetch batches');
       }
 
-      console.log('📊 Aggregated metrics:', metricsSummary);
       setMetrics({
         totalBatches: metricsSummary.totalBatches,
         totalRevenue: metricsSummary.totalRevenue,
@@ -225,12 +229,12 @@ function DashboardContent() {
                 name: batch.client_name
               },
               pickup_date: batch.pickup_date,
-              status: batch.status,
+              status: batch.status as BatchStatus,
               total_amount: batch.total_amount,
               created_at: batch.created_at
             })
           ) || [];
-        console.log('📦 Setting batches:', transformedBatches);
+
         setBatches(transformedBatches);
       }
     } catch (err) {
@@ -239,13 +243,13 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Load data on mount and when month changes
   useEffect(() => {
     fetchDashboardData(selectedMonth.month, selectedMonth.year);
-  }, [selectedMonth.month, selectedMonth.year]);
-
+  }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
+  
   const handleMonthChange = (month: number | null, year: number) => {
     setSelectedMonth({ month, year });
   };
@@ -291,7 +295,7 @@ function DashboardContent() {
       <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Breadcrumb />
-        
+
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">

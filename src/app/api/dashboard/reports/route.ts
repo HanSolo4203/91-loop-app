@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getInvoiceSummaryByMonth, getInvoiceSummaryByYear } from '@/lib/services/analytics';
 import type { AnalyticsServiceResponse } from '@/lib/services/analytics';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
 
 // GET /api/dashboard/reports?month=YYYY-MM
 export async function GET(request: NextRequest) {
@@ -16,13 +17,14 @@ export async function GET(request: NextRequest) {
     if (monthParam) {
       const parts = monthParam.split('-');
       if (parts.length !== 2) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid month format. Use YYYY-MM',
             data: null,
           } as AnalyticsServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
       targetYear = parseInt(parts[0], 10);
@@ -33,13 +35,14 @@ export async function GET(request: NextRequest) {
         targetMonth = parseInt(monthPart, 10);
       }
       if (isNaN(targetYear) || (!isAllMonths && (targetMonth === null || isNaN(targetMonth)))) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid month format. Use YYYY-MM',
             data: null,
           } as AnalyticsServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
     } else {
@@ -62,23 +65,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Reports change frequently
     );
   } catch (error) {
     console.error('GET /api/dashboard/reports error:', error);
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       } as AnalyticsServiceResponse<null>,
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }

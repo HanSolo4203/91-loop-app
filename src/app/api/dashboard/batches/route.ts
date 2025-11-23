@@ -6,6 +6,10 @@ import {
 import type { 
   AnalyticsServiceResponse 
 } from '@/lib/services/analytics';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 60 seconds
+export const revalidate = 60;
 
 // GET /api/dashboard/batches - Get recent batches with pagination
 export async function GET(request: NextRequest) {
@@ -25,13 +29,14 @@ export async function GET(request: NextRequest) {
     
     if (!supabaseUrl || !serviceRoleKey) {
       console.error('Missing required environment variables');
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: 'Server configuration error: Missing environment variables',
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
     
@@ -52,25 +57,27 @@ export async function GET(request: NextRequest) {
 
     // Validate limit
     if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: 'Limit must be between 1 and 100',
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 400 }
+        'noCache',
+        400
       );
     }
 
     // Validate offset
     if (isNaN(offsetNum) || offsetNum < 0) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: 'Offset must be a non-negative number',
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 400 }
+        'noCache',
+        400
       );
     }
 
@@ -81,26 +88,28 @@ export async function GET(request: NextRequest) {
       const invalidStatuses = statusList.filter(s => !validStatuses.includes(s));
       
       if (invalidStatuses.length > 0) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: `Invalid status values: ${invalidStatuses.join(', ')}. Must be one or more of: pickup, washing, completed, delivered`,
             data: null,
           } as AnalyticsServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
     }
 
     // Validate has_discrepancy if provided
     if (has_discrepancy && !['true', 'false'].includes(has_discrepancy)) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: 'has_discrepancy must be true or false',
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 400 }
+        'noCache',
+        400
       );
     }
 
@@ -108,13 +117,14 @@ export async function GET(request: NextRequest) {
     if (date_from) {
       const date = new Date(date_from);
       if (isNaN(date.getTime())) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid date_from format. Use YYYY-MM-DD',
             data: null,
           } as AnalyticsServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
     }
@@ -122,13 +132,14 @@ export async function GET(request: NextRequest) {
     if (date_to) {
       const date = new Date(date_to);
       if (isNaN(date.getTime())) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid date_to format. Use YYYY-MM-DD',
             data: null,
           } as AnalyticsServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
     }
@@ -141,13 +152,14 @@ export async function GET(request: NextRequest) {
     
     if (!result.success) {
       console.error('getRecentBatches failed:', result.error);
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
@@ -204,24 +216,25 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: response,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Batches change frequently
     );
   } catch (error) {
     console.error('GET /api/dashboard/batches error:', error);
     
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       } as AnalyticsServiceResponse<null>,
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }

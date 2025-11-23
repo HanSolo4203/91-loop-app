@@ -10,6 +10,10 @@ import {
 import type { 
   AnalyticsServiceResponse 
 } from '@/lib/services/analytics';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 60 seconds
+export const revalidate = 60;
 
 // GET /api/dashboard/stats - Get dashboard statistics
 export async function GET(request: NextRequest) {
@@ -39,25 +43,27 @@ export async function GET(request: NextRequest) {
         return handleDiscrepanciesRequest();
       
       default:
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Invalid type parameter. Must be one of: overview, monthly, revenue, clients, discrepancies',
-            data: null,
-          } as AnalyticsServiceResponse<null>,
-          { status: 400 }
-        );
+    return cachedJsonResponse(
+      {
+        success: false,
+        error: 'Invalid type parameter. Must be one of: overview, monthly, revenue, clients, discrepancies',
+        data: null,
+      } as AnalyticsServiceResponse<null>,
+      'noCache',
+      400
+    );
     }
   } catch (error) {
     console.error('GET /api/dashboard/stats error:', error);
     
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       } as AnalyticsServiceResponse<null>,
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }
@@ -68,33 +74,35 @@ async function handleOverviewRequest() {
     const result = await getDashboardOverview();
     
     if (!result.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Stats change frequently
     );
   } catch (error) {
     console.error('Overview request error:', error);
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Failed to fetch overview statistics',
         data: null,
       } as AnalyticsServiceResponse<null>,
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }
@@ -156,23 +164,24 @@ async function handleMonthlyRequest(month: string | null, year: string | null) {
     const result = await getMonthlyStats(targetYear, targetMonth);
     
     if (!result.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Stats change frequently
     );
   } catch (error) {
     console.error('Monthly request error:', error);
@@ -212,23 +221,24 @@ async function handleRevenueRequest(year: string | null) {
     const result = await getRevenueByMonth(targetYear);
     
     if (!result.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Stats change frequently
     );
   } catch (error) {
     console.error('Revenue request error:', error);
@@ -249,23 +259,24 @@ async function handleClientsRequest() {
     const result = await getTopClients(10);
     
     if (!result.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Stats change frequently
     );
   } catch (error) {
     console.error('Clients request error:', error);
@@ -286,23 +297,24 @@ async function handleDiscrepanciesRequest() {
     const result = await getDiscrepancyReport();
     
     if (!result.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Stats change frequently
     );
   } catch (error) {
     console.error('Discrepancies request error:', error);

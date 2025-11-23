@@ -193,6 +193,7 @@ export interface Database {
           price_per_item: number;
           subtotal: number;
           discrepancy_details: string | null;
+          express_delivery: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -205,6 +206,7 @@ export interface Database {
           price_per_item?: number;
           subtotal?: number;
           discrepancy_details?: string | null;
+          express_delivery?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -217,6 +219,7 @@ export interface Database {
           price_per_item?: number;
           subtotal?: number;
           discrepancy_details?: string | null;
+          express_delivery?: boolean;
           created_at?: string;
           updated_at?: string;
         };

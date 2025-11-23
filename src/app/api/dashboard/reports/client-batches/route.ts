@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getClientBatchesByMonth, getClientBatchesByYear } from '@/lib/services/analytics';
 import type { AnalyticsServiceResponse } from '@/lib/services/analytics';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 60 seconds
+export const revalidate = 60;
 
 // GET /api/dashboard/reports/client-batches?clientId=...&month=YYYY-MM
 export async function GET(request: NextRequest) {
@@ -11,13 +15,14 @@ export async function GET(request: NextRequest) {
     const monthParam = searchParams.get('month');
 
     if (!clientId) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: 'clientId is required',
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 400 }
+        'noCache',
+        400
       );
     }
 
@@ -28,13 +33,14 @@ export async function GET(request: NextRequest) {
     if (monthParam) {
       const parts = monthParam.split('-');
       if (parts.length !== 2) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid month format. Use YYYY-MM',
             data: null,
           } as AnalyticsServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
       targetYear = parseInt(parts[0], 10);
@@ -45,13 +51,14 @@ export async function GET(request: NextRequest) {
         targetMonth = parseInt(monthPart, 10);
       }
       if (isNaN(targetYear) || (!isAllMonths && (targetMonth === null || isNaN(targetMonth)))) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid month format. Use YYYY-MM',
             data: null,
           } as AnalyticsServiceResponse<null>,
-          { status: 400 }
+          'noCache',
+          400
         );
       }
     } else {
@@ -64,33 +71,35 @@ export async function GET(request: NextRequest) {
       ? await getClientBatchesByYear(clientId, targetYear)
       : await getClientBatchesByMonth(clientId, targetYear, targetMonth as number);
     if (!result.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as AnalyticsServiceResponse<null>,
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as AnalyticsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Client batches change frequently
     );
   } catch (error) {
     console.error('GET /api/dashboard/reports/client-batches error:', error);
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       } as AnalyticsServiceResponse<null>,
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }

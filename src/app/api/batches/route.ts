@@ -8,6 +8,10 @@ import type {
   CreateBatchRequest,
   BatchSearchFilters 
 } from '@/lib/services/batches';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 60 seconds for GET requests
+export const revalidate = 60;
 
 // POST /api/batches - Create a new batch
 export async function POST(request: NextRequest) {
@@ -281,24 +285,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       },
-      { status: 200 }
+      'dynamic' // Batches change frequently
     );
   } catch (error) {
     console.error('GET /api/batches error:', error);
     
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       },
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }

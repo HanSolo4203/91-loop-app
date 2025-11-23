@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
 import { 
   LayoutDashboard, 
   PlusCircle, 
@@ -15,9 +17,10 @@ import {
   FileSpreadsheet,
   LogOut,
   Calculator,
-  Radio
+  Radio,
+  ChevronDown
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const navigation = [
   {
@@ -45,17 +48,18 @@ const navigation = [
     href: '/reports',
     icon: FileSpreadsheet,
   },
-  {
-    name: 'Settings',
-    href: '/settings',
-    icon: Settings,
-  },
 ];
 
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  // Close dropdown when route changes
+  useEffect(() => {
+    setUserDropdownOpen(false);
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
@@ -71,37 +75,46 @@ export default function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo and Brand */}
-          <div className="flex items-center">
-            <Link href="/dashboard" className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">RSL</span>
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-bold text-slate-900">RSL Express</h1>
-                <p className="text-xs text-slate-500 -mt-1">Linen Tracking</p>
-              </div>
+          <div className="flex items-center flex-shrink-0">
+            <Link href="/dashboard" className="flex items-center">
+              <Image
+                src="/rsllogo.png"
+                alt="RSL Express"
+                width={2364}
+                height={297}
+                className="h-5 w-auto object-contain"
+                quality={90}
+                priority
+                placeholder="blur"
+                blurDataURL={BLUR_DATA_URL}
+                sizes={getImageSizes({
+                  mobile: '120px',
+                  tablet: '150px',
+                  default: '200px',
+                })}
+              />
             </Link>
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden md:flex items-center flex-1 justify-center gap-1 px-4">
             {navigation.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== '/dashboard' && pathname.startsWith(item.href));
               
               return (
-                <Link key={item.name} href={item.href}>
+                <Link key={item.name} href={item.href} className="flex-1 max-w-[140px]">
                   <Button
                     variant={isActive ? "default" : "ghost"}
                     className={cn(
-                      "flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors",
+                      "w-full flex items-center justify-center space-x-2 px-3 py-2 text-sm font-medium transition-colors",
                       isActive
                         ? "bg-blue-600 text-white hover:bg-blue-700"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                     )}
                   >
-                    <item.icon className="w-4 h-4" />
-                    <span>{item.name}</span>
+                    <item.icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">{item.name}</span>
                   </Button>
                 </Link>
               );
@@ -110,27 +123,56 @@ export default function Navigation() {
 
           {/* User Profile Section */}
           <div className="flex items-center space-x-4">
-            {/* User Profile - Placeholder */}
-            <div className="hidden sm:flex items-center space-x-3">
-              <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-slate-600" />
-              </div>
-              <div className="hidden lg:block">
-                <p className="text-sm font-medium text-slate-900">Admin User</p>
-                <p className="text-xs text-slate-500">RSL Express</p>
-              </div>
+            {/* User Profile Dropdown */}
+            <div className="hidden sm:block relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="flex items-center space-x-2 text-slate-600 hover:text-slate-900"
+              >
+                <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-slate-600" />
+                </div>
+                <span className="hidden lg:inline text-sm font-medium text-slate-900">Admin User</span>
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+              
+              {/* Dropdown Menu */}
+              {userDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setUserDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-slate-200 z-20">
+                    <div className="py-1">
+                      <Link
+                        href="/settings"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className={cn(
+                          "flex items-center space-x-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100",
+                          pathname === '/settings' && "bg-slate-50"
+                        )}
+                      >
+                        <Settings className="w-4 h-4" />
+                        <span>Settings</span>
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-
-            {/* Logout Button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="flex items-center space-x-2 text-slate-600 hover:text-slate-900"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
 
             {/* Mobile menu button */}
             <Button
@@ -186,9 +228,27 @@ export default function Navigation() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-slate-900">Admin User</p>
-                    <p className="text-xs text-slate-500">RSL Express</p>
                   </div>
                 </div>
+                
+                {/* Mobile Settings Button */}
+                <Link
+                  href="/settings"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Button
+                    variant={pathname === '/settings' ? "default" : "ghost"}
+                    className={cn(
+                      "w-full justify-start flex items-center space-x-3 px-3 py-2 text-sm font-medium transition-colors",
+                      pathname === '/settings'
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    )}
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Settings</span>
+                  </Button>
+                </Link>
                 
                 {/* Mobile Logout Button */}
                 <Button

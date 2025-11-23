@@ -174,8 +174,12 @@ export async function getBatchById(
       };
     }) || [];
 
-    // Calculate financial summary
-    const totalAmount = itemsWithDetails.reduce((sum, item) => sum + item.pricing.total_sent_value, 0);
+    // Calculate financial summary (including express delivery surcharges)
+    const totalAmount = itemsWithDetails.reduce((sum, item) => {
+      const baseAmount = item.pricing.total_received_value;
+      const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+      return sum + baseAmount + surcharge;
+    }, 0);
     const totalItemsSent = itemsWithDetails.reduce((sum, item) => sum + item.quantity_sent, 0);
     const totalItemsReceived = itemsWithDetails.reduce((sum, item) => sum + item.quantity_received, 0);
     const discrepancyCount = itemsWithDetails.filter(item => item.discrepancy.quantity !== 0).length;

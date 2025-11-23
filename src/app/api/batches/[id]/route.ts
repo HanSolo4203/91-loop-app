@@ -8,6 +8,10 @@ import type {
   BatchDetailsServiceResponse,
   BatchUpdateData
 } from '@/lib/services/batch-details';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 60 seconds
+export const revalidate = 60;
 
 // GET /api/batches/[id] - Get complete batch details
 export async function GET(
@@ -19,13 +23,14 @@ export async function GET(
 
     // Validate batch ID
     if (!id || typeof id !== 'string') {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: 'Batch ID is required and must be a string',
           data: null,
         } as BatchDetailsServiceResponse<null>,
-        { status: 400 }
+        'noCache',
+        400
       );
     }
 
@@ -34,34 +39,36 @@ export async function GET(
     
     if (!result.success) {
       const statusCode = result.error?.includes('not found') ? 404 : 500;
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: result.error,
           data: null,
         } as BatchDetailsServiceResponse<null>,
-        { status: statusCode }
+        'noCache',
+        statusCode
       );
     }
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: result.data,
       } as BatchDetailsServiceResponse<any>,
-      { status: 200 }
+      'dynamic' // Batch details change frequently
     );
   } catch (error) {
     console.error('GET /api/batches/[id] error:', error);
     
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       } as BatchDetailsServiceResponse<null>,
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }

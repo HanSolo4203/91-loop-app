@@ -36,6 +36,7 @@ export interface BatchItemData {
   quantity_received?: number;
   price_per_item?: number;
   discrepancy_details?: string;
+  express_delivery?: boolean;
 }
 
 export interface CreateBatchRequest {
@@ -268,7 +269,10 @@ export async function calculateBatchTotal(items: BatchItemData[]): Promise<numbe
         price = (category as any).price_per_item;
       }
 
-      total += quantity * (price || 0);
+      const lineTotal = quantity * (price || 0);
+      // Add 50% surcharge for express delivery items
+      const surcharge = (item.express_delivery ? lineTotal * 0.5 : 0);
+      total += lineTotal + surcharge;
     }
 
     return Math.round(total * 100) / 100; // Round to 2 decimal places
@@ -712,6 +716,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
         quantity_received: quantityReceived,
         price_per_item: price,
         discrepancy_details: item.discrepancy_details || null,
+        express_delivery: item.express_delivery || false,
       });
     }
 
