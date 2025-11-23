@@ -26,6 +26,7 @@ interface BatchDetails {
     quantity_received: number;
     price_per_item: number;
     discrepancy_details?: string | null;
+    express_delivery?: boolean;
   }>;
   financial_summary: {
     total_amount: number;
@@ -44,6 +45,8 @@ interface InvoiceItem {
   line_total: number;
   discrepancy: number;
   discrepancy_value: number;
+  express_delivery: boolean;
+  surcharge: number;
 }
 
 interface BusinessInfo {
@@ -56,7 +59,7 @@ interface BusinessInfo {
   website?: string | null;
 }
 
-const INVOICE_LOGO_SRC = '/rsllogo.png';
+const DEFAULT_LOGO_URL = 'https://bwuslachnnapmtenbdgq.supabase.co/storage/v1/object/public/business-logos/rsl_dynamic_italic_final444.svg';
 
 export default function InvoicePage() {
   const params = useParams();
@@ -147,6 +150,8 @@ export default function InvoicePage() {
     const discrepancy = qtyReceived - qtySent;
     const discrepancyValue = discrepancy * price;
     const lineTotal = qtyReceived * price;
+    const expressDelivery = item.express_delivery || false;
+    const surcharge = expressDelivery ? Math.round(lineTotal * 0.5 * 100) / 100 : 0;
     
     return {
       id: item.id,
@@ -157,13 +162,16 @@ export default function InvoicePage() {
       line_total: Math.round(lineTotal * 100) / 100,
       discrepancy: discrepancy,
       discrepancy_value: Math.round(discrepancyValue * 100) / 100,
+      express_delivery: expressDelivery,
+      surcharge: surcharge,
     };
   });
 
   // Calculate totals
   const subtotalReceived = lines.reduce((sum, line) => sum + line.line_total, 0);
   const totalDiscrepancyValue = lines.reduce((sum, line) => sum + line.discrepancy_value, 0);
-  const adjustedSubtotal = subtotalReceived + totalDiscrepancyValue;
+  const totalSurcharge = lines.reduce((sum, line) => sum + line.surcharge, 0);
+  const adjustedSubtotal = subtotalReceived + totalDiscrepancyValue + totalSurcharge;
   const vatRate = 0.15;
   const vat = Math.round(adjustedSubtotal * vatRate * 100) / 100;
   const total = Math.round((adjustedSubtotal + vat) * 100) / 100;
@@ -174,6 +182,7 @@ export default function InvoicePage() {
     phone: businessInfo?.phone || '+27 (0) 21 XXX XXXX',
     address: businessInfo?.address || 'Cape Town, South Africa',
     website: businessInfo?.website || '',
+    logo_url: businessInfo?.logo_url || DEFAULT_LOGO_URL,
   };
 
   return (
@@ -193,15 +202,20 @@ export default function InvoicePage() {
         <div className="flex items-start justify-between mb-8 border-b-2 border-blue-100 pb-8">
           <div className="flex flex-col">
             <Image 
-              src={INVOICE_LOGO_SRC}
-              alt="RSL Express Laundry logo"
+              src={businessDetails.logo_url} 
+              alt={`${businessDetails.company_name} logo`} 
               width={256}
               height={128}
-              priority
-              quality={100}
-              className="h-12 w-auto object-contain mb-4"
-              sizes="(max-width: 768px) 96px, 192px"
+              className="h-32 w-auto object-contain mb-4"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.nextElementSibling?.classList.remove('hidden');
+              }}
             />
+            <div className="hidden">
+              <h1 className="text-3xl font-bold text-blue-900">{businessDetails.company_name}</h1>
+            </div>
             
             {/* Company Details */}
             <div className="text-slate-700 space-y-1">
@@ -288,12 +302,22 @@ export default function InvoicePage() {
                   <th className="text-center py-4 px-4 font-semibold">Discrepancy</th>
                   <th className="text-right py-4 px-4 font-semibold">Unit Price</th>
                   <th className="text-right py-4 px-4 font-semibold">Line Total</th>
+                  {totalSurcharge > 0 && (
+                    <th className="text-right py-4 px-4 font-semibold">Surcharge</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {lines.map((line, index) => (
                   <tr key={line.id} className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-blue-50'}`}>
-                    <td className="py-4 px-4 font-medium text-slate-900">{line.name}</td>
+                    <td className="py-4 px-4 font-medium text-slate-900">
+                      {line.name}
+                      {line.express_delivery && (
+                        <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                          Express
+                        </span>
+                      )}
+                    </td>
                     <td className="py-4 px-4 text-center text-slate-700">{line.quantity_sent}</td>
                     <td className="py-4 px-4 text-center text-slate-700">{line.quantity_received}</td>
                     <td className={`py-4 px-4 text-center font-medium ${
@@ -308,6 +332,11 @@ export default function InvoicePage() {
                     </td>
                     <td className="py-4 px-4 text-right text-slate-700">{formatCurrencySSR(line.unit_price)}</td>
                     <td className="py-4 px-4 text-right font-semibold text-slate-900">{formatCurrencySSR(line.line_total)}</td>
+                    {totalSurcharge > 0 && (
+                      <td className="py-4 px-4 text-right font-semibold text-yellow-600">
+                        {line.surcharge > 0 ? formatCurrencySSR(line.surcharge) : '-'}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -328,6 +357,15 @@ export default function InvoicePage() {
                 <span className="text-slate-700">Discrepancy Adjustment:</span>
                 <span className={`font-semibold ${totalDiscrepancyValue > 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {totalDiscrepancyValue > 0 ? '+' : ''}{formatCurrencySSR(totalDiscrepancyValue)}
+                </span>
+              </div>
+            )}
+            
+            {totalSurcharge > 0 && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-slate-700">Express Delivery Surcharge (50%):</span>
+                <span className="font-semibold text-yellow-600">
+                  {formatCurrencySSR(totalSurcharge)}
                 </span>
               </div>
             )}

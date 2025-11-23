@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,7 +10,12 @@ import BatchHeader from '@/components/batch/batch-header';
 import StatusUpdater from '@/components/batch/status-updater';
 import ItemsBreakdown from '@/components/batch/items-breakdown';
 import FinancialSummary from '@/components/batch/financial-summary';
-import InvoiceView from '@/components/batch/invoice-view';
+
+// Lazy load InvoiceView - only loaded when invoice view is shown
+const InvoiceView = dynamic(() => import('@/components/batch/invoice-view'), {
+  loading: () => <div className="p-8 text-center text-slate-500">Loading invoice...</div>,
+  ssr: false,
+});
 import { 
   ArrowLeft, 
   RefreshCw, 

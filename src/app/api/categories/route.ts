@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { LinenCategory, LinenCategoryInsert } from '@/types/database';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 1 hour (3600 seconds)
+export const revalidate = 3600;
 
 // GET /api/categories - Get all linen categories
 export async function GET() {
@@ -18,10 +22,13 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: categories || []
-    });
+    return cachedJsonResponse(
+      {
+        success: true,
+        data: categories || []
+      },
+      'static' // Categories rarely change
+    );
   } catch (error) {
     console.error('Unexpected error:', error);
     return NextResponse.json(

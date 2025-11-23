@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBusinessSettings, upsertBusinessSettings } from '@/lib/services/business-settings';
 import type { BusinessSettingsPayload } from '@/lib/services/business-settings';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 1 hour (3600 seconds)
+export const revalidate = 3600;
 
 export async function GET() {
   const result = await getBusinessSettings();
 
-  return NextResponse.json(
+  return cachedJsonResponse(
     {
       success: result.success,
       data: result.data,
       error: result.error,
     },
-    { status: result.statusCode || (result.success ? 200 : 500) }
+    'static', // Business settings rarely change
+    result.statusCode || (result.success ? 200 : 500)
   );
 }
 

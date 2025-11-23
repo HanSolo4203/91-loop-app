@@ -113,8 +113,8 @@ async function generatePDFBlob(quotationData: {
 }): Promise<Blob> {
   try {
     // Dynamic import for server-side use
-    const { PDFGenerator } = await import('@/lib/services/pdf-generator');
-    const generator = new PDFGenerator();
+    const { createPDFGenerator } = await import('@/lib/services/pdf-generator');
+    const generator = await createPDFGenerator();
     
     // Transform items to match PDF generator expectations
     const transformedData = {
@@ -127,8 +127,8 @@ async function generatePDFBlob(quotationData: {
       }))
     };
     
-    // Generate the PDF blob
-    return generator.generateQuotationBlob(transformedData);
+    // Generate the PDF blob (now async)
+    return await generator.generateQuotationBlob(transformedData);
   } catch (error) {
     console.error('Error generating PDF blob:', error);
     throw error;

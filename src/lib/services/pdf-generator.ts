@@ -1,4 +1,14 @@
-import jsPDF from 'jspdf';
+// Dynamic import for jsPDF - loaded only when needed
+import type { jsPDF } from 'jspdf';
+
+let jsPDFModule: { default: typeof jsPDF } | null = null;
+
+async function getJsPDF(): Promise<typeof jsPDF> {
+  if (!jsPDFModule) {
+    jsPDFModule = await import('jspdf');
+  }
+  return jsPDFModule.default;
+}
 
 export interface QuotationData {
   quotationNumber: string;
@@ -17,21 +27,25 @@ export interface QuotationData {
 }
 
 export class PDFGenerator {
-  private doc: jsPDF;
-  private pageWidth: number;
-  private pageHeight: number;
-  private margin: number;
-  private currentY: number;
+  private doc: jsPDF | null = null;
+  private pageWidth: number = 0;
+  private pageHeight: number = 0;
+  private margin: number = 20;
+  private currentY: number = 20;
 
-  constructor() {
-    this.doc = new jsPDF('p', 'mm', 'a4');
-    this.pageWidth = this.doc.internal.pageSize.getWidth();
-    this.pageHeight = this.doc.internal.pageSize.getHeight();
-    this.margin = 20;
-    this.currentY = this.margin;
+  private async initialize() {
+    if (!this.doc) {
+      const jsPDF = await getJsPDF();
+      this.doc = new jsPDF('p', 'mm', 'a4');
+      this.pageWidth = this.doc.internal.pageSize.getWidth();
+      this.pageHeight = this.doc.internal.pageSize.getHeight();
+      this.currentY = this.margin;
+    }
   }
 
-  private addHeader(): void {
+  private async addHeader(): Promise<void> {
+    await this.initialize();
+    if (!this.doc) return;
     // RSL Logo/Header
     this.doc.setFillColor(37, 99, 235); // Blue color
     this.doc.rect(0, 0, this.pageWidth, 30, 'F');
@@ -56,7 +70,9 @@ export class PDFGenerator {
     this.currentY = 45;
   }
 
-  private addQuotationHeader(data: QuotationData): void {
+  private async addQuotationHeader(data: QuotationData): Promise<void> {
+    await this.initialize();
+    if (!this.doc) return;
     // Quotation title
     this.doc.setTextColor(0, 0, 0);
     this.doc.setFontSize(20);
@@ -99,54 +115,60 @@ export class PDFGenerator {
     this.currentY += 20;
   }
 
-  private addItemsTable(data: QuotationData): void {
-    // Table header
-    this.doc.setFillColor(248, 250, 252); // Light gray background
-    this.doc.rect(this.margin, this.currentY - 5, this.pageWidth - 2 * this.margin, 10, 'F');
+  private async addItemsTable(data: QuotationData): Promise<void> {
+    await this.initialize();
+    if (!this.doc) return;
+    const doc = this.doc; // Store in local variable for type narrowing
     
-    this.doc.setTextColor(0, 0, 0);
-    this.doc.setFontSize(10);
-    this.doc.setFont('helvetica', 'bold');
+    // Table header
+    doc.setFillColor(248, 250, 252); // Light gray background
+    doc.rect(this.margin, this.currentY - 5, this.pageWidth - 2 * this.margin, 10, 'F');
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
     
     const colWidths = [100, 25, 30, 35]; // Item, Qty, Price, Subtotal
     const startX = this.margin;
     
-    this.doc.text('Item Description', startX, this.currentY);
-    this.doc.text('Qty', startX + colWidths[0], this.currentY);
-    this.doc.text('Price', startX + colWidths[0] + colWidths[1], this.currentY);
-    this.doc.text('Subtotal', startX + colWidths[0] + colWidths[1] + colWidths[2], this.currentY);
+    doc.text('Item Description', startX, this.currentY);
+    doc.text('Qty', startX + colWidths[0], this.currentY);
+    doc.text('Price', startX + colWidths[0] + colWidths[1], this.currentY);
+    doc.text('Subtotal', startX + colWidths[0] + colWidths[1] + colWidths[2], this.currentY);
     
     this.currentY += 15;
     
     // Table rows
-    this.doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'normal');
     
-    data.items.forEach((item, index) => {
+    for (const [index, item] of data.items.entries()) {
       // Alternate row colors
       if (index % 2 === 0) {
-        this.doc.setFillColor(249, 250, 251);
-        this.doc.rect(this.margin, this.currentY - 5, this.pageWidth - 2 * this.margin, 10, 'F');
+        doc.setFillColor(249, 250, 251);
+        doc.rect(this.margin, this.currentY - 5, this.pageWidth - 2 * this.margin, 10, 'F');
       }
       
       // Item details
-      this.doc.text(item.name, startX, this.currentY);
-      this.doc.text(item.quantity.toString(), startX + colWidths[0], this.currentY);
-      this.doc.text(`R${item.price.toFixed(2)}`, startX + colWidths[0] + colWidths[1], this.currentY);
-      this.doc.text(`R${item.subtotal.toFixed(2)}`, startX + colWidths[0] + colWidths[1] + colWidths[2], this.currentY);
+      doc.text(item.name, startX, this.currentY);
+      doc.text(item.quantity.toString(), startX + colWidths[0], this.currentY);
+      doc.text(`R${item.price.toFixed(2)}`, startX + colWidths[0] + colWidths[1], this.currentY);
+      doc.text(`R${item.subtotal.toFixed(2)}`, startX + colWidths[0] + colWidths[1] + colWidths[2], this.currentY);
       
       this.currentY += 10;
       
       // Check if we need a new page
       if (this.currentY > this.pageHeight - 60) {
-        this.addNewPage();
-        this.addTableHeader(colWidths, startX);
+        await this.addNewPage();
+        await this.addTableHeader(colWidths, startX);
       }
-    });
+    }
     
     this.currentY += 10;
   }
 
-  private addTableHeader(colWidths: number[], startX: number): void {
+  private async addTableHeader(colWidths: number[], startX: number): Promise<void> {
+    await this.initialize();
+    if (!this.doc) return;
     this.doc.setFillColor(248, 250, 252);
     this.doc.rect(this.margin, this.currentY - 5, this.pageWidth - 2 * this.margin, 10, 'F');
     
@@ -162,12 +184,16 @@ export class PDFGenerator {
     this.currentY += 15;
   }
 
-  private addNewPage(): void {
+  private async addNewPage(): Promise<void> {
+    await this.initialize();
+    if (!this.doc) return;
     this.doc.addPage();
     this.currentY = this.margin;
   }
 
-  private addTotals(data: QuotationData): void {
+  private async addTotals(data: QuotationData): Promise<void> {
+    await this.initialize();
+    if (!this.doc) return;
     const rightAlign = this.pageWidth - this.margin;
     const labelWidth = 50;
     
@@ -197,7 +223,9 @@ export class PDFGenerator {
     this.currentY += 20;
   }
 
-  private addFooter(): void {
+  private async addFooter(): Promise<void> {
+    await this.initialize();
+    if (!this.doc) return;
     const footerY = this.pageHeight - 30;
     
     // Footer line
@@ -236,7 +264,7 @@ export class PDFGenerator {
     });
   }
 
-  public generateQuotation(data: Partial<QuotationData>): void {
+  public async generateQuotation(data: Partial<QuotationData>): Promise<void> {
     // Set default values
     const quotationData: QuotationData = {
       quotationNumber: data.quotationNumber || this.generateQuotationNumber(),
@@ -250,11 +278,13 @@ export class PDFGenerator {
     };
 
     // Generate PDF content
-    this.addHeader();
-    this.addQuotationHeader(quotationData);
-    this.addItemsTable(quotationData);
-    this.addTotals(quotationData);
-    this.addFooter();
+    await this.addHeader();
+    await this.addQuotationHeader(quotationData);
+    await this.addItemsTable(quotationData);
+    await this.addTotals(quotationData);
+    await this.addFooter();
+
+    if (!this.doc) return;
 
     // Open PDF in new tab
     const pdfBlob = this.doc.output('blob');
@@ -267,7 +297,7 @@ export class PDFGenerator {
     }, 1000);
   }
 
-  public generateQuotationBlob(data: Partial<QuotationData>): Blob {
+  public async generateQuotationBlob(data: Partial<QuotationData>): Promise<Blob> {
     // Set default values
     const quotationData: QuotationData = {
       quotationNumber: data.quotationNumber || this.generateQuotationNumber(),
@@ -281,6 +311,7 @@ export class PDFGenerator {
     };
 
     // Create a new document for the blob
+    const jsPDF = await getJsPDF();
     const doc = new jsPDF('p', 'mm', 'a4');
     this.doc = doc;
     this.pageWidth = doc.internal.pageSize.getWidth();
@@ -288,15 +319,22 @@ export class PDFGenerator {
     this.currentY = this.margin;
 
     // Generate PDF content
-    this.addHeader();
-    this.addQuotationHeader(quotationData);
-    this.addItemsTable(quotationData);
-    this.addTotals(quotationData);
-    this.addFooter();
+    await this.addHeader();
+    await this.addQuotationHeader(quotationData);
+    await this.addItemsTable(quotationData);
+    await this.addTotals(quotationData);
+    await this.addFooter();
+
+    if (!this.doc) throw new Error('Failed to generate PDF');
 
     return this.doc.output('blob');
   }
 }
 
-// Export a singleton instance
+// Factory function to create PDFGenerator instance
+export async function createPDFGenerator(): Promise<PDFGenerator> {
+  return new PDFGenerator();
+}
+
+// Export a singleton instance for convenience
 export const pdfGenerator = new PDFGenerator();

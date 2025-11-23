@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
+import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
 
 type ProfileRole = { role: 'admin' | 'user' };
 import { Button } from '@/components/ui/button';
@@ -133,7 +135,23 @@ export default function LoginPage() {
           }}>
             {/* Receipt header */}
             <div className="text-center mb-6 border-b-2 border-dashed border-gray-400 pb-4">
-              <h1 className="text-xl font-bold text-gray-800 mb-1">RSL EXPRESS</h1>
+              <div className="mb-1 flex justify-center">
+                <Image
+                  src="/rsllogo.png"
+                  alt="RSL EXPRESS"
+                  width={400}
+                  height={120}
+                  className="h-auto w-full max-w-[300px]"
+                  quality={90}
+                  priority
+                  placeholder="blur"
+                  blurDataURL={BLUR_DATA_URL}
+                  sizes={getImageSizes({
+                    mobile: '280px',
+                    default: '300px',
+                  })}
+                />
+              </div>
               <p className="text-xs text-gray-600 font-mono">ADMIN ACCESS SYSTEM</p>
               <p className="text-xs text-gray-500 font-mono mt-1">CNPJ: 00.000.000/0001-00</p>
             </div>

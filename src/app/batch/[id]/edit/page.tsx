@@ -20,6 +20,7 @@ interface BatchItemPayload {
   quantity_received: number;
   price_per_item: number;
   discrepancy_details?: string | null;
+  express_delivery?: boolean;
 }
 
 interface BatchDetails {
@@ -46,6 +47,7 @@ interface BatchDetails {
     quantity_received: number;
     price_per_item: number;
     discrepancy_details?: string | null;
+    express_delivery?: boolean;
     category?: {
       id: string;
       name: string;
@@ -139,6 +141,7 @@ function EditBatchContent() {
           quantity_received: item.quantity_received,
           price_per_item: item.price_per_item || item.category?.price_per_item || 0,
           discrepancy_details: item.discrepancy_details || '',
+          express_delivery: item.express_delivery || false,
         }));
         setInitialSelections(mappedItems);
       } catch (error) {
@@ -193,6 +196,7 @@ function EditBatchContent() {
         quantity_received: item.quantity_received,
         price_per_item: item.price_per_item,
         discrepancy_details: item.discrepancy_details || null,
+        express_delivery: item.express_delivery || false,
       }));
 
       const response = await fetch(`/api/batches/${batchId}/items`, {

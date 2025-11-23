@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getInvoiceSummaryByMonth, getClientBatchesByMonth, getInvoiceSummaryByYear, getClientBatchesByYear } from '@/lib/services/analytics';
-import * as XLSX from 'xlsx';
 
 // GET /api/dashboard/reports/export-excel?month=YYYY-MM
 export async function GET(request: NextRequest) {
@@ -64,6 +63,9 @@ export async function GET(request: NextRequest) {
     }
 
     const summaryData = summaryResult.data || [];
+    
+    // Dynamic import of xlsx library - only loaded when needed
+    const XLSX = await import('xlsx');
     
     // Create workbook
     const workbook = XLSX.utils.book_new();

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, Upload, X } from 'lucide-react';
 import Image from 'next/image';
+import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
 
 interface ImageUploadProps {
   label?: string;
@@ -199,6 +200,17 @@ export default function ImageUpload({
     }
   };
 
+  const getImageSize = () => {
+    switch (previewSize) {
+      case 'sm':
+        return '64px';
+      case 'lg':
+        return '128px';
+      default:
+        return '96px';
+    }
+  };
+
   const currentImage = value || preview;
 
   return (
@@ -265,6 +277,11 @@ export default function ImageUpload({
               alt="Preview"
               fill
               className="object-cover"
+              quality={85}
+              loading="lazy"
+              placeholder="blur"
+              blurDataURL={BLUR_DATA_URL}
+              sizes={getImageSize()}
               onError={() => setError('Failed to load image preview')}
             />
           </div>
@@ -302,6 +319,11 @@ export default function ImageUpload({
               alt="Current logo"
               fill
               className="object-cover"
+              quality={85}
+              loading="lazy"
+              placeholder="blur"
+              blurDataURL={BLUR_DATA_URL}
+              sizes={getImageSize()}
               onError={() => setError('Failed to load current image')}
             />
           </div>

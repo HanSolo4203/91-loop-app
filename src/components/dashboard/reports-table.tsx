@@ -9,6 +9,8 @@ import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, Ale
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
+import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
+import { useReports } from '@/lib/hooks/use-reports';
 
 interface ClientInvoiceSummary {
   client_id: string;
@@ -56,11 +58,24 @@ const buildMonthParam = (monthValue: number | null, yearValue: number) => {
   return `${yearValue}-${String(monthValue + 1).padStart(2, '0')}`;
 };
 
-export default function ReportsTable() {
+interface ReportsTableProps {
+  month?: number | null;
+  year?: number;
+  onMonthYearChange?: (month: number | null, year: number) => void;
+}
+
+export default function ReportsTable({ 
+  month: propMonth, 
+  year: propYear,
+  onMonthYearChange 
+}: ReportsTableProps = {} as ReportsTableProps) {
   const now = new Date();
-  const [month, setMonth] = useState<number | null>(now.getMonth());
-  const [year, setYear] = useState<number>(now.getFullYear());
-  const [loading, setLoading] = useState<boolean>(true);
+  const [internalMonth, setInternalMonth] = useState<number | null>(now.getMonth());
+  const [internalYear, setInternalYear] = useState<number>(now.getFullYear());
+  
+  // Use props if provided, otherwise use internal state
+  const month = propMonth !== undefined ? propMonth : internalMonth;
+  const year = propYear !== undefined ? propYear : internalYear;
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ClientInvoiceSummary[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -72,35 +87,39 @@ export default function ReportsTable() {
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
   const [exportLoading, setExportLoading] = useState<boolean>(false);
 
-  const fetchData = async (m: number | null, y: number) => {
-    try {
-      setLoading(true);
+  // Use React Query for data fetching with caching
+  const monthParam = buildMonthParam(month, year);
+  const { data, isLoading, error: queryError, refetch } = useReports({ month: monthParam });
+  
+  useEffect(() => {
+    if (data?.data) {
+      setRows(data.data);
       setError(null);
-      const ym = buildMonthParam(m, y);
-      const res = await fetch(`/api/dashboard/reports?month=${ym}`);
-      const json = await res.json();
-      if (!json.success) {
-        setError(json.error || 'Failed to load reports');
-        setRows([]);
-        return;
-      }
-      setRows(json.data || []);
-    } catch {
+    } else if (data && !data.success) {
+      setError(data.error || 'Failed to load reports');
+      setRows([]);
+    }
+  }, [data]);
+  
+  useEffect(() => {
+    if (queryError) {
       setError('Failed to load reports');
       setRows([]);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData(month, year);
-  }, [month, year]);
+  }, [queryError]);
+  
+  const loading = isLoading;
 
   const handleChange = (m: number | null, y: number) => {
-    setMonth(m);
-    setYear(y);
-    fetchData(m, y);
+    if (propMonth === undefined) {
+      setInternalMonth(m);
+    }
+    if (propYear === undefined) {
+      setInternalYear(y);
+    }
+    if (onMonthYearChange) {
+      onMonthYearChange(m, y);
+    }
   };
 
   const totals = rows.reduce(
@@ -219,7 +238,7 @@ export default function ReportsTable() {
             </div>
             <MonthSelector value={{ month, year }} onChange={handleChange} loading={loading} />
             <button
-              onClick={() => fetchData(month, year)}
+              onClick={() => refetch()}
               className="inline-flex items-center px-3 py-2 border rounded-md text-sm"
               disabled={loading}
             >
@@ -284,6 +303,11 @@ export default function ReportsTable() {
                                 alt={`${r.client_name} logo`}
                                 fill
                                 className="object-contain rounded-sm"
+                                quality={85}
+                                loading="lazy"
+                                placeholder="blur"
+                                blurDataURL={BLUR_DATA_URL}
+                                sizes="40px"
                                 onError={(e) => {
                                   e.currentTarget.style.display = 'none';
                                 }}
@@ -401,6 +425,11 @@ export default function ReportsTable() {
                         alt={`${invoiceData.client_name} logo`}
                         fill
                         className="object-contain rounded-lg border border-slate-200"
+                        quality={85}
+                        loading="lazy"
+                        placeholder="blur"
+                        blurDataURL={BLUR_DATA_URL}
+                        sizes="64px"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}

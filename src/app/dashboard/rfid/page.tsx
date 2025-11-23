@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Navigation from '@/components/navigation';
@@ -24,25 +25,25 @@ import {
   AlertTriangle,
   ClipboardList
 } from 'lucide-react';
-import Papa from 'papaparse';
 import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
+  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
-  Legend,
-  ResponsiveContainer
+  Legend
 } from 'recharts';
 import { getCategoryPrice, formatPrice } from '@/lib/constants/rfid-pricing';
-import ManualEntryForm from '@/components/rfid/manual-entry-form';
 import type { RFIDDataInsert } from '@/types/database';
+
+// Dynamic imports for heavy libraries
+const ManualEntryForm = dynamic(() => import('@/components/rfid/manual-entry-form'), {
+  loading: () => <div className="p-4 text-center text-slate-500">Loading form...</div>,
+  ssr: false,
+});
+
+// Lazy load chart components
+import RFIDCharts from '@/components/rfid/rfid-charts';
 
 // Type for parsed CSV data
 interface RFIDRecord {
@@ -154,7 +155,7 @@ function CSVUploadZone({
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const handleFile = (file: File) => {
+  const handleFile = async (file: File) => {
     if (!file.name.endsWith('.csv')) {
       setUploadError('Please upload a CSV file');
       return;
@@ -163,54 +164,63 @@ function CSVUploadZone({
     setIsProcessing(true);
     setUploadError(null);
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (header: string) => header.trim(), // Trim whitespace from headers
-      transform: (value: string) => value.trim(), // Trim whitespace from values
-      complete: (results) => {
-        setIsProcessing(false);
-        
-        if (results.errors.length > 0) {
-          const criticalErrors = results.errors.filter(err => err.type === 'Quotes' || err.type === 'FieldMismatch');
-          if (criticalErrors.length > 0) {
-            setUploadError(`CSV parsing error: ${criticalErrors[0].message}`);
+    try {
+      // Dynamic import of papaparse - only loaded when CSV parsing is needed
+      const Papa = (await import('papaparse')).default;
+      
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim(), // Trim whitespace from headers
+        transform: (value: string) => value.trim(), // Trim whitespace from values
+        complete: (results) => {
+          setIsProcessing(false);
+          
+          if (results.errors.length > 0) {
+            const criticalErrors = results.errors.filter(err => err.type === 'Quotes' || err.type === 'FieldMismatch');
+            if (criticalErrors.length > 0) {
+              setUploadError(`CSV parsing error: ${criticalErrors[0].message}`);
+              return;
+            }
+          }
+
+          // Filter out completely empty rows
+          const cleanedData = (results.data as RFIDRecord[]).filter(row => {
+            return Object.values(row).some(value => {
+              if (typeof value === 'string') {
+                return value.trim() !== '';
+              }
+              return value !== undefined && value !== null;
+            });
+          });
+
+          if (cleanedData.length === 0) {
+            setUploadError('CSV file is empty or contains no valid data');
             return;
           }
+
+          // Validate required columns
+          const requiredColumns = ['RFID Number', 'Category', 'Status'];
+          const firstRow = cleanedData[0];
+          const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+          
+          if (missingColumns.length > 0) {
+            setUploadError(`Missing required columns: ${missingColumns.join(', ')}`);
+            return;
+          }
+
+          onDataParsed(cleanedData, file.name);
+        },
+        error: (error) => {
+          setIsProcessing(false);
+          setUploadError(`Failed to parse CSV: ${error.message}`);
         }
-
-        // Filter out completely empty rows
-        const cleanedData = (results.data as RFIDRecord[]).filter(row => {
-          return Object.values(row).some(value => {
-            if (typeof value === 'string') {
-              return value.trim() !== '';
-            }
-            return value !== undefined && value !== null;
-          });
-        });
-
-        if (cleanedData.length === 0) {
-          setUploadError('CSV file is empty or contains no valid data');
-          return;
-        }
-
-        // Validate required columns
-        const requiredColumns = ['RFID Number', 'Category', 'Status'];
-        const firstRow = cleanedData[0];
-        const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-        
-        if (missingColumns.length > 0) {
-          setUploadError(`Missing required columns: ${missingColumns.join(', ')}`);
-          return;
-        }
-
-        onDataParsed(cleanedData, file.name);
-      },
-      error: (error) => {
-        setIsProcessing(false);
-        setUploadError(`Failed to parse CSV: ${error.message}`);
-      }
-    });
+      });
+    } catch (err) {
+      setIsProcessing(false);
+      setUploadError('Failed to load CSV parser. Please try again.');
+      console.error('Error loading papaparse:', err);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -1022,117 +1032,10 @@ function RFIDDashboardContent() {
               </div>
             </Card>
 
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Status Distribution */}
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Status Distribution</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={processedData.byStatus}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      label
-                    >
-                      {processedData.byStatus.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* Category Distribution */}
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Category Distribution</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={processedData.byCategory}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* Condition Analysis */}
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Condition Analysis</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={processedData.byCondition}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      label
-                    >
-                      {processedData.byCondition.map((_, index) => (
-                        <Cell key={`cell-cond-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* Location Distribution */}
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Current Location</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={processedData.byLocation} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={120} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#10b981" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* Assigned Location Distribution */}
-              {processedData.byAssignedLocation.length > 0 && (
-                <Card className="p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4">Assigned Locations</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={processedData.byAssignedLocation} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="name" type="category" width={120} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#f59e0b" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-
-              {/* Time Series */}
-              {processedData.timeSeriesData.length > 0 && (
-                <Card className="p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4">Activity Over Time</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={processedData.timeSeriesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Line type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={2} name="Items" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-            </div>
+            {/* Charts Grid - Lazy Loaded */}
+            {processedData && (
+              <RFIDCharts processedData={processedData} colors={COLORS} />
+            )}
 
             {/* RSL Express Billing Section */}
             <div className="mt-8">

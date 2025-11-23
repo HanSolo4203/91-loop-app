@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
 import { Button } from '@/components/ui/button';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { 
@@ -154,6 +155,15 @@ function StatisticsPageContent() {
             width={200}
             height={80}
             className="h-20 w-auto object-contain mx-auto mb-4"
+            quality={90}
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL={BLUR_DATA_URL}
+            sizes={getImageSizes({
+              mobile: '160px',
+              tablet: '180px',
+              default: '200px',
+            })}
           />
           <h1 className="text-3xl font-bold text-blue-900 mb-2">
             {data.period.is_all_months ? 'Annual Statistics Report' : 'Monthly Statistics Report'}

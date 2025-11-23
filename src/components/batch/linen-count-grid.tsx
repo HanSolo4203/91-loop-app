@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import TabletNumericInput from '@/components/ui/tablet-numeric-input';
-import { Package, Calculator, AlertCircle, CheckCircle, Search, X, Copy, Trash2, RotateCcw } from 'lucide-react';
+import { Package, Calculator, AlertCircle, CheckCircle, Search, X, Copy, Trash2, RotateCcw, Zap } from 'lucide-react';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { categorizeBySections } from '@/lib/utils/category-sections';
 import type { LinenCategory } from '@/types/database';
@@ -18,6 +18,7 @@ export interface LinenCountItem {
   price_per_item: number;
   subtotal: number;
   discrepancy_details?: string;
+  express_delivery?: boolean;
 }
 
 interface PrefilledItem {
@@ -88,6 +89,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
         price_per_item: pricePerItem,
         subtotal: quantityReceived * pricePerItem,
         discrepancy_details: existing?.discrepancy_details || '',
+        express_delivery: false,
       };
     });
 
@@ -242,8 +244,26 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
           updatedItem.quantity_received = 0;
           updatedItem.subtotal = 0;
           updatedItem.discrepancy_details = '';
+          updatedItem.express_delivery = false;
           
           return updatedItem;
+        }
+        return item;
+      });
+      
+      return newItems;
+    });
+  };
+
+  // Handle express delivery toggle
+  const handleExpressDeliveryToggle = (categoryId: string, checked: boolean) => {
+    setItems(prevItems => {
+      const newItems = prevItems.map(item => {
+        if (item.category.id === categoryId) {
+          return {
+            ...item,
+            express_delivery: checked,
+          };
         }
         return item;
       });
@@ -295,7 +315,11 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
   const getTotals = () => {
     const totalSent = items.reduce((sum, item) => sum + item.quantity_sent, 0);
     const totalReceived = items.reduce((sum, item) => sum + item.quantity_received, 0);
-    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const totalAmount = items.reduce((sum, item) => {
+      const baseAmount = item.subtotal;
+      const surcharge = item.express_delivery ? baseAmount * 0.5 : 0;
+      return sum + baseAmount + surcharge;
+    }, 0);
     const itemsWithQuantity = items.filter(item => item.quantity_sent > 0).length;
     
     return { totalSent, totalReceived, totalAmount, itemsWithQuantity };
@@ -551,6 +575,27 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                               </div>
                             </div>
 
+                            {/* Express Delivery Checkbox */}
+                            {hasQuantity && (
+                              <div className="pt-2 border-t border-slate-200">
+                                <label className="flex items-center space-x-2 cursor-pointer group">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.express_delivery || false}
+                                    onChange={(e) => handleExpressDeliveryToggle(item.category.id, e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <div className="flex items-center space-x-1">
+                                    <Zap className="w-3.5 h-3.5 text-yellow-500" />
+                                    <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900">
+                                      Express Delivery (+50%)
+                                    </span>
+                                  </div>
+                                </label>
+                              </div>
+                            )}
+
                             {/* Subtotal */}
                             <div className="pt-2 border-t border-slate-200">
                               <div className="flex items-center justify-between">
@@ -559,6 +604,14 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                                   {formatCurrencySSR(item.subtotal)}
                                 </span>
                               </div>
+                              {item.express_delivery && (
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-xs text-slate-600">Surcharge (50%):</span>
+                                  <span className="text-xs font-semibold text-yellow-600">
+                                    {formatCurrencySSR(item.subtotal * 0.5)}
+                                  </span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Discrepancy Warning and Details */}

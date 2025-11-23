@@ -66,15 +66,20 @@ export default function BatchTotalCard({
   const calculateTotals = () => {
     const totalSent = items.reduce((sum, item) => sum + item.quantity_sent, 0);
     const totalReceived = items.reduce((sum, item) => sum + item.quantity_received, 0);
-    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const baseAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const totalSurcharge = items.reduce((sum, item) => {
+      return sum + (item.express_delivery ? item.subtotal * 0.5 : 0);
+    }, 0);
+    const totalAmount = baseAmount + totalSurcharge;
     const itemsWithQuantity = items.filter(item => item.quantity_sent > 0).length;
     const itemsWithDiscrepancy = items.filter(item => 
       item.quantity_sent > 0 && item.quantity_sent !== item.quantity_received
     ).length;
+    const itemsWithExpressDelivery = items.filter(item => item.express_delivery && item.quantity_sent > 0).length;
     
     // Calculate average price
     const totalItems = items.reduce((sum, item) => sum + item.quantity_received, 0);
-    const averagePrice = totalItems > 0 ? totalAmount / totalItems : 0;
+    const averagePrice = totalItems > 0 ? baseAmount / totalItems : 0;
     
     // Find highest and lowest priced items
     const itemsWithPrices = items.filter(item => item.quantity_received > 0);
@@ -87,8 +92,11 @@ export default function BatchTotalCard({
       totalSent,
       totalReceived,
       totalAmount,
+      baseAmount,
+      totalSurcharge,
       itemsWithQuantity,
       itemsWithDiscrepancy,
+      itemsWithExpressDelivery,
       averagePrice,
       highestPrice,
       lowestPrice,
@@ -180,6 +188,11 @@ export default function BatchTotalCard({
             <p className="text-sm text-blue-600 mt-1">
               {totals.totalItems} items across {totals.itemsWithQuantity} categories
             </p>
+            {totals.totalSurcharge > 0 && (
+              <p className="text-xs text-yellow-600 mt-1">
+                Includes {formatCurrency(totals.totalSurcharge)} express delivery surcharge ({totals.itemsWithExpressDelivery} item{totals.itemsWithExpressDelivery > 1 ? 's' : ''})
+              </p>
+            )}
           </div>
         </div>
 

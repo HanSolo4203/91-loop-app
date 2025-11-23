@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getInvoiceSummaryByMonth, getClientBatchesByMonth, getInvoiceSummaryByYear, getClientBatchesByYear } from '@/lib/services/analytics';
+import { cachedJsonResponse } from '@/lib/utils/api-cache';
+
+// Revalidate every 60 seconds
+export const revalidate = 60;
 
 // GET /api/dashboard/reports/pdf-stats?month=YYYY-MM
 export async function GET(request: NextRequest) {
@@ -15,13 +19,14 @@ export async function GET(request: NextRequest) {
     if (monthParam) {
       const parts = monthParam.split('-');
       if (parts.length !== 2) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid month format. Use YYYY-MM',
             data: null,
           },
-          { status: 400 }
+          'noCache',
+          400
         );
       }
       targetYear = parseInt(parts[0], 10);
@@ -32,13 +37,14 @@ export async function GET(request: NextRequest) {
         targetMonth = parseInt(monthPart, 10);
       }
       if (isNaN(targetYear) || (!isAllMonths && (targetMonth === null || isNaN(targetMonth)))) {
-        return NextResponse.json(
+        return cachedJsonResponse(
           {
             success: false,
             error: 'Invalid month format. Use YYYY-MM',
             data: null,
           },
-          { status: 400 }
+          'noCache',
+          400
         );
       }
     } else {
@@ -52,13 +58,14 @@ export async function GET(request: NextRequest) {
       ? await getInvoiceSummaryByYear(targetYear)
       : await getInvoiceSummaryByMonth(targetYear, targetMonth as number);
     if (!summaryResult.success) {
-      return NextResponse.json(
+      return cachedJsonResponse(
         {
           success: false,
           error: summaryResult.error,
           data: null,
         },
-        { status: 500 }
+        'noCache',
+        500
       );
     }
 
@@ -154,24 +161,25 @@ export async function GET(request: NextRequest) {
       generated_at: new Date().toISOString()
     };
 
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: true,
         error: null,
         data: statisticsData,
       },
-      { status: 200 }
+      'dynamic' // Stats change frequently
     );
 
   } catch (error) {
     console.error('GET /api/dashboard/reports/pdf-stats error:', error);
-    return NextResponse.json(
+    return cachedJsonResponse(
       {
         success: false,
         error: 'Internal server error',
         data: null,
       },
-      { status: 500 }
+      'noCache',
+      500
     );
   }
 }
