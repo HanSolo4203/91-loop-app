@@ -34,6 +34,9 @@ interface BatchDetails {
     total_items_received: number;
     average_item_price: number;
   };
+  washing_notes?: string | null;
+  completed_notes?: string | null;
+  delivery_notes?: string | null;
 }
 
 interface InvoiceItem {
@@ -176,13 +179,31 @@ export default function InvoicePage() {
   const vat = Math.round(adjustedSubtotal * vatRate * 100) / 100;
   const total = Math.round((adjustedSubtotal + vat) * 100) / 100;
 
+  // Validate and sanitize logo URL
+  const getValidLogoUrl = (url: string | null | undefined): string => {
+    if (!url || url.trim() === '') {
+      return DEFAULT_LOGO_URL;
+    }
+    // Reject placeholder URLs and invalid URLs
+    if (url.includes('via.placeholder.com')) {
+      return DEFAULT_LOGO_URL;
+    }
+    // Basic URL validation
+    try {
+      new URL(url);
+      return url;
+    } catch {
+      return DEFAULT_LOGO_URL;
+    }
+  };
+
   const businessDetails = {
     company_name: businessInfo?.company_name || 'RSL Express',
     email: businessInfo?.email || 'info@rslexpress.co.za',
     phone: businessInfo?.phone || '+27 (0) 21 XXX XXXX',
     address: businessInfo?.address || 'Cape Town, South Africa',
     website: businessInfo?.website || '',
-    logo_url: businessInfo?.logo_url || DEFAULT_LOGO_URL,
+    logo_url: getValidLogoUrl(businessInfo?.logo_url),
   };
 
   return (
@@ -401,6 +422,33 @@ export default function InvoicePage() {
             </div>
           </div>
         </div>
+
+        {/* Stage Notes Section */}
+        {(batchDetails.washing_notes || batchDetails.completed_notes || batchDetails.delivery_notes) && (
+          <div className="mt-8 pt-8 border-t border-slate-200">
+            <h4 className="font-semibold text-slate-900 mb-4">Process Notes:</h4>
+            <div className="space-y-4">
+              {batchDetails.washing_notes && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                  <h5 className="font-medium text-yellow-900 mb-1">Washing Stage:</h5>
+                  <p className="text-sm text-yellow-800 whitespace-pre-wrap">{batchDetails.washing_notes}</p>
+                </div>
+              )}
+              {batchDetails.completed_notes && (
+                <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded">
+                  <h5 className="font-medium text-green-900 mb-1">Completed Stage:</h5>
+                  <p className="text-sm text-green-800 whitespace-pre-wrap">{batchDetails.completed_notes}</p>
+                </div>
+              )}
+              {batchDetails.delivery_notes && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                  <h5 className="font-medium text-blue-900 mb-1">Delivery Stage:</h5>
+                  <p className="text-sm text-blue-800 whitespace-pre-wrap">{batchDetails.delivery_notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="mt-12 pt-8 border-t border-slate-200">

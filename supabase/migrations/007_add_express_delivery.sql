@@ -12,3 +12,6 @@ COMMENT ON COLUMN batch_items.express_delivery IS 'Indicates if this item requir
 CREATE INDEX IF NOT EXISTS idx_batch_items_express_delivery ON batch_items(express_delivery);
 
 
+
+
+

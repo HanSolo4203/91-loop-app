@@ -44,6 +44,10 @@ export interface BatchDetails extends Batch {
     timestamp: string;
     notes?: string;
   }>;
+  // Stage-specific notes
+  washing_notes?: string | null;
+  completed_notes?: string | null;
+  delivery_notes?: string | null;
 }
 
 export interface BatchItemWithDetails extends BatchItem {
@@ -275,14 +279,29 @@ export async function updateBatchStatus(
       );
     }
 
+    // Determine which notes column to update based on status
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString()
+    };
+
+    // Store notes in the appropriate stage column
+    if (notes !== undefined) {
+      if (status === 'washing') {
+        updateData.washing_notes = notes.trim() || null;
+      } else if (status === 'completed') {
+        updateData.completed_notes = notes.trim() || null;
+      } else if (status === 'delivered') {
+        updateData.delivery_notes = notes.trim() || null;
+      }
+      // Also update the general notes field for backward compatibility
+      updateData.notes = notes.trim() || null;
+    }
+
     // Update the batch
     const { data, error } = await (supabaseAdmin as any)
       .from('batches')
-      .update({
-        status,
-        notes: notes || null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
@@ -558,9 +577,26 @@ export async function updateBatch(
       updated_at: new Date().toISOString()
     };
 
-    // Handle notes - convert empty string to null
-    if ('notes' in updateData) {
-      updateObject.notes = updateData.notes?.trim() || null;
+    // Handle notes - if status is being updated, store notes in appropriate stage column
+    if ('notes' in updateData && updateData.notes !== undefined) {
+      const notesValue = updateData.notes?.trim() || null;
+      
+      // If status is also being updated, store notes in stage-specific column
+      if (updateData.status) {
+        if (updateData.status === 'washing') {
+          updateObject.washing_notes = notesValue;
+        } else if (updateData.status === 'completed') {
+          updateObject.completed_notes = notesValue;
+        } else if (updateData.status === 'delivered') {
+          updateObject.delivery_notes = notesValue;
+        }
+      }
+      
+      // Also update the general notes field for backward compatibility
+      updateObject.notes = notesValue;
+    } else if ('notes' in updateData) {
+      // Handle empty/null notes
+      updateObject.notes = null;
     }
 
     // Update the batch

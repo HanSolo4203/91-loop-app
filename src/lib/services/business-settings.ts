@@ -36,7 +36,24 @@ const sanitize = (value?: string | null) => {
     return null;
   }
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  if (trimmed.length === 0) {
+    return null;
+  }
+  // Reject placeholder URLs
+  if (trimmed.includes('via.placeholder.com')) {
+    return null;
+  }
+  // Basic URL validation for logo_url
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      new URL(trimmed);
+      return trimmed;
+    } catch {
+      // Invalid URL, return null
+      return null;
+    }
+  }
+  return trimmed;
 };
 
 export async function getBusinessSettings(): Promise<BusinessSettingsResponse<BusinessSettings>> {
