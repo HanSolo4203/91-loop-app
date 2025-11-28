@@ -173,10 +173,8 @@ function NewBatchContent() {
       errors.pickupDate = 'Pickup date is required';
     } else {
       const date = new Date(pickupDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (date < today) {
-        errors.pickupDate = 'Pickup date cannot be in the past';
+      if (isNaN(date.getTime())) {
+        errors.pickupDate = 'Invalid pickup date format';
       }
     }
 
