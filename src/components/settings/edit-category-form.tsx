@@ -83,7 +83,7 @@ export default function EditCategoryForm({
         name: formData.name.trim() !== category.name ? formData.name.trim() : undefined,
         price_per_item: formData.price_per_item !== category.price_per_item ? formData.price_per_item : undefined,
         is_active: formData.is_active !== category.is_active ? formData.is_active : undefined,
-        section: formData.section !== (category.section || '') ? (formData.section || null) : undefined,
+        section: formData.section !== (category.section || '') ? (formData.section || undefined) : undefined,
       });
     } catch (error) {
       console.error('Error updating category:', error);

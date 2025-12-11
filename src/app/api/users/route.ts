@@ -154,8 +154,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const { data: existingUser } = await supabaseAdmin.auth.admin.getUserByEmail(email);
-    if (existingUser?.user) {
+    const emailToMatch = email.trim().toLowerCase();
+    const { data: existingProfiles, error: existingProfileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', emailToMatch)
+      .limit(1);
+
+    if (existingProfileError) {
+      console.error('Error checking existing user:', existingProfileError);
+      return NextResponse.json(
+        { success: false, error: 'Failed to verify existing users', data: null },
+        { status: 500 }
+      );
+    }
+
+    if (existingProfiles && existingProfiles.length > 0) {
       return NextResponse.json(
         { success: false, error: 'User with this email already exists', data: null },
         { status: 409 }
