@@ -4,6 +4,9 @@ import { getClientBatchesByMonth, getClientBatchesByYear } from '@/lib/services/
 import type { AnalyticsServiceResponse } from '@/lib/services/analytics';
 import { cachedJsonResponse } from '@/lib/utils/api-cache';
 
+// This route depends on request URL params; force dynamic rendering to avoid static optimization errors
+export const dynamic = 'force-dynamic';
+
 // Revalidate every 60 seconds
 export const revalidate = 60;
 
