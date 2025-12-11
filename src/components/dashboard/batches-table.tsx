@@ -178,13 +178,13 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center space-x-2">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <CardTitle className="flex items-center space-x-2 text-lg sm:text-xl">
               <Package className="w-5 h-5 text-blue-600" />
               <span>Recent Batches</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm sm:text-base">
               {filteredBatches.length} batch{filteredBatches.length !== 1 ? 'es' : ''} found
               {selectedMonth &&
                 (selectedMonth.month === null
@@ -203,9 +203,9 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
               {searchTerm && ` matching "${searchTerm}"`}
             </CardDescription>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-3">
             <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -223,7 +223,7 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
                 placeholder="Search batches..."
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-10 w-64"
+                className="pl-10 w-full sm:w-64"
               />
             </div>
           </div>
@@ -267,16 +267,16 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
           )
         ) : (
           <>
-            <div className="rounded-md border">
-              <Table>
+            <div className="rounded-md border overflow-x-auto">
+              <Table className="min-w-[720px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Paper Batch ID</TableHead>
-                    <TableHead>System ID</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="whitespace-nowrap text-xs sm:text-sm">Paper Batch ID</TableHead>
+                    <TableHead className="whitespace-nowrap text-xs sm:text-sm">System ID</TableHead>
+                    <TableHead className="whitespace-nowrap text-xs sm:text-sm">Client</TableHead>
+                    <TableHead className="whitespace-nowrap text-xs sm:text-sm">Date</TableHead>
+                    <TableHead className="whitespace-nowrap text-xs sm:text-sm">Status</TableHead>
+                    <TableHead className="text-right whitespace-nowrap text-xs sm:text-sm">Amount</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -293,7 +293,7 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
                       <TableCell className="text-slate-500 font-mono text-sm">
                         #{batch.id.slice(-8)}
                       </TableCell>
-                      <TableCell>{batch.client.name}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{batch.client.name}</TableCell>
                       <TableCell>{formatDate(batch.pickup_date)}</TableCell>
                       <TableCell>
                         {getStatusBadge(batch.status)}
@@ -316,11 +316,11 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4">
                 <div className="text-sm text-slate-500">
                   Showing {startIndex + 1} to {Math.min(endIndex, filteredBatches.length)} of {filteredBatches.length} batches
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"

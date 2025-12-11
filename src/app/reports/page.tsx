@@ -33,13 +33,13 @@ export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center space-x-3">
-            <FileSpreadsheet className="w-8 h-8 text-blue-600" />
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center space-x-3">
+            <FileSpreadsheet className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
             <span>Reports</span>
           </h1>
-          <p className="text-slate-600 mt-2">
+          <p className="text-sm sm:text-base text-slate-600 mt-2 leading-relaxed">
             Invoicing summary per client filtered by month, including total items washed,
             total amount, and discrepancy information.
           </p>

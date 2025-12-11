@@ -131,7 +131,7 @@ export default function MonthSelector({ value, onChange, loading = false }: Mont
   }
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <Button
         variant="outline"
         size="sm"

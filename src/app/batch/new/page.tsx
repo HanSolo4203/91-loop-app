@@ -356,7 +356,7 @@ function NewBatchContent() {
         
         {/* Page Header */}
         <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-4">
+          <div className="flex flex-wrap items-center gap-3 text-sm sm:text-base mb-4">
             <Link 
               href="/dashboard"
               className="flex items-center space-x-2 text-slate-600 hover:text-slate-900 transition-colors"
@@ -365,17 +365,17 @@ function NewBatchContent() {
               <span>Back to Dashboard</span>
             </Link>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center space-x-3">
-            <PlusCircle className="w-8 h-8 text-blue-600" />
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center space-x-3">
+            <PlusCircle className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
             <span>Create New Batch</span>
           </h1>
-          <p className="text-slate-600 mt-2">
+          <p className="text-sm sm:text-base text-slate-600 mt-2">
             Set up a new linen batch for tracking and management. Configure batch details, assign items, and set up tracking parameters.
           </p>
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
           {/* Left Column - Form */}
           <div className="lg:col-span-2 xl:col-span-3 space-y-6">
             {/* Batch Information Card */}

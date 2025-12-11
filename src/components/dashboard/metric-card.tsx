@@ -65,26 +65,26 @@ export default function MetricCard({
   }
 
   return (
-    <Card className={styles.card}>
+    <Card className={`${styles.card} h-full`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-slate-600">
+        <CardTitle className="text-xs sm:text-sm font-medium text-slate-600">
           {title}
         </CardTitle>
-        <Icon className={`h-4 w-4 ${styles.icon}`} />
+        <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${styles.icon}`} />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-slate-900 mb-1">
+        <div className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1">
           {value}
         </div>
         {change && (
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
             <Badge 
               variant="secondary" 
-              className={`${styles.badge} text-xs`}
+              className={`${styles.badge} text-[11px] sm:text-xs`}
             >
               {change.value > 0 ? '+' : ''}{change.value}%
             </Badge>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs sm:text-sm text-slate-500">
               vs {change.period}
             </span>
           </div>

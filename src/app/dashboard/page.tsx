@@ -334,34 +334,34 @@ function DashboardContent() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <Breadcrumb />
 
         {/* Page Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 flex items-center space-x-3">
-                <LayoutDashboard className="w-8 h-8 text-blue-600" />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center space-x-3">
+                <LayoutDashboard className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
                 <span>Dashboard</span>
               </h1>
-              <p className="text-slate-600 mt-2">
+              <p className="text-sm sm:text-base text-slate-600">
                 Overview of your linen tracking operations and key performance metrics
               </p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRefresh}
                 disabled={loading}
-                className="flex items-center space-x-2"
+                className="flex items-center justify-center space-x-2 w-full sm:w-auto"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </Button>
               <Link href="/batch/new">
-                <Button className="flex items-center space-x-2">
+                <Button className="flex items-center justify-center space-x-2 w-full sm:w-auto">
                   <Plus className="w-4 h-4" />
                   <span>New Batch</span>
                 </Button>
@@ -372,9 +372,11 @@ function DashboardContent() {
 
         {/* Month Selector */}
         <div className="mb-8">
-          <div className="flex items-center space-x-4">
-            <Calendar className="w-5 h-5 text-slate-600" />
-            <span className="text-sm font-medium text-slate-700">Viewing data for:</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-5 h-5 text-slate-600" />
+              <span className="text-sm font-medium text-slate-700">Viewing data for:</span>
+            </div>
             <MonthSelector
               value={selectedMonth}
               onChange={handleMonthChange}
@@ -384,7 +386,7 @@ function DashboardContent() {
         </div>
 
         {/* Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-8">
           <MetricCard
             title="Total Batches"
             value={metrics.totalBatches}
