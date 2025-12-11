@@ -159,9 +159,13 @@ function DashboardContent() {
           `/api/dashboard/batches?limit=20&date_from=${startDate}&date_to=${endDate}`
         );
       } else {
-        const formattedMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-        startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]; // Last day of the month
+        // month is 0-indexed (0 = January, 11 = December)
+        const monthNum = month + 1; // Convert to 1-indexed for date strings
+        const formattedMonth = `${year}-${String(monthNum).padStart(2, '0')}`;
+        startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
+        // Get last day of the month without timezone issues
+        const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+        endDate = `${year}-${String(monthNum).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
 
         const [metricsResponse, batchesFetchResponse] = await Promise.all([
           fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`),
@@ -248,6 +252,43 @@ function DashboardContent() {
   // Load data on mount and when month changes
   useEffect(() => {
     fetchDashboardData(selectedMonth.month, selectedMonth.year);
+  }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
+
+  // Refresh dashboard when window gains focus (e.g., returning from batch creation)
+  useEffect(() => {
+    const handleFocus = () => {
+      // Check if we should refresh (user might have created a batch)
+      const lastRefresh = sessionStorage.getItem('dashboardLastRefresh');
+      const now = Date.now();
+      // Refresh if it's been more than 5 seconds since last refresh
+      if (!lastRefresh || now - parseInt(lastRefresh, 10) > 5000) {
+        fetchDashboardData(selectedMonth.month, selectedMonth.year);
+        sessionStorage.setItem('dashboardLastRefresh', now.toString());
+      }
+    };
+
+    // Refresh on visibility change (when tab becomes visible)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        handleFocus();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Also refresh if URL has refresh parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('refresh') === 'true') {
+      fetchDashboardData(selectedMonth.month, selectedMonth.year);
+      // Remove the parameter from URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
   
   const handleMonthChange = (month: number | null, year: number) => {

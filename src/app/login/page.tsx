@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
@@ -18,7 +18,58 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('Session check error:', sessionError);
+          if (sessionError.message?.toLowerCase().includes('refresh token')) {
+            await supabase.auth.signOut();
+            setCheckingAuth(false);
+            return;
+          }
+        }
+
+        if (!session) {
+          setCheckingAuth(false);
+          return;
+        }
+
+        // Check if user is admin
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single<ProfileRole>();
+
+        if (profileError) {
+          console.error('Profile fetch error during session check:', profileError);
+          setCheckingAuth(false);
+          return;
+        }
+
+        if (profile?.role === 'admin') {
+          router.replace('/dashboard');
+        } else {
+          // Not admin, sign out and stay on login
+          await supabase.auth.signOut();
+          setCheckingAuth(false);
+        }
+      } catch (err) {
+        console.error('Error checking session:', err);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+
+    checkSession();
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +156,17 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-white">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700">

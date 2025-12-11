@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Reduce noisy sourcemap warnings from third-party bundles
+  productionBrowserSourceMaps: false,
   images: {
     remotePatterns: [
       {

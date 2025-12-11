@@ -60,6 +60,12 @@ interface BusinessInfo {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  bank_name?: string | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_branch_code?: string | null;
+  bank_account_type?: string | null;
+  bank_payment_reference?: string | null;
 }
 
 const DEFAULT_LOGO_URL = 'https://bwuslachnnapmtenbdgq.supabase.co/storage/v1/object/public/business-logos/rsl_dynamic_italic_final444.svg';
@@ -184,14 +190,19 @@ export default function InvoicePage() {
     if (!url || url.trim() === '') {
       return DEFAULT_LOGO_URL;
     }
-    // Reject placeholder URLs and invalid URLs
-    if (url.includes('via.placeholder.com')) {
+    const trimmed = url.trim();
+    // Reject placeholder URLs
+    if (trimmed.includes('via.placeholder.com')) {
       return DEFAULT_LOGO_URL;
     }
-    // Basic URL validation
+    // Allow root-relative paths to Next.js public assets (e.g. /FNB_LOGO_1.png)
+    if (trimmed.startsWith('/')) {
+      return trimmed;
+    }
+    // Basic URL validation for absolute URLs
     try {
-      new URL(url);
-      return url;
+      new URL(trimmed);
+      return trimmed;
     } catch {
       return DEFAULT_LOGO_URL;
     }
@@ -204,6 +215,12 @@ export default function InvoicePage() {
     address: businessInfo?.address || 'Cape Town, South Africa',
     website: businessInfo?.website || '',
     logo_url: getValidLogoUrl(businessInfo?.logo_url),
+    bank_name: businessInfo?.bank_name || '',
+    bank_account_name: businessInfo?.bank_account_name || '',
+    bank_account_number: businessInfo?.bank_account_number || '',
+    bank_branch_code: businessInfo?.bank_branch_code || '',
+    bank_account_type: businessInfo?.bank_account_type || '',
+    bank_payment_reference: businessInfo?.bank_payment_reference || '',
   };
 
   return (
@@ -450,8 +467,42 @@ export default function InvoicePage() {
           </div>
         )}
 
-        {/* Footer */}
+        {/* Bank Details + Footer */}
         <div className="mt-12 pt-8 border-t border-slate-200">
+          {/* Bank details (if configured in Business Settings) */}
+          {(businessDetails.bank_name ||
+            businessDetails.bank_account_name ||
+            businessDetails.bank_account_number ||
+            businessDetails.bank_branch_code ||
+            businessDetails.bank_account_type ||
+            businessDetails.bank_payment_reference) && (
+            <div className="mb-8">
+              <h4 className="font-semibold text-slate-900 mb-3">Bank Details for Payment</h4>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-800 space-y-1">
+                {businessDetails.bank_name && (
+                  <p><span className="font-medium">Bank:</span> {businessDetails.bank_name}</p>
+                )}
+                {businessDetails.bank_account_name && (
+                  <p><span className="font-medium">Account Name:</span> {businessDetails.bank_account_name}</p>
+                )}
+                {businessDetails.bank_account_number && (
+                  <p><span className="font-medium">Account Number:</span> {businessDetails.bank_account_number}</p>
+                )}
+                {businessDetails.bank_branch_code && (
+                  <p><span className="font-medium">Branch Code:</span> {businessDetails.bank_branch_code}</p>
+                )}
+                {businessDetails.bank_account_type && (
+                  <p><span className="font-medium">Account Type:</span> {businessDetails.bank_account_type}</p>
+                )}
+                {businessDetails.bank_payment_reference && (
+                  <p className="mt-2 text-xs text-slate-700">
+                    <span className="font-semibold">Payment Reference:</span> {businessDetails.bank_payment_reference}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="text-center">
             <h4 className="font-semibold text-slate-900 mb-2">Payment Terms:</h4>
             <p className="text-slate-600 text-sm">Payment is due within 30 days of invoice date.</p>

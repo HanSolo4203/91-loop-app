@@ -19,28 +19,48 @@ export function AuthGuard({ children }: AuthGuardProps) {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (error || !session) {
-          router.push('/login');
+        if (error) {
+          console.error('Session fetch error:', error);
+          // If refresh token is invalid or missing, force sign-out and reset storage
+          if (error.message?.toLowerCase().includes('refresh token')) {
+            await supabase.auth.signOut();
+            router.replace('/login');
+            setLoading(false);
+            return;
+          }
+        }
+
+        if (!session) {
+          router.replace('/login');
+          setLoading(false);
           return;
         }
 
         // Check if user is admin
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', session.user.id)
           .single() as { data: { role: 'admin' | 'user' } | null };
+
+        if (profileError) {
+          console.error('Profile fetch error:', profileError);
+          await supabase.auth.signOut();
+          router.replace('/login');
+          setLoading(false);
+          return;
+        }
 
         if (profile?.role === 'admin') {
           setIsAdmin(true);
         } else {
           // User is not admin, sign out and redirect
           await supabase.auth.signOut();
-          router.push('/login');
+          router.replace('/login');
         }
       } catch (error) {
         console.error('Auth check error:', error);
-        router.push('/login');
+        router.replace('/login');
       } finally {
         setLoading(false);
       }

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import MonthSelector from '@/components/dashboard/month-selector';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
-import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, Download, FileText, Printer } from 'lucide-react';
+import { AlertCircle, FileSpreadsheet, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, Download, FileText, Printer, FileDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
@@ -205,6 +205,12 @@ export default function ReportsTable({
     window.open(`/reports/statistics?month=${ym}`, '_blank');
   };
 
+  const handleDownloadAllInvoicesPDF = () => {
+    const ym = buildMonthParam(month, year);
+    // Open PDF in new tab - the API route will return the PDF with proper headers
+    window.open(`/api/dashboard/reports/download-invoices-pdf?month=${ym}`, '_blank');
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -224,6 +230,16 @@ export default function ReportsTable({
               >
                 <Download className="w-4 h-4" />
                 <span>{exportLoading ? 'Exporting...' : 'Excel'}</span>
+              </Button>
+              <Button
+                onClick={handleDownloadAllInvoicesPDF}
+                disabled={loading || rows.length === 0}
+                size="sm"
+                variant="outline"
+                className="flex items-center space-x-2"
+              >
+                <FileDown className="w-4 h-4" />
+                <span>Download All Invoices (PDF)</span>
               </Button>
               <Button
                 onClick={handleViewStatistics}

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import TabletNumericInput from '@/components/ui/tablet-numeric-input';
-import { Package, Calculator, AlertCircle, CheckCircle, Search, X, Copy, Trash2, RotateCcw, Zap } from 'lucide-react';
+import { Package, Calculator, AlertCircle, CheckCircle, Search, Star, X, Copy, Trash2, RotateCcw, Zap } from 'lucide-react';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { categorizeBySections } from '@/lib/utils/category-sections';
 import type { LinenCategory } from '@/types/database';
@@ -35,6 +35,8 @@ interface LinenCountGridProps {
   isLoading?: boolean;
   error?: string;
   initialSelections?: PrefilledItem[];
+  favoriteCategoryIds?: string[];
+  onToggleFavorite?: (categoryId: string, nextFavorite: boolean) => void;
 }
 
 export interface LinenCountGridRef {
@@ -47,6 +49,8 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
   isLoading = false,
   error,
   initialSelections,
+  favoriteCategoryIds = [],
+  onToggleFavorite,
 }, ref) => {
   const [items, setItems] = useState<LinenCountItem[]>([]);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -54,6 +58,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
   const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
   const onItemsChangeRef = useRef(onItemsChange);
   const normalizedInitialSelections = useMemo(() => initialSelections ?? [], [initialSelections]);
+  const favoriteIdsSet = useMemo(() => new Set(favoriteCategoryIds), [favoriteCategoryIds]);
 
   // Update the ref when the callback changes
   useEffect(() => {
@@ -280,35 +285,74 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
 
   // Use SSR-safe currency formatting
 
-  // Filter and sort categories based on search query
+  // Filter and sort categories based on search query and favourites
   const getFilteredSections = () => {
-    const sections = categorizeBySections(categories);
-    
-    if (!searchQuery.trim()) {
-      return sections;
-    }
-    
-    const query = searchQuery.toLowerCase().trim();
-    const filteredSections = sections.map(section => ({
-      ...section,
-      categories: section.categories.filter(category => 
+    const baseSections = categorizeBySections(categories);
+
+    // If there's a search term, show matches with favourites first
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      const matchingCategories = categories.filter((category) =>
         category.name.toLowerCase().includes(query)
-      )
-    })).filter(section => section.categories.length > 0);
-    
-    // If there are search results, create a "Search Results" section at the top
-    if (filteredSections.length > 0) {
-      const allMatchingCategories = filteredSections.flatMap(section => section.categories);
-      return [
-        {
-          name: `Search Results (${allMatchingCategories.length})`,
-          categories: allMatchingCategories.sort((a, b) => a.name.localeCompare(b.name))
-        },
-        ...filteredSections.filter(section => section.name !== 'Search Results')
-      ];
+      );
+
+      if (matchingCategories.length === 0) {
+        return [];
+      }
+
+      const favoriteMatches = matchingCategories.filter((category) => favoriteIdsSet.has(category.id));
+      const nonFavoriteMatches = matchingCategories.filter((category) => !favoriteIdsSet.has(category.id));
+
+      const sectionsWithoutFavorites = categorizeBySections(nonFavoriteMatches).filter(
+        (section) => section.categories.length > 0
+      );
+
+      const searchSection =
+        nonFavoriteMatches.length > 0
+          ? [
+              {
+                name: `Search Results (${matchingCategories.length})`,
+                categories: nonFavoriteMatches.sort((a, b) => a.name.localeCompare(b.name)),
+              },
+            ]
+          : [];
+
+      const favoritesSection =
+        favoriteMatches.length > 0
+          ? [
+              {
+                name: `Favourites (${favoriteMatches.length})`,
+                categories: favoriteMatches.sort((a, b) => a.name.localeCompare(b.name)),
+              },
+            ]
+          : [];
+
+      return [...favoritesSection, ...searchSection, ...sectionsWithoutFavorites];
     }
-    
-    return filteredSections;
+
+    // No search: put favourites at the top, then the regular sections
+    const favouriteCategories = categories
+      .filter((category) => favoriteIdsSet.has(category.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const sectionsWithoutFavorites = baseSections
+      .map((section) => ({
+        ...section,
+        categories: section.categories.filter((category) => !favoriteIdsSet.has(category.id)),
+      }))
+      .filter((section) => section.categories.length > 0);
+
+    if (favouriteCategories.length === 0) {
+      return sectionsWithoutFavorites;
+    }
+
+    return [
+      {
+        name: `Favourites (${favouriteCategories.length})`,
+        categories: favouriteCategories,
+      },
+      ...sectionsWithoutFavorites,
+    ];
   };
 
   // Get total quantities
@@ -449,6 +493,8 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                       
                       const hasDiscrepancy = item.quantity_sent !== item.quantity_received;
                       const hasQuantity = item.quantity_sent > 0;
+                      const isFavorite = favoriteIdsSet.has(item.category.id);
+                      const canToggleFavorite = Boolean(onToggleFavorite);
                       
                       const isCardFocused = focusedCardId === item.category.id;
                       
@@ -471,6 +517,26 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                                 {item.category.name}
                               </h4>
                               <div className="flex items-center space-x-2">
+                                {canToggleFavorite && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onToggleFavorite?.(item.category.id, !isFavorite);
+                                    }}
+                                    className={`p-1 rounded-full transition-colors ${
+                                      isFavorite
+                                        ? 'text-amber-500 hover:text-amber-600 bg-amber-50'
+                                        : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'
+                                    }`}
+                                    aria-label={isFavorite ? 'Remove favourite' : 'Mark as favourite'}
+                                  >
+                                    <Star
+                                      className="w-4 h-4"
+                                      fill={isFavorite ? 'currentColor' : 'none'}
+                                    />
+                                  </button>
+                                )}
                                 {item.discrepancy_details && (
                                   <button
                                     onClick={() => handleClearDiscrepancyDetails(item.category.id)}
@@ -524,22 +590,25 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                                 )}
                               </div>
 
-                              {/* Action Buttons - Only show when card is focused */}
-                              {isCardFocused && (item.quantity_sent > 0 || item.quantity_received > 0) && (
+                              {/* Action Buttons - show when card is focused */}
+                              {isCardFocused && (
                                 <div className="flex justify-center space-x-2">
-                                  {item.quantity_sent > 0 && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleCopyQuantityToReceived(item.category.id);
-                                      }}
-                                      className="flex items-center space-x-1 px-3 py-2 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors touch-manipulation min-h-[44px]"
-                                      title="Copy quantity sent to received"
-                                    >
-                                      <Copy className="w-3 h-3" />
-                                      <span>Copy</span>
-                                    </button>
-                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopyQuantityToReceived(item.category.id);
+                                    }}
+                                    className={`flex items-center space-x-1 px-3 py-2 text-xs rounded-md transition-colors touch-manipulation min-h-[44px] ${
+                                      item.quantity_sent > 0
+                                        ? 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                    }`}
+                                    title="Copy quantity sent to received"
+                                    disabled={item.quantity_sent === 0}
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                    <span>Copy</span>
+                                  </button>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -576,25 +645,24 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                             </div>
 
                             {/* Express Delivery Checkbox */}
-                            {hasQuantity && (
-                              <div className="pt-2 border-t border-slate-200">
-                                <label className="flex items-center space-x-2 cursor-pointer group">
-                                  <input
-                                    type="checkbox"
-                                    checked={item.express_delivery || false}
-                                    onChange={(e) => handleExpressDeliveryToggle(item.category.id, e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <div className="flex items-center space-x-1">
-                                    <Zap className="w-3.5 h-3.5 text-yellow-500" />
-                                    <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900">
-                                      Express Delivery (+50%)
-                                    </span>
-                                  </div>
-                                </label>
-                              </div>
-                            )}
+                            <div className="pt-2 border-t border-slate-200">
+                              <label className={`flex items-center space-x-2 cursor-pointer group ${item.quantity_sent === 0 ? 'opacity-70' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={item.express_delivery || false}
+                                  onChange={(e) => handleExpressDeliveryToggle(item.category.id, e.target.checked)}
+                                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 focus:ring-2 disabled:cursor-not-allowed"
+                                  onClick={(e) => e.stopPropagation()}
+                                  disabled={item.quantity_sent === 0}
+                                />
+                                <div className="flex items-center space-x-1">
+                                  <Zap className="w-3.5 h-3.5 text-yellow-500" />
+                                  <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900">
+                                    Express Delivery (+50%)
+                                  </span>
+                                </div>
+                              </label>
+                            </div>
 
                             {/* Subtotal */}
                             <div className="pt-2 border-t border-slate-200">

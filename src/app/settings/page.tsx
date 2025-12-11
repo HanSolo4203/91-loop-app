@@ -10,12 +10,15 @@ import ClientsTable from '@/components/settings/clients-table';
 import ClientForm, { ClientFormData } from '@/components/settings/client-form';
 import ClientDetails from '@/components/settings/client-details';
 import AddLinenCategoryForm from '@/components/settings/add-linen-category-form';
+import EditCategoryForm from '@/components/settings/edit-category-form';
 import SectionHeader from '@/components/settings/section-header';
+import UsersTable, { User } from '@/components/settings/users-table';
+import UserForm, { UserFormData } from '@/components/settings/user-form';
 import { categorizeBySections } from '@/lib/utils/category-sections';
 import { 
   LayoutDashboard, 
   Settings, 
-  User, 
+  User as UserIcon, 
   DollarSign, 
   Save, 
   RefreshCw,
@@ -23,9 +26,11 @@ import {
   CheckCircle,
   Users,
   Building,
-  Plus as PlusIcon
+  Plus as PlusIcon,
+  UserCog
 } from 'lucide-react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 import type { LinenCategory, Client, LinenCategoryFormData } from '@/types/database';
 
 // Loading component
@@ -79,7 +84,14 @@ const BUSINESS_SETTINGS_DEFAULT = {
   phone: '+27 (0) 21 XXX XXXX',
   address: '',
   website: '',
-  logo_url: '',
+  // Default to local FNB logo in /public
+  logo_url: '/FNB_LOGO_1.png',
+  bank_name: '',
+  bank_account_name: '',
+  bank_account_number: '',
+  bank_branch_code: '',
+  bank_account_type: '',
+  bank_payment_reference: '',
 };
 
 type BusinessSettingsFormState = typeof BUSINESS_SETTINGS_DEFAULT;
@@ -92,6 +104,12 @@ const mapBusinessSettingsResponse = (data: Partial<BusinessSettingsFormState> | 
   address: data?.address || '',
   website: data?.website || '',
   logo_url: data?.logo_url || '',
+  bank_name: data?.bank_name || '',
+  bank_account_name: data?.bank_account_name || '',
+  bank_account_number: data?.bank_account_number || '',
+  bank_branch_code: data?.bank_branch_code || '',
+  bank_account_type: data?.bank_account_type || '',
+  bank_payment_reference: data?.bank_payment_reference || '',
 });
 
 
@@ -120,6 +138,14 @@ function SettingsContent() {
   const [activeTab, setActiveTab] = useState('pricing');
   const [showAddForm, setShowAddForm] = useState(false);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<LinenCategory | null>(null);
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [usersView, setUsersView] = useState<'list' | 'form'>('list');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [userSuccess, setUserSuccess] = useState<string | null>(null);
+  const [usersRefreshTrigger, setUsersRefreshTrigger] = useState(0);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
     // Initialize with all sections expanded by default
     return {
@@ -144,6 +170,26 @@ function SettingsContent() {
   const [businessSaving, setBusinessSaving] = useState(false);
   const [businessStatus, setBusinessStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [businessMessage, setBusinessMessage] = useState('');
+
+  // Check if current user is admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          setIsAdmin(profile?.role === 'admin' || false);
+        }
+      } catch (err) {
+        console.error('Error checking admin status:', err);
+      }
+    };
+    checkAdmin();
+  }, []);
 
   // Load categories from API
   useEffect(() => {
@@ -345,7 +391,122 @@ function SettingsContent() {
     }
   };
 
+  // Edit category function
+  const handleEditCategory = (category: LinenCategory) => {
+    setEditingCategory(category);
+    setIsEditingCategory(true);
+    setShowAddForm(false);
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCategory(null);
+    setIsEditingCategory(false);
+  };
+
+  const handleSaveCategoryEdit = async (id: string, data: { name?: string; price_per_item?: number; is_active?: boolean; section?: string }) => {
+    setIsEditingCategory(true);
+    try {
+      const response = await fetch(`/api/categories/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update the category in the list
+        setCategories(prev => prev.map(cat => 
+          cat.id === id ? result.data : cat
+        ).sort((a, b) => a.name.localeCompare(b.name)));
+        
+        setEditingCategory(null);
+        setIsEditingCategory(false);
+        setSaveStatus('success');
+        setErrorMessage('');
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      } else {
+        setSaveStatus('error');
+        setErrorMessage(result.error || 'Failed to update category');
+      }
+    } catch (error) {
+      console.error('Error updating category:', error);
+      setSaveStatus('error');
+      setErrorMessage('Failed to update category. Please try again.');
+    } finally {
+      setIsEditingCategory(false);
+    }
+  };
+
   // Add new category function
+  // User management functions
+  const handleAddUser = () => {
+    setSelectedUser(null);
+    setUsersView('form');
+    setUserError(null);
+    setUserSuccess(null);
+  };
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user);
+    setUsersView('form');
+    setUserError(null);
+    setUserSuccess(null);
+  };
+
+  const handleBackToUsers = () => {
+    setUsersView('list');
+    setSelectedUser(null);
+    setUserError(null);
+    setUserSuccess(null);
+  };
+
+  const handleSaveUser = async (userData: UserFormData) => {
+    try {
+      setUserError(null);
+      setUserSuccess(null);
+
+      const url = selectedUser ? `/api/users/${selectedUser.id}` : '/api/users';
+      const method = selectedUser ? 'PATCH' : 'POST';
+
+      // Get session token to pass in Authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setUserError('You must be logged in to perform this action');
+        return;
+      }
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        credentials: 'include', // Include cookies for session
+        body: JSON.stringify(userData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setUserSuccess(selectedUser ? 'User updated successfully!' : 'User created successfully!');
+        setUsersRefreshTrigger(prev => prev + 1); // Trigger refresh
+        setTimeout(() => {
+          handleBackToUsers();
+        }, 1500);
+      } else {
+        setUserError(result.error || 'Failed to save user');
+      }
+    } catch (err) {
+      console.error('Error saving user:', err);
+      setUserError('Failed to save user. Please try again.');
+    }
+  };
+
   const handleAddCategory = async (categoryData: LinenCategoryFormData) => {
     setIsAddingCategory(true);
     try {
@@ -528,6 +689,18 @@ function SettingsContent() {
               >
                 Security
               </button>
+              {isAdmin && (
+                <button 
+                  onClick={() => setActiveTab('users')}
+                  className={`border-b-2 py-2 px-1 text-sm font-medium transition-colors ${
+                    activeTab === 'users' 
+                      ? 'border-blue-500 text-blue-600' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  User Management
+                </button>
+              )}
             </nav>
           </div>
         </div>
@@ -572,11 +745,21 @@ function SettingsContent() {
             </div>
 
             {/* Add New Category Form */}
-            {showAddForm && (
+            {showAddForm && !editingCategory && (
               <AddLinenCategoryForm
                 onAdd={handleAddCategory}
                 onCancel={() => setShowAddForm(false)}
                 isSubmitting={isAddingCategory}
+              />
+            )}
+
+            {/* Edit Category Form */}
+            {editingCategory && (
+              <EditCategoryForm
+                category={editingCategory}
+                onSave={handleSaveCategoryEdit}
+                onCancel={handleCancelEditCategory}
+                isSubmitting={isEditingCategory}
               />
             )}
 
@@ -585,16 +768,16 @@ function SettingsContent() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-slate-900">Category Pricing</h3>
                 <div className="flex items-center space-x-2">
-                  {!showAddForm && (
+                  {!showAddForm && !editingCategory && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setShowAddForm(true)}
-                      disabled={isLoading || isSaving || isAddingCategory}
+                      disabled={isLoading || isSaving || isAddingCategory || isEditingCategory}
                       className="flex items-center space-x-2"
                     >
                       <PlusIcon className="w-4 h-4" />
-                      <span>Add Category</span>
+                      <span>Add Item</span>
                     </Button>
                   )}
                   <Button
@@ -654,20 +837,23 @@ function SettingsContent() {
                         isExpanded={expandedSections[section.name] || false}
                         onToggle={() => toggleSection(section.name)}
                       />
-                      <div className={`transition-all duration-300 overflow-hidden ${
+                      <div className={`transition-all duration-300 ${
                         expandedSections[section.name] 
-                          ? 'max-h-screen opacity-100' 
-                          : 'max-h-0 opacity-0'
+                          ? 'max-h-none opacity-100'
+                          : 'max-h-0 opacity-0 overflow-hidden'
                       }`}>
                         <div className="space-y-4">
                           {section.categories.map((category) => (
-                            <PricingCard
-                              key={category.id}
-                              category={category}
-                              onPriceChange={handlePriceChange}
-                              isUpdating={isSaving}
-                              hasError={false}
-                            />
+                            editingCategory?.id === category.id ? null : (
+                              <PricingCard
+                                key={category.id}
+                                category={category}
+                                onPriceChange={handlePriceChange}
+                                onEdit={handleEditCategory}
+                                isUpdating={isSaving}
+                                hasError={false}
+                              />
+                            )
                           ))}
                         </div>
                       </div>
@@ -736,8 +922,55 @@ function SettingsContent() {
 
         {/* Reports moved to top navigation at /reports */}
 
+        {/* User Management Section */}
+        {activeTab === 'users' && isAdmin && (
+          <div className="mb-12">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-slate-900 flex items-center space-x-2">
+                <UserCog className="w-6 h-6 text-blue-600" />
+                <span>User Management</span>
+              </h2>
+              <p className="text-slate-600 mt-1">
+                Add, edit, and manage user accounts for the application. Only administrators can access this section.
+              </p>
+            </div>
+
+            {/* User Success/Error Messages */}
+            {userSuccess && (
+              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-green-800">{userSuccess}</span>
+              </div>
+            )}
+
+            {userError && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                <span className="text-red-800">{userError}</span>
+              </div>
+            )}
+
+            {/* User Views */}
+            {usersView === 'list' && (
+              <UsersTable
+                onAddUser={handleAddUser}
+                onEditUser={handleEditUser}
+                refreshTrigger={usersRefreshTrigger}
+              />
+            )}
+
+            {usersView === 'form' && (
+              <UserForm
+                user={selectedUser}
+                onSave={handleSaveUser}
+                onCancel={handleBackToUsers}
+              />
+            )}
+          </div>
+        )}
+
         {/* Other Settings Sections */}
-        {activeTab !== 'pricing' && activeTab !== 'clients' && (
+        {activeTab !== 'pricing' && activeTab !== 'clients' && activeTab !== 'users' && (
           <div className="space-y-6">
             {/* Business Settings */}
             <Card>
@@ -838,6 +1071,97 @@ function SettingsContent() {
                   />
                 </div>
 
+                {/* Bank account details for invoices */}
+                <div className="mt-6 border-t border-slate-200 pt-4 space-y-4">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Bank Account Details (shown on invoice summary page)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    These details will appear on the first page when downloading all invoices as a single PDF.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label htmlFor="bank_name" className="text-sm font-medium text-slate-700">
+                        Bank Name
+                      </label>
+                      <input
+                        type="text"
+                        id="bank_name"
+                        value={businessSettings.bank_name}
+                        onChange={(e) => handleBusinessFieldChange('bank_name', e.target.value)}
+                        disabled={isBusinessFormDisabled}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="bank_account_name" className="text-sm font-medium text-slate-700">
+                        Account Name
+                      </label>
+                      <input
+                        type="text"
+                        id="bank_account_name"
+                        value={businessSettings.bank_account_name}
+                        onChange={(e) => handleBusinessFieldChange('bank_account_name', e.target.value)}
+                        disabled={isBusinessFormDisabled}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="bank_account_number" className="text-sm font-medium text-slate-700">
+                        Account Number
+                      </label>
+                      <input
+                        type="text"
+                        id="bank_account_number"
+                        value={businessSettings.bank_account_number}
+                        onChange={(e) => handleBusinessFieldChange('bank_account_number', e.target.value)}
+                        disabled={isBusinessFormDisabled}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="bank_branch_code" className="text-sm font-medium text-slate-700">
+                        Branch Code
+                      </label>
+                      <input
+                        type="text"
+                        id="bank_branch_code"
+                        value={businessSettings.bank_branch_code}
+                        onChange={(e) => handleBusinessFieldChange('bank_branch_code', e.target.value)}
+                        disabled={isBusinessFormDisabled}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="bank_account_type" className="text-sm font-medium text-slate-700">
+                        Account Type
+                      </label>
+                      <input
+                        type="text"
+                        id="bank_account_type"
+                        value={businessSettings.bank_account_type}
+                        onChange={(e) => handleBusinessFieldChange('bank_account_type', e.target.value)}
+                        disabled={isBusinessFormDisabled}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="bank_payment_reference" className="text-sm font-medium text-slate-700">
+                      Preferred Payment Reference / Notes
+                    </label>
+                    <textarea
+                      id="bank_payment_reference"
+                      rows={2}
+                      value={businessSettings.bank_payment_reference}
+                      onChange={(e) => handleBusinessFieldChange('bank_payment_reference', e.target.value)}
+                      disabled={isBusinessFormDisabled}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 resize-y"
+                      placeholder="e.g. Use your paper batch number or client code as payment reference."
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label htmlFor="business_logo" className="text-sm font-medium text-slate-700">
                     Logo URL
@@ -849,7 +1173,7 @@ function SettingsContent() {
                     onChange={(e) => handleBusinessFieldChange('logo_url', e.target.value)}
                     disabled={isBusinessFormDisabled}
                     className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
-                    placeholder="https://..."
+                    placeholder="https://example.com/logo.svg or /FNB_LOGO_1.png"
                   />
                   {businessSettings.logo_url && (
                     <div className="flex items-center space-x-3">
@@ -897,7 +1221,7 @@ function SettingsContent() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <User className="w-5 h-5" />
+                  <UserIcon className="w-5 h-5" />
                   <span>Profile Settings</span>
                 </CardTitle>
                 <CardDescription>

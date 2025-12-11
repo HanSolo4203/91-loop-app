@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { QueryProvider } from "@/lib/providers/query-provider";
+import { RefreshTokenGuard } from "@/components/auth/refresh-token-guard";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -32,9 +33,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="font-sans antialiased bg-slate-50 text-slate-900">
         <ErrorBoundary>
+          <RefreshTokenGuard />
           <QueryProvider>
             <div className="min-h-screen flex flex-col">
               {children}

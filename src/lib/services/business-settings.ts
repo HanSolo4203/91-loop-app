@@ -16,6 +16,12 @@ export interface BusinessSettingsPayload {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  bank_name?: string | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_branch_code?: string | null;
+  bank_account_type?: string | null;
+  bank_payment_reference?: string | null;
 }
 
 class BusinessSettingsServiceError extends Error {
@@ -110,6 +116,12 @@ export async function upsertBusinessSettings(
       phone: sanitize(payload.phone ?? null),
       email: sanitize(payload.email ?? null),
       website: sanitize(payload.website ?? null),
+      bank_name: sanitize(payload.bank_name ?? null),
+      bank_account_name: sanitize(payload.bank_account_name ?? null),
+      bank_account_number: sanitize(payload.bank_account_number ?? null),
+      bank_branch_code: sanitize(payload.bank_branch_code ?? null),
+      bank_account_type: sanitize(payload.bank_account_type ?? null),
+      bank_payment_reference: sanitize(payload.bank_payment_reference ?? null),
       updated_at: new Date().toISOString(),
     };
 
@@ -120,6 +132,15 @@ export async function upsertBusinessSettings(
       .single();
 
     if (error) {
+      // Provide a clearer error if the database hasn't been migrated to include bank fields yet
+      if (error.message && error.message.toLowerCase().includes('column') && error.message.includes('bank_')) {
+        throw new BusinessSettingsServiceError(
+          'Failed to save business settings: database is missing bank account columns. ' +
+          'Please run the latest Supabase migrations (including 009_add_business_bank_details.sql).',
+          500
+        );
+      }
+
       throw new BusinessSettingsServiceError(`Failed to save business settings: ${error.message}`);
     }
 

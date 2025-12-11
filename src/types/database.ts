@@ -40,6 +40,7 @@ export interface Database {
           name: string;
           price_per_item: number;
           is_active: boolean;
+          section: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -48,6 +49,7 @@ export interface Database {
           name: string;
           price_per_item?: number;
           is_active?: boolean;
+          section?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -56,6 +58,7 @@ export interface Database {
           name?: string;
           price_per_item?: number;
           is_active?: boolean;
+          section?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -100,6 +103,48 @@ export interface Database {
         Relationships: [];
       };
 
+      // Client Favorite Categories table
+      client_favorite_categories: {
+        Row: {
+          id: string;
+          client_id: string;
+          linen_category_id: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          linen_category_id: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          linen_category_id?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_favorite_categories_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_favorite_categories_linen_category_id_fkey";
+            columns: ["linen_category_id"];
+            referencedRelation: "linen_categories";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+
       // Business Settings table
       business_settings: {
         Row: {
@@ -110,6 +155,12 @@ export interface Database {
           phone: string | null;
           email: string | null;
           website: string | null;
+          bank_name: string | null;
+          bank_account_name: string | null;
+          bank_account_number: string | null;
+          bank_branch_code: string | null;
+          bank_account_type: string | null;
+          bank_payment_reference: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -121,6 +172,12 @@ export interface Database {
           phone?: string | null;
           email?: string | null;
           website?: string | null;
+          bank_name?: string | null;
+          bank_account_name?: string | null;
+          bank_account_number?: string | null;
+          bank_branch_code?: string | null;
+          bank_account_type?: string | null;
+          bank_payment_reference?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -132,6 +189,12 @@ export interface Database {
           phone?: string | null;
           email?: string | null;
           website?: string | null;
+          bank_name?: string | null;
+          bank_account_name?: string | null;
+          bank_account_number?: string | null;
+          bank_branch_code?: string | null;
+          bank_account_type?: string | null;
+          bank_payment_reference?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -444,6 +507,7 @@ export type Enums<T extends keyof Database['public']['Enums']> = Database['publi
 export type Profile = Tables<'profiles'>;
 export type LinenCategory = Tables<'linen_categories'>;
 export type Client = Tables<'clients'>;
+export type ClientFavoriteCategory = Tables<'client_favorite_categories'>;
 export type BusinessSettings = Tables<'business_settings'>;
 export type Batch = Tables<'batches'>;
 export type BatchItem = Tables<'batch_items'>;
@@ -457,6 +521,7 @@ export type BatchItemsDetailView = Views<'batch_items_detail_view'>;
 export type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
 export type LinenCategoryInsert = Database['public']['Tables']['linen_categories']['Insert'];
 export type ClientInsert = Database['public']['Tables']['clients']['Insert'];
+export type ClientFavoriteCategoryInsert = Database['public']['Tables']['client_favorite_categories']['Insert'];
 export type BatchInsert = Database['public']['Tables']['batches']['Insert'];
 export type BatchItemInsert = Database['public']['Tables']['batch_items']['Insert'];
 export type RFIDDataInsert = Database['public']['Tables']['rfid_data']['Insert'];
@@ -465,6 +530,7 @@ export type RFIDDataInsert = Database['public']['Tables']['rfid_data']['Insert']
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
 export type LinenCategoryUpdate = Database['public']['Tables']['linen_categories']['Update'];
 export type ClientUpdate = Database['public']['Tables']['clients']['Update'];
+export type ClientFavoriteCategoryUpdate = Database['public']['Tables']['client_favorite_categories']['Update'];
 export type BatchUpdate = Database['public']['Tables']['batches']['Update'];
 export type BatchItemUpdate = Database['public']['Tables']['batch_items']['Update'];
 export type RFIDDataUpdate = Database['public']['Tables']['rfid_data']['Update'];
@@ -538,6 +604,7 @@ export interface LinenCategoryFormData {
   name: string;
   price_per_item: number;
   is_active: boolean;
+  section?: string;
 }
 
 // Search and filter types

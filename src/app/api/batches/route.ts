@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { 
   createBatch, 
   getBatches
@@ -120,6 +121,18 @@ export async function POST(request: NextRequest) {
         },
         { status: statusCode }
       );
+    }
+
+    // Revalidate dashboard and batch-related routes after successful creation
+    try {
+      revalidatePath('/dashboard');
+      revalidatePath('/api/dashboard/batches');
+      revalidatePath('/api/dashboard/stats');
+      revalidatePath('/api/batches');
+      console.log('✅ Cache revalidated after batch creation');
+    } catch (revalidateError) {
+      console.warn('⚠️ Failed to revalidate cache:', revalidateError);
+      // Don't fail the request if revalidation fails
     }
 
     return NextResponse.json(
