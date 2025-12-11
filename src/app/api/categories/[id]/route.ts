@@ -99,6 +99,19 @@ export async function PATCH(
       updateData.is_active = body.is_active;
     }
 
+    if (body.section !== undefined) {
+      if (body.section === null || body.section === '') {
+        updateData.section = null;
+      } else if (typeof body.section === 'string') {
+        updateData.section = body.section.trim();
+      } else {
+        return NextResponse.json(
+          { success: false, error: 'section must be a string or null' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Check if category exists
     const { data: existingCategory, error: checkError } = await supabaseAdmin
       .from('linen_categories')

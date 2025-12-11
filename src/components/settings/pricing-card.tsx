@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DollarSign, AlertCircle, CheckCircle, Edit } from 'lucide-react';
 import type { LinenCategory } from '@/types/database';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 
 interface PricingCardProps {
   category: LinenCategory;
   onPriceChange: (id: string, price: number) => void;
+  onEdit?: (category: LinenCategory) => void;
   isUpdating?: boolean;
   hasError?: boolean;
   errorMessage?: string;
@@ -19,6 +21,7 @@ interface PricingCardProps {
 export default function PricingCard({
   category,
   onPriceChange,
+  onEdit,
   isUpdating = false,
   hasError = false,
   errorMessage,
@@ -169,6 +172,20 @@ export default function PricingCard({
 
           {/* Right side - Price input and indicators */}
           <div className="flex items-center space-x-4">
+            {/* Edit Button */}
+            {onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(category)}
+                className="flex items-center space-x-1"
+                title="Edit category name and details"
+              >
+                <Edit className="w-3 h-3" />
+                <span className="text-xs">Edit</span>
+              </Button>
+            )}
+
             {/* Price Change Indicator */}
             {getPriceChangeIndicator() && (
               <div className="flex-shrink-0">

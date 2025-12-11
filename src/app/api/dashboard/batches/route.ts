@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { 
   getRecentBatches
 } from '@/lib/services/analytics';
@@ -144,9 +144,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get recent batches
-    console.log('Calling getRecentBatches with:', { limitNum, offsetNum });
-    const result = await getRecentBatches(limitNum, offsetNum);
+    // When date filters are applied, fetch more batches to account for additional filtering
+    // This ensures we have enough results after filtering by status/client/discrepancy
+    const fetchLimit = (date_from || date_to || status || client_id || has_discrepancy) 
+      ? Math.min(limitNum * 5, 100) // Fetch up to 5x the limit or 100, whichever is smaller
+      : limitNum;
+
+    // Get recent batches with date filters applied in the query (more efficient)
+    console.log('Calling getRecentBatches with:', { fetchLimit, offsetNum, date_from, date_to });
+    // For date-filtered queries, start from offset 0 and fetch more, then paginate after filtering
+    const queryOffset = (date_from || date_to || status || client_id || has_discrepancy) ? 0 : offsetNum;
+    const result = await getRecentBatches(fetchLimit, queryOffset, date_from || undefined, date_to || undefined);
     
     console.log('getRecentBatches result:', { success: result.success, error: result.error, dataLength: result.data?.length });
     
@@ -163,7 +171,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Apply additional filters if provided
+    // Apply additional filters if provided (status, client, discrepancy)
     let filteredBatches = result.data || [];
 
     if (status) {
@@ -180,15 +188,9 @@ export async function GET(request: NextRequest) {
       filteredBatches = filteredBatches.filter(batch => batch.has_discrepancy === hasDiscrepancy);
     }
 
-    if (date_from) {
-      filteredBatches = filteredBatches.filter(batch => batch.pickup_date >= date_from!);
-    }
+    // Note: date_from and date_to filters are now applied in the database query, so no need to filter here
 
-    if (date_to) {
-      filteredBatches = filteredBatches.filter(batch => batch.pickup_date <= date_to!);
-    }
-
-    // Calculate pagination metadata
+    // Calculate pagination metadata based on filtered results
     const totalCount = filteredBatches.length;
     const hasMore = offsetNum + limitNum < totalCount;
     const currentPage = Math.floor(offsetNum / limitNum) + 1;
@@ -239,47 +241,51 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Handle unsupported methods
-export async function POST() {
-  return NextResponse.json(
+// Handle unsupported methods with consistent JSON + cache headers
+export function POST() {
+  return cachedJsonResponse(
     {
       success: false,
       error: 'Method not allowed. Use GET to retrieve batches.',
       data: null,
     } as AnalyticsServiceResponse<null>,
-    { status: 405 }
+    'noCache',
+    405
   );
 }
 
-export async function PUT() {
-  return NextResponse.json(
+export function PUT() {
+  return cachedJsonResponse(
     {
       success: false,
       error: 'Method not allowed. Use GET to retrieve batches.',
       data: null,
     } as AnalyticsServiceResponse<null>,
-    { status: 405 }
+    'noCache',
+    405
   );
 }
 
-export async function PATCH() {
-  return NextResponse.json(
+export function PATCH() {
+  return cachedJsonResponse(
     {
       success: false,
       error: 'Method not allowed. Use GET to retrieve batches.',
       data: null,
     } as AnalyticsServiceResponse<null>,
-    { status: 405 }
+    'noCache',
+    405
   );
 }
 
-export async function DELETE() {
-  return NextResponse.json(
+export function DELETE() {
+  return cachedJsonResponse(
     {
       success: false,
       error: 'Method not allowed. Use GET to retrieve batches.',
       data: null,
     } as AnalyticsServiceResponse<null>,
-    { status: 405 }
+    'noCache',
+    405
   );
 }

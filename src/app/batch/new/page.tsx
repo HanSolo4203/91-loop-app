@@ -102,6 +102,8 @@ function NewBatchContent() {
   const [notes, setNotes] = useState('');
   const [categories, setCategories] = useState<LinenCategory[]>([]);
   const [linenItems, setLinenItems] = useState<LinenCountItem[]>([]);
+  const [favoriteCategoryIds, setFavoriteCategoryIds] = useState<string[]>([]);
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [createStatus, setCreateStatus] = useState<'draft' | 'ready' | 'creating' | 'success' | 'error'>('draft');
@@ -159,6 +161,36 @@ function NewBatchContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Load client-specific favourites when a client is selected
+  useEffect(() => {
+    if (!selectedClient) {
+      setFavoriteCategoryIds([]);
+      return;
+    }
+
+    const fetchFavorites = async () => {
+      setIsLoadingFavorites(true);
+      try {
+        const response = await fetch(`/api/clients/${selectedClient.id}/favorites`);
+        const result = await response.json();
+
+        if (result.success) {
+          setFavoriteCategoryIds(result.data?.favorites || []);
+        } else {
+          console.error('Failed to load favourites:', result.error);
+          setFavoriteCategoryIds([]);
+        }
+      } catch (error) {
+        console.error('Failed to load favourites', error);
+        setFavoriteCategoryIds([]);
+      } finally {
+        setIsLoadingFavorites(false);
+      }
+    };
+
+    fetchFavorites();
+  }, [selectedClient]);
+
   // Validate form data
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -171,11 +203,6 @@ function NewBatchContent() {
 
     if (!pickupDate) {
       errors.pickupDate = 'Pickup date is required';
-    } else {
-      const date = new Date(pickupDate);
-      if (isNaN(date.getTime())) {
-        errors.pickupDate = 'Invalid pickup date format';
-      }
     }
 
     const itemsWithQuantity = linenItems.filter(item => item.quantity_sent > 0);
@@ -216,7 +243,6 @@ function NewBatchContent() {
             quantity_received: item.quantity_received,
             price_per_item: item.price_per_item,
             discrepancy_details: item.discrepancy_details || null,
-            express_delivery: item.express_delivery || false,
           }))
       };
 
@@ -252,6 +278,55 @@ function NewBatchContent() {
   const handleLinenItemsChange = useCallback((items: LinenCountItem[]) => {
     setLinenItems(items);
   }, []);
+
+  // Handle favourite toggle per client
+  const handleToggleFavorite = useCallback(
+    async (categoryId: string, nextFavorite: boolean) => {
+      if (!selectedClient) return;
+
+      setFavoriteCategoryIds((prev) => {
+        const updated = new Set(prev);
+        if (nextFavorite) {
+          updated.add(categoryId);
+        } else {
+          updated.delete(categoryId);
+        }
+        return Array.from(updated);
+      });
+
+      try {
+        const response = await fetch(`/api/clients/${selectedClient.id}/favorites`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            linen_category_id: categoryId,
+            favorite: nextFavorite,
+          }),
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to update favourite');
+        }
+      } catch (error) {
+        console.error('Failed to update favourite', error);
+        // Roll back optimistic update
+        setFavoriteCategoryIds((prev) => {
+          const updated = new Set(prev);
+          if (nextFavorite) {
+            updated.delete(categoryId);
+          } else {
+            updated.add(categoryId);
+          }
+          return Array.from(updated);
+        });
+        setErrorMessage('Could not save favourite. Please try again.');
+      }
+    },
+    [selectedClient]
+  );
 
   // Get current items from the grid
   const getCurrentItems = () => {
@@ -388,8 +463,10 @@ function NewBatchContent() {
               ref={linenGridRef}
               categories={categories}
               onItemsChange={handleLinenItemsChange}
-              isLoading={isLoading}
+              isLoading={isLoading || isLoadingFavorites}
               error={validationErrors.items}
+              favoriteCategoryIds={favoriteCategoryIds}
+              onToggleFavorite={selectedClient ? handleToggleFavorite : undefined}
             />
           </div>
 

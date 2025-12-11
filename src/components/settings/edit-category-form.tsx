@@ -1,49 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, CheckCircle, Plus, X } from 'lucide-react';
-import type { LinenCategoryFormData } from '@/types/database';
+import { AlertCircle, CheckCircle, Save, X } from 'lucide-react';
+import type { LinenCategory } from '@/types/database';
 
-interface AddLinenCategoryFormProps {
-  onAdd: (categoryData: LinenCategoryFormData) => Promise<void>;
+interface EditCategoryFormProps {
+  category: LinenCategory;
+  onSave: (id: string, data: { name?: string; price_per_item?: number; is_active?: boolean; section?: string }) => Promise<void>;
   onCancel: () => void;
   isSubmitting?: boolean;
 }
 
-export default function AddLinenCategoryForm({
-  onAdd,
+export default function EditCategoryForm({
+  category,
+  onSave,
   onCancel,
   isSubmitting = false,
-}: AddLinenCategoryFormProps) {
-  const [formData, setFormData] = useState<LinenCategoryFormData>({
-    name: '',
-    price_per_item: 0,
-    is_active: true,
-    section: '',
+}: EditCategoryFormProps) {
+  const [formData, setFormData] = useState({
+    name: category.name,
+    price_per_item: category.price_per_item,
+    is_active: category.is_active,
+    section: category.section || '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isValid, setIsValid] = useState(false);
+  const [isValid, setIsValid] = useState(true);
 
-  const validateForm = (data: LinenCategoryFormData): boolean => {
+  useEffect(() => {
+    setFormData({
+      name: category.name,
+      price_per_item: category.price_per_item,
+      is_active: category.is_active,
+      section: category.section || '',
+    });
+  }, [category]);
+
+  const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
     // Validate name
-    if (!data.name.trim()) {
+    if (!formData.name.trim()) {
       newErrors.name = 'Category name is required';
-    } else if (data.name.trim().length < 2) {
+    } else if (formData.name.trim().length < 2) {
       newErrors.name = 'Category name must be at least 2 characters';
-    } else if (data.name.trim().length > 100) {
+    } else if (formData.name.trim().length > 100) {
       newErrors.name = 'Category name must be less than 100 characters';
     }
 
     // Validate price
-    if (data.price_per_item < 0) {
+    if (formData.price_per_item < 0) {
       newErrors.price_per_item = 'Price cannot be negative';
-    } else if (data.price_per_item > 10000) {
+    } else if (formData.price_per_item > 10000) {
       newErrors.price_per_item = 'Price cannot exceed R10,000';
     }
 
@@ -53,41 +64,44 @@ export default function AddLinenCategoryForm({
     return valid;
   };
 
-  const handleInputChange = (field: keyof LinenCategoryFormData, value: string | number | boolean) => {
+  const handleInputChange = (field: keyof typeof formData, value: string | number | boolean) => {
     const updatedData = { ...formData, [field]: value };
     setFormData(updatedData);
-    validateForm(updatedData);
+    // Validate on change
+    setTimeout(() => validateForm(), 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm(formData)) {
+    if (!validateForm()) {
       return;
     }
 
     try {
-      await onAdd(formData);
-      // Reset form after successful submission
-      setFormData({
-        name: '',
-        price_per_item: 0,
-        is_active: true,
-        section: '',
+      await onSave(category.id, {
+        name: formData.name.trim() !== category.name ? formData.name.trim() : undefined,
+        price_per_item: formData.price_per_item !== category.price_per_item ? formData.price_per_item : undefined,
+        is_active: formData.is_active !== category.is_active ? formData.is_active : undefined,
+        section: formData.section !== (category.section || '') ? (formData.section || null) : undefined,
       });
-      setErrors({});
-      setIsValid(false);
     } catch (error) {
-      console.error('Error adding category:', error);
+      console.error('Error updating category:', error);
     }
   };
 
+  const hasChanges = 
+    formData.name.trim() !== category.name ||
+    formData.price_per_item !== category.price_per_item ||
+    formData.is_active !== category.is_active ||
+    formData.section !== (category.section || '');
+
   return (
-    <Card className="mb-6 border-blue-200 bg-blue-50">
+    <Card className="mb-4 border-purple-200 bg-purple-50">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center space-x-2 text-blue-900">
-          <Plus className="w-5 h-5" />
-          <span>Add New Linen Item</span>
+        <CardTitle className="flex items-center space-x-2 text-purple-900">
+          <Save className="w-5 h-5" />
+          <span>Edit Category: {category.name}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -95,12 +109,12 @@ export default function AddLinenCategoryForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Category Name */}
             <div className="space-y-2">
-              <Label htmlFor="categoryName" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="editCategoryName" className="text-sm font-medium text-slate-700">
                 Category Name *
               </Label>
               <div className="relative">
                 <Input
-                  id="categoryName"
+                  id="editCategoryName"
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
@@ -108,7 +122,7 @@ export default function AddLinenCategoryForm({
                   className={`${
                     errors.name 
                       ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-                      : 'border-slate-300 focus:border-blue-500 focus:ring-blue-500'
+                      : 'border-slate-300 focus:border-purple-500 focus:ring-purple-500'
                   } transition-colors`}
                   disabled={isSubmitting}
                   maxLength={100}
@@ -134,14 +148,14 @@ export default function AddLinenCategoryForm({
 
             {/* Section */}
             <div className="space-y-2">
-              <Label htmlFor="categorySection" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="editCategorySection" className="text-sm font-medium text-slate-700">
                 Section
               </Label>
               <select
-                id="categorySection"
+                id="editCategorySection"
                 value={formData.section || ''}
                 onChange={(e) => handleInputChange('section', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
                 disabled={isSubmitting}
               >
                 <option value="">Auto-detect (based on name)</option>
@@ -154,12 +168,12 @@ export default function AddLinenCategoryForm({
 
             {/* Price Per Item */}
             <div className="space-y-2">
-              <Label htmlFor="pricePerItem" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="editPricePerItem" className="text-sm font-medium text-slate-700">
                 Price Per Item (R) *
               </Label>
               <div className="relative">
                 <Input
-                  id="pricePerItem"
+                  id="editPricePerItem"
                   type="number"
                   step="0.01"
                   min="0"
@@ -170,7 +184,7 @@ export default function AddLinenCategoryForm({
                   className={`${
                     errors.price_per_item 
                       ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-                      : 'border-slate-300 focus:border-blue-500 focus:ring-blue-500'
+                      : 'border-slate-300 focus:border-purple-500 focus:ring-purple-500'
                   } transition-colors`}
                   disabled={isSubmitting}
                 />
@@ -198,19 +212,19 @@ export default function AddLinenCategoryForm({
           <div className="flex items-center space-x-2">
             <input
               type="checkbox"
-              id="isActive"
+              id="editIsActive"
               checked={formData.is_active}
               onChange={(e) => handleInputChange('is_active', e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
               disabled={isSubmitting}
             />
-            <Label htmlFor="isActive" className="text-sm font-medium text-slate-700">
+            <Label htmlFor="editIsActive" className="text-sm font-medium text-slate-700">
               Active (category will be available for use)
             </Label>
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-blue-200">
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-purple-200">
             <Button
               type="button"
               variant="outline"
@@ -223,15 +237,15 @@ export default function AddLinenCategoryForm({
             </Button>
             <Button
               type="submit"
-              disabled={!isValid || isSubmitting}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700"
+              disabled={!isValid || !hasChanges || isSubmitting}
+              className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700"
             >
               {isSubmitting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <Plus className="w-4 h-4" />
+                <Save className="w-4 h-4" />
               )}
-              <span>{isSubmitting ? 'Adding...' : 'Add Item'}</span>
+              <span>{isSubmitting ? 'Saving...' : 'Save Changes'}</span>
             </Button>
           </div>
         </form>
@@ -239,3 +253,4 @@ export default function AddLinenCategoryForm({
     </Card>
   );
 }
+

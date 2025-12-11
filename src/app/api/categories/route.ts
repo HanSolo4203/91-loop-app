@@ -42,7 +42,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, price_per_item, is_active = true } = body;
+    const { name, price_per_item, is_active = true, section } = body;
 
     // Validate required fields
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -92,7 +92,8 @@ export async function POST(request: NextRequest) {
     const newCategory: LinenCategoryInsert = {
       name: name.trim(),
       price_per_item,
-      is_active
+      is_active,
+      section: section && section.trim() ? section.trim() : null
     };
 
     const { data: category, error } = await supabaseAdmin

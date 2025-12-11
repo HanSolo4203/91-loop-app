@@ -177,6 +177,13 @@ function getDateRange(year: number, month?: number) {
     );
   }
 
+  // Helper function to format date as YYYY-MM-DD without timezone issues
+  const formatDate = (y: number, m: number, d: number): string => {
+    const monthStr = String(m).padStart(2, '0');
+    const dayStr = String(d).padStart(2, '0');
+    return `${y}-${monthStr}-${dayStr}`;
+  };
+
   if (typeof month === 'number') {
     if (month < 1 || month > 12) {
       throw new AnalyticsServiceError(
@@ -186,15 +193,20 @@ function getDateRange(year: number, month?: number) {
       );
     }
 
+    const startDate = formatDate(year, month, 1);
+    const lastDayOfMonth = new Date(year, month, 0).getDate(); // day 0 of next month = last day of current month
+    const endDate = formatDate(year, month, lastDayOfMonth);
+    
     return {
-      startDate: new Date(year, month - 1, 1).toISOString().split('T')[0],
-      endDate: new Date(year, month, 0).toISOString().split('T')[0],
+      startDate,
+      endDate,
     };
   }
 
+  // For full year
   return {
-    startDate: new Date(year, 0, 1).toISOString().split('T')[0],
-    endDate: new Date(year, 11, 31).toISOString().split('T')[0],
+    startDate: formatDate(year, 1, 1),
+    endDate: formatDate(year, 12, 31),
   };
 }
 
@@ -490,10 +502,27 @@ export async function getMonthlyStats(
       );
     }
 
-    const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-    const previousMonthStart = new Date(year, month - 2, 1).toISOString().split('T')[0];
-    const previousMonthEnd = new Date(year, month - 1, 0).toISOString().split('T')[0];
+    // Date calculation: month is 1-indexed (1-12), but Date constructor uses 0-indexed months (0-11)
+    // Helper function to format date as YYYY-MM-DD without timezone issues
+    const formatDate = (y: number, m: number, d: number): string => {
+      const monthStr = String(m).padStart(2, '0');
+      const dayStr = String(d).padStart(2, '0');
+      return `${y}-${monthStr}-${dayStr}`;
+    };
+    
+    // startDate: first day of the month
+    const startDate = formatDate(year, month, 1);
+    // endDate: last day of the month - get last day by creating date for next month and subtracting
+    const lastDayOfMonth = new Date(year, month, 0).getDate(); // day 0 of next month = last day of current month
+    const endDate = formatDate(year, month, lastDayOfMonth);
+    
+    // previousMonthStart: first day of previous month
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const previousMonthStart = formatDate(prevYear, prevMonth, 1);
+    // previousMonthEnd: last day of previous month
+    const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
+    const previousMonthEnd = formatDate(prevYear, prevMonth, prevLastDay);
 
     // Get current month statistics
     const { data: currentMonthData, error: currentError } = await supabaseAdmin
@@ -655,11 +684,15 @@ export async function getMonthlyStats(
  * Get recent batches with pagination
  * @param limit - Number of batches to return
  * @param offset - Number of batches to skip
+ * @param dateFrom - Optional: filter batches by pickup_date >= dateFrom
+ * @param dateTo - Optional: filter batches by pickup_date <= dateTo
  * @returns Promise<AnalyticsServiceResponse<RecentBatch[]>>
  */
 export async function getRecentBatches(
   limit: number = 10,
-  offset: number = 0
+  offset: number = 0,
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<AnalyticsServiceResponse<RecentBatch[]>> {
   try {
     // Validate inputs
@@ -679,7 +712,7 @@ export async function getRecentBatches(
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('batches')
       .select(`
         id,
@@ -692,7 +725,19 @@ export async function getRecentBatches(
         created_at,
         client:clients(name),
         batch_items(id)
-      `)
+      `);
+
+    // Apply date filters if provided (filter by pickup_date)
+    if (dateFrom) {
+      query = query.gte('pickup_date', dateFrom);
+    }
+
+    if (dateTo) {
+      query = query.lte('pickup_date', dateTo);
+    }
+
+    // Order by created_at descending (most recent first) and apply pagination
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -713,8 +758,8 @@ export async function getRecentBatches(
       status: batch.status,
       total_amount: batch.total_amount,
       has_discrepancy: batch.has_discrepancy,
-      item_count: 0, // Item count not available in this data structure
-      created_at: new Date().toISOString() // Created date not available in this data structure
+      item_count: Array.isArray(batch.batch_items) ? batch.batch_items.length : 0,
+      created_at: batch.created_at || new Date().toISOString()
     }));
 
     return {

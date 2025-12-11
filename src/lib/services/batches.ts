@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { randomUUID } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { 
   Batch, 
@@ -37,7 +36,6 @@ export interface BatchItemData {
   quantity_received?: number;
   price_per_item?: number;
   discrepancy_details?: string;
-  express_delivery?: boolean;
 }
 
 export interface CreateBatchRequest {
@@ -147,6 +145,12 @@ export async function validateBatchData(batchData: CreateBatchRequest): Promise<
     const pickupDate = new Date(batchData.pickup_date);
     if (isNaN(pickupDate.getTime())) {
       errors.push('Invalid pickup date format');
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (pickupDate < today) {
+        errors.push('Pickup date cannot be in the past');
+      }
     }
   }
 
@@ -264,10 +268,7 @@ export async function calculateBatchTotal(items: BatchItemData[]): Promise<numbe
         price = (category as any).price_per_item;
       }
 
-      const lineTotal = quantity * (price || 0);
-      // Add 50% surcharge for express delivery items
-      const surcharge = (item.express_delivery ? lineTotal * 0.5 : 0);
-      total += lineTotal + surcharge;
+      total += quantity * (price || 0);
     }
 
     return Math.round(total * 100) / 100; // Round to 2 decimal places
@@ -289,7 +290,6 @@ interface PreparedBatchItem {
   quantity_received: number;
   price_per_item: number;
   discrepancy_details?: string | null;
-  express_delivery: boolean;
 }
 
 /**
@@ -425,14 +425,11 @@ export async function updateBatchItems(
         quantity_received: quantityReceived,
         price_per_item: pricePerItem,
         discrepancy_details: item.discrepancy_details || null,
-        express_delivery: !!item.express_delivery,
       };
     });
 
     const totalAmount = preparedItems.reduce((sum, item) => {
-      const baseAmount = item.quantity_received * item.price_per_item;
-      const surcharge = item.express_delivery ? baseAmount * 0.5 : 0;
-      return sum + baseAmount + surcharge;
+      return sum + item.quantity_received * item.price_per_item;
     }, 0);
     const hasDiscrepancy = preparedItems.some(
       (item) => item.quantity_sent !== item.quantity_received
@@ -473,16 +470,14 @@ export async function updateBatchItems(
 
     const upsertPayload = preparedItems.map((item) => {
       const existing = existingItemsMap.get(item.linen_category_id);
-      const recordId = existing?.id ?? randomUUID();
       return {
-        id: recordId,
+        ...(existing ? { id: existing.id } : {}),
         batch_id: batchId,
         linen_category_id: item.linen_category_id,
         quantity_sent: item.quantity_sent,
         quantity_received: item.quantity_received,
         price_per_item: item.price_per_item,
         discrepancy_details: item.discrepancy_details || null,
-        express_delivery: item.express_delivery,
         subtotal: item.quantity_received * item.price_per_item,
       };
     });
@@ -717,7 +712,6 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
         quantity_received: quantityReceived,
         price_per_item: price,
         discrepancy_details: item.discrepancy_details || null,
-        express_delivery: item.express_delivery || false,
       });
     }
 

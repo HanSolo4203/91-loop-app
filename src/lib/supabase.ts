@@ -15,30 +15,57 @@ const validateEnvVars = () => {
   }
 };
 
-// Create Supabase client for client-side usage
-export const supabase = createClient<Database>(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key',
-  {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  }
-);
+// Reuse singletons to avoid multiple GoTrue instances in the browser (prevents auth storage conflicts)
+const getGlobalStore = () => globalThis as Record<string, unknown>;
+const globalStore = getGlobalStore();
 
-// Create Supabase client for server-side usage (with service role key)
-export const supabaseAdmin = createClient<Database>(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key',
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
+const SUPABASE_BROWSER_KEY = '__SUPABASE_BROWSER_CLIENT__';
+const SUPABASE_ADMIN_KEY = '__SUPABASE_ADMIN_CLIENT__';
+
+// Create or reuse Supabase client for client-side usage
+const existingBrowserClient = globalStore[SUPABASE_BROWSER_KEY] as ReturnType<
+  typeof createClient<Database>
+> | undefined;
+
+export const supabase =
+  existingBrowserClient ||
+  createClient<Database>(
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseAnonKey || 'placeholder-key',
+    {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    }
+  );
+
+if (!existingBrowserClient) {
+  globalStore[SUPABASE_BROWSER_KEY] = supabase;
+}
+
+// Create or reuse Supabase client for server-side usage (with service role key)
+const existingAdminClient = globalStore[SUPABASE_ADMIN_KEY] as ReturnType<
+  typeof createClient<Database>
+> | undefined;
+
+export const supabaseAdmin =
+  existingAdminClient ||
+  createClient<Database>(
+    supabaseUrl || 'https://placeholder.supabase.co',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key',
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
+
+if (!existingAdminClient) {
+  globalStore[SUPABASE_ADMIN_KEY] = supabaseAdmin;
+}
 
 // Helper function to validate environment variables before making requests
 export const validateSupabaseConfig = () => {
