@@ -41,7 +41,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
           .from('profiles')
           .select('role')
           .eq('id', session.user.id)
-          .single() as { data: { role: 'admin' | 'user' } | null };
+          .single<{ role: 'admin' | 'user' }>();
 
         if (profileError) {
           console.error('Profile fetch error:', profileError);
@@ -78,7 +78,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
           .from('profiles')
           .select('role')
           .eq('id', session.user.id)
-          .single() as { data: { role: 'admin' | 'user' } | null };
+          .single<{ role: 'admin' | 'user' }>();
 
         if (profile?.role !== 'admin') {
           await supabase.auth.signOut();

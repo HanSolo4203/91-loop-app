@@ -149,7 +149,7 @@ export async function PATCH(
     }
 
     // Update profile
-    const updateData: { email?: string; full_name?: string | null; role?: string } = {};
+    const updateData: { email?: string; full_name?: string | null; role?: 'admin' | 'user' } = {};
     if (email) {
       updateData.email = email.trim().toLowerCase();
     }
@@ -157,7 +157,7 @@ export async function PATCH(
       updateData.full_name = full_name || null;
     }
     if (role) {
-      updateData.role = role;
+      updateData.role = role as 'admin' | 'user';
     }
 
     // Only update if there are fields to update

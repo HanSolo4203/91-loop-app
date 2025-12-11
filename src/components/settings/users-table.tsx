@@ -108,7 +108,7 @@ export default function UsersTable({ onAddUser, onEditUser, refreshTrigger }: Us
         <CardContent>
           {users.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
-              <p>No users found. Click "Add User" to create a new user.</p>
+              <p>No users found. Click &quot;Add User&quot; to create a new user.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">

@@ -569,10 +569,11 @@ export async function GET(request: NextRequest) {
     const pdfBlob = doc.output('blob');
 
     // Return PDF as response
+    const filenameMonth = targetMonth ? monthNames[targetMonth - 1] : 'all-months';
     return new NextResponse(pdfBlob, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="invoices-${monthNames[targetMonth - 1]}-${targetYear}.pdf"`,
+        'Content-Disposition': `attachment; filename="invoices-${filenameMonth}-${targetYear}.pdf"`,
       },
     });
   } catch (error) {
