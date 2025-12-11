@@ -385,22 +385,22 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 p-4 bg-slate-50 rounded-lg">
           <div className="text-center">
-            <p className="text-2xl font-bold text-slate-900">{totals.totalSent}</p>
-            <p className="text-sm text-slate-600">Total Sent</p>
+            <p className="text-xl sm:text-2xl font-bold text-slate-900">{totals.totalSent}</p>
+            <p className="text-xs sm:text-sm text-slate-600">Total Sent</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-slate-900">{totals.totalReceived}</p>
-            <p className="text-sm text-slate-600">Total Received</p>
+            <p className="text-xl sm:text-2xl font-bold text-slate-900">{totals.totalReceived}</p>
+            <p className="text-xs sm:text-sm text-slate-600">Total Received</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-blue-600">{totals.itemsWithQuantity}</p>
-            <p className="text-sm text-slate-600">Categories Used</p>
+            <p className="text-xl sm:text-2xl font-bold text-blue-600">{totals.itemsWithQuantity}</p>
+            <p className="text-xs sm:text-sm text-slate-600">Categories Used</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-green-600">{formatCurrencySSR(totals.totalAmount)}</p>
-            <p className="text-sm text-slate-600">Total Amount</p>
+            <p className="text-xl sm:text-2xl font-bold text-green-600">{formatCurrencySSR(totals.totalAmount)}</p>
+            <p className="text-xs sm:text-sm text-slate-600">Total Amount</p>
           </div>
         </div>
 
@@ -458,7 +458,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
             ))}
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {filteredSections.length === 0 && searchQuery ? (
               <div className="text-center py-12">
                 <Search className="mx-auto h-12 w-12 text-slate-400 mb-4" />
@@ -486,7 +486,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                   </div>
 
                   {/* Categories Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
                     {section.categories.map((category) => {
                       const item = items.find(i => i.category.id === category.id);
                       if (!item) return null;
@@ -502,7 +502,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                         <div
                           key={item.category.id}
                           data-card-id={item.category.id}
-                          className={`p-4 lg:p-5 border rounded-lg transition-all cursor-pointer touch-manipulation ${
+                          className={`p-3 sm:p-4 lg:p-5 border rounded-lg transition-all cursor-pointer touch-manipulation ${
                             hasDiscrepancy ? 'border-orange-200 bg-orange-50' :
                             hasQuantity ? 'border-blue-200 bg-blue-50' :
                             'border-slate-200 hover:border-slate-300'

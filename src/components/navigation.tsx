@@ -71,9 +71,9 @@ export default function Navigation() {
   };
 
   return (
-    <nav className="bg-white border-b border-slate-200 shadow-sm">
+    <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-14 sm:h-16">
           {/* Logo and Brand */}
           <div className="flex items-center flex-shrink-0">
             <Link href="/dashboard" className="flex items-center">
@@ -82,7 +82,7 @@ export default function Navigation() {
                 alt="RSL Express"
                 width={2364}
                 height={297}
-                className="h-5 w-auto object-contain"
+                className="h-6 sm:h-7 w-auto object-contain"
                 quality={90}
                 priority
                 placeholder="blur"
@@ -97,7 +97,7 @@ export default function Navigation() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center flex-1 justify-center gap-1 px-4">
+          <div className="hidden md:flex items-center flex-1 justify-center gap-2 px-2">
             {navigation.map((item) => {
               const isActive = pathname === item.href || 
                 (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -107,13 +107,13 @@ export default function Navigation() {
                   <Button
                     variant={isActive ? "default" : "ghost"}
                     className={cn(
-                      "w-full flex items-center justify-center space-x-2 px-3 py-2 text-sm font-medium transition-colors",
+                      "w-full flex items-center justify-center space-x-2 px-3 py-2 text-sm sm:text-base font-medium transition-colors",
                       isActive
                         ? "bg-blue-600 text-white hover:bg-blue-700"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                     )}
                   >
-                    <item.icon className="w-4 h-4 flex-shrink-0" />
+                    <item.icon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
                     <span className="truncate">{item.name}</span>
                   </Button>
                 </Link>
@@ -131,7 +131,7 @@ export default function Navigation() {
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                 className="flex items-center space-x-2 text-slate-600 hover:text-slate-900"
               >
-                <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+                <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
                   <User className="w-4 h-4 text-slate-600" />
                 </div>
                 <span className="hidden lg:inline text-sm font-medium text-slate-900">Admin User</span>
@@ -178,7 +178,8 @@ export default function Navigation() {
             <Button
               variant="ghost"
               size="sm"
-              className="md:hidden"
+              aria-expanded={mobileMenuOpen}
+              className="md:hidden rounded-full"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? (

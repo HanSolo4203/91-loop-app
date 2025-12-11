@@ -34,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
-      <body className="font-sans antialiased bg-slate-50 text-slate-900">
+      <body className="font-sans antialiased bg-slate-50 text-slate-900 overflow-x-hidden leading-relaxed">
         <ErrorBoundary>
           <RefreshTokenGuard />
           <QueryProvider>
