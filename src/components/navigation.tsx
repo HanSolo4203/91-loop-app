@@ -21,6 +21,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { playLogoutChime } from '@/lib/utils/sounds';
 
 const navigation = [
   {
@@ -63,6 +64,9 @@ export default function Navigation() {
 
   const handleLogout = async () => {
     try {
+      playLogoutChime();
+      // Delay to let the longer chime play before navigation
+      await new Promise(resolve => setTimeout(resolve, 800));
       await supabase.auth.signOut();
       router.push('/login');
     } catch (error) {
