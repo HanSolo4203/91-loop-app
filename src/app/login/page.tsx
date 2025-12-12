@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { playLoginChime } from '@/lib/utils/sounds';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -142,6 +143,7 @@ export default function LoginPage() {
           await supabase.auth.signOut();
         } else if (profile?.role === 'admin') {
           console.log('Admin access granted');
+          playLoginChime();
           router.push('/dashboard');
         } else {
           console.log('Access denied - not admin');

@@ -15,6 +15,10 @@ export const metadata: Metadata = {
   description: "Professional linen tracking and management system for RSL Express. Track batches, manage inventory, and streamline your linen operations.",
   keywords: ["linen tracking", "inventory management", "RSL Express", "laundry management", "batch tracking"],
   authors: [{ name: "RSL Express" }],
+  icons: {
+    icon: '/apple-touch-icon.png',
+    apple: '/apple-touch-icon.png',
+  },
   openGraph: {
     title: "RSL Express - Linen Tracking System",
     description: "Professional linen tracking and management system",
