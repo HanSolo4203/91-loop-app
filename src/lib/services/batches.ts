@@ -36,6 +36,7 @@ export interface BatchItemData {
   quantity_received?: number;
   price_per_item?: number;
   discrepancy_details?: string;
+  express_delivery?: boolean;
 }
 
 export interface CreateBatchRequest {
@@ -50,6 +51,7 @@ export interface CreateBatchRequest {
 export interface UpdateBatchItemsRequest {
   items: BatchItemData[];
   notes?: string | null;
+  pickup_date?: string;
 }
 
 export interface BatchWithDetails extends Batch {
@@ -145,13 +147,8 @@ export async function validateBatchData(batchData: CreateBatchRequest): Promise<
     const pickupDate = new Date(batchData.pickup_date);
     if (isNaN(pickupDate.getTime())) {
       errors.push('Invalid pickup date format');
-    } else {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (pickupDate < today) {
-        errors.push('Pickup date cannot be in the past');
-      }
     }
+    // Past dates are allowed - removed validation restriction
   }
 
   // Validate status
@@ -290,6 +287,7 @@ interface PreparedBatchItem {
   quantity_received: number;
   price_per_item: number;
   discrepancy_details?: string | null;
+  express_delivery?: boolean;
 }
 
 /**
@@ -425,6 +423,7 @@ export async function updateBatchItems(
         quantity_received: quantityReceived,
         price_per_item: pricePerItem,
         discrepancy_details: item.discrepancy_details || null,
+        express_delivery: item.express_delivery || false,
       };
     });
 
@@ -468,29 +467,76 @@ export async function updateBatchItems(
       existingItemsMap.set(item.linen_category_id, { id: item.id });
     });
 
-    const upsertPayload = preparedItems.map((item) => {
+    // Separate items into updates (existing) and inserts (new)
+    const itemsToUpdate: Array<{
+      id: string;
+      batch_id: string;
+      linen_category_id: string;
+      quantity_sent: number;
+      quantity_received: number;
+      price_per_item: number;
+      discrepancy_details: string | null;
+      subtotal: number;
+    }> = [];
+    const itemsToInsert: Array<{
+      batch_id: string;
+      linen_category_id: string;
+      quantity_sent: number;
+      quantity_received: number;
+      price_per_item: number;
+      discrepancy_details: string | null;
+      subtotal: number;
+    }> = [];
+
+    preparedItems.forEach((item) => {
       const existing = existingItemsMap.get(item.linen_category_id);
-      return {
-        ...(existing ? { id: existing.id } : {}),
+      const itemData = {
         batch_id: batchId,
         linen_category_id: item.linen_category_id,
         quantity_sent: item.quantity_sent,
         quantity_received: item.quantity_received,
         price_per_item: item.price_per_item,
         discrepancy_details: item.discrepancy_details || null,
+        express_delivery: item.express_delivery || false,
         subtotal: item.quantity_received * item.price_per_item,
       };
+
+      if (existing) {
+        itemsToUpdate.push({ ...itemData, id: existing.id });
+      } else {
+        itemsToInsert.push(itemData);
+      }
     });
 
-    if (upsertPayload.length > 0) {
-      const { error: upsertError } = await (supabaseAdmin as any)
-        .from('batch_items')
-        .upsert(upsertPayload, { onConflict: 'id' });
+    // Update existing items
+    if (itemsToUpdate.length > 0) {
+      for (const item of itemsToUpdate) {
+        const { id, ...updateData } = item;
+        const { error: updateError } = await supabaseAdmin
+          .from('batch_items')
+          .update(updateData)
+          .eq('id', id);
 
-      if (upsertError) {
+        if (updateError) {
+          throw new BatchServiceError(
+            `Failed to update batch items: ${updateError.message}`,
+            'ITEMS_UPDATE_ERROR',
+            500
+          );
+        }
+      }
+    }
+
+    // Insert new items
+    if (itemsToInsert.length > 0) {
+      const { error: insertError } = await supabaseAdmin
+        .from('batch_items')
+        .insert(itemsToInsert);
+
+      if (insertError) {
         throw new BatchServiceError(
-          `Failed to update batch items: ${upsertError.message}`,
-          'ITEMS_UPSERT_ERROR',
+          `Failed to insert batch items: ${insertError.message}`,
+          'ITEMS_INSERT_ERROR',
           500
         );
       }
@@ -525,6 +571,10 @@ export async function updateBatchItems(
 
     if (payload.notes !== undefined) {
       batchUpdatePayload.notes = payload.notes?.trim() || null;
+    }
+
+    if (payload.pickup_date !== undefined) {
+      batchUpdatePayload.pickup_date = payload.pickup_date;
     }
 
     const { data: updatedBatch, error: batchUpdateError } = await (supabaseAdmin as any)

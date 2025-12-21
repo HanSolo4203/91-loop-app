@@ -139,7 +139,7 @@ export async function PUT(
       );
     }
 
-    let payload: { items?: unknown; notes?: string };
+    let payload: { items?: unknown; notes?: string; pickup_date?: string };
     try {
       payload = await request.json();
     } catch {
@@ -167,6 +167,7 @@ export async function PUT(
     const result = await updateBatchItemsService(id, {
       items: payload.items,
       notes: payload.notes ?? undefined,
+      pickup_date: payload.pickup_date,
     });
 
     if (!result.success) {
