@@ -9,3 +9,4 @@ alter table public.business_settings
 
 
 
+

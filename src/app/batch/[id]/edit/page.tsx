@@ -11,7 +11,9 @@ import BatchTotalCard from '@/components/batch/batch-total-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, ArrowLeft, FileEdit, RefreshCw } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { AlertCircle, ArrowLeft, FileEdit, RefreshCw, Calendar } from 'lucide-react';
 import type { LinenCategory } from '@/types/database';
 
 interface BatchItemPayload {
@@ -102,6 +104,7 @@ function EditBatchContent() {
   const [gridError, setGridError] = useState('');
   const [amendStatus, setAmendStatus] = useState<'draft' | 'creating' | 'success' | 'error'>('draft');
   const [errorMessage, setErrorMessage] = useState('');
+  const [pickupDate, setPickupDate] = useState<string>('');
 
   const loadPageData = useCallback(
     async (isRefresh = false) => {
@@ -134,6 +137,14 @@ function EditBatchContent() {
 
         setCategories(categoriesResponse.data || []);
         setBatchDetails(batchResponse.data);
+        
+        // Set pickup date for editing
+        if (batchResponse.data.pickup_date) {
+          // Format date as YYYY-MM-DD for input field
+          const date = new Date(batchResponse.data.pickup_date);
+          const formattedDate = date.toISOString().split('T')[0];
+          setPickupDate(formattedDate);
+        }
 
         const mappedItems: BatchItemPayload[] = (batchResponse.data.items || []).map((item: BatchDetails['items'][number]) => ({
           linen_category_id: item.linen_category_id,
@@ -204,7 +215,10 @@ function EditBatchContent() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ items: payloadItems }),
+        body: JSON.stringify({ 
+          items: payloadItems,
+          pickup_date: pickupDate || undefined,
+        }),
       });
 
       const result = await response.json();
@@ -297,6 +311,41 @@ function EditBatchContent() {
             {batchDetails && (
               <BatchHeader batch={batchDetails} client={batchDetails.client} loading={refreshing} />
             )}
+
+            {/* Pickup Date Editor */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base text-slate-900 flex items-center space-x-2">
+                  <Calendar className="w-5 h-5 text-blue-600" />
+                  <span>Pickup Date</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Label htmlFor="pickup-date" className="text-sm text-slate-700">
+                    Select or edit the pickup date (past dates allowed)
+                  </Label>
+                  <Input
+                    id="pickup-date"
+                    type="date"
+                    value={pickupDate}
+                    onChange={(e) => setPickupDate(e.target.value)}
+                    className="w-full max-w-xs"
+                    disabled={amendStatus === 'creating' || !batchDetails}
+                  />
+                  {pickupDate && (
+                    <p className="text-sm text-slate-600">
+                      Selected date: {new Date(pickupDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             <LinenCountGrid
               ref={linenGridRef}
