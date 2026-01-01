@@ -27,6 +27,7 @@ interface PrefilledItem {
   quantity_received: number;
   price_per_item?: number;
   discrepancy_details?: string | null;
+  express_delivery?: boolean;
 }
 
 interface LinenCountGridProps {
@@ -94,7 +95,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
         price_per_item: pricePerItem,
         subtotal: quantityReceived * pricePerItem,
         discrepancy_details: existing?.discrepancy_details || '',
-        express_delivery: false,
+        express_delivery: existing?.express_delivery || false,
       };
     });
 

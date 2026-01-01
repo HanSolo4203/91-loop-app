@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, ArrowLeft, FileEdit, RefreshCw, Calendar } from 'lucide-react';
 import type { LinenCategory } from '@/types/database';
+import { markDashboardForRefresh } from '@/lib/utils';
 
 interface BatchItemPayload {
   linen_category_id: string;
@@ -224,6 +225,8 @@ function EditBatchContent() {
       const result = await response.json();
 
       if (result.success) {
+        // Mark dashboard for refresh when user navigates back
+        markDashboardForRefresh();
         setAmendStatus('success');
         setTimeout(() => {
           router.push(`/batch/${batchId}`);

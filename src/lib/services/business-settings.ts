@@ -22,6 +22,7 @@ export interface BusinessSettingsPayload {
   bank_branch_code?: string | null;
   bank_account_type?: string | null;
   bank_payment_reference?: string | null;
+  payment_terms_days?: number | null;
 }
 
 class BusinessSettingsServiceError extends Error {
@@ -122,6 +123,7 @@ export async function upsertBusinessSettings(
       bank_branch_code: sanitize(payload.bank_branch_code ?? null),
       bank_account_type: sanitize(payload.bank_account_type ?? null),
       bank_payment_reference: sanitize(payload.bank_payment_reference ?? null),
+      payment_terms_days: payload.payment_terms_days !== undefined ? payload.payment_terms_days : null,
       updated_at: new Date().toISOString(),
     };
 

@@ -92,6 +92,7 @@ const BUSINESS_SETTINGS_DEFAULT = {
   bank_branch_code: '',
   bank_account_type: '',
   bank_payment_reference: '',
+  payment_terms_days: 8,
 };
 
 type BusinessSettingsFormState = typeof BUSINESS_SETTINGS_DEFAULT;
@@ -110,6 +111,7 @@ const mapBusinessSettingsResponse = (data: Partial<BusinessSettingsFormState> | 
   bank_branch_code: data?.bank_branch_code || '',
   bank_account_type: data?.bank_account_type || '',
   bank_payment_reference: data?.bank_payment_reference || '',
+  payment_terms_days: data?.payment_terms_days ?? BUSINESS_SETTINGS_DEFAULT.payment_terms_days,
 });
 
 
@@ -569,7 +571,7 @@ function SettingsContent() {
     loadBusinessSettings();
   }, [loadBusinessSettings]);
 
-  const handleBusinessFieldChange = (field: keyof BusinessSettingsFormState, value: string) => {
+  const handleBusinessFieldChange = (field: keyof BusinessSettingsFormState, value: string | number) => {
     setBusinessSettings(prev => ({
       ...prev,
       [field]: value,
@@ -1159,6 +1161,25 @@ function SettingsContent() {
                       className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 resize-y"
                       placeholder="e.g. Use your paper batch number or client code as payment reference."
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="payment_terms_days" className="text-sm font-medium text-slate-700">
+                      Payment Terms (Days)
+                    </label>
+                    <input
+                      type="number"
+                      id="payment_terms_days"
+                      min="1"
+                      max="365"
+                      value={businessSettings.payment_terms_days}
+                      onChange={(e) => handleBusinessFieldChange('payment_terms_days', parseInt(e.target.value) || 8)}
+                      disabled={isBusinessFormDisabled}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                      placeholder="8"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Number of days for payment terms. This will appear on invoices as "Payment terms: Net {'{X}'} days".
+                    </p>
                   </div>
                 </div>
 

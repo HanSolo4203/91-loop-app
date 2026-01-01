@@ -24,6 +24,7 @@ import {
   FileEdit
 } from 'lucide-react';
 import Link from 'next/link';
+import { markDashboardForRefresh } from '@/lib/utils';
 
 // Types
 interface BatchDetails {
@@ -184,6 +185,8 @@ function BatchDetailsContent() {
       const result = await response.json();
 
       if (result.success) {
+        // Mark dashboard for refresh when user navigates back
+        markDashboardForRefresh();
         // Refresh the batch details
         await fetchBatchDetails(true);
       } else {

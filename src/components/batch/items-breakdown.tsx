@@ -16,7 +16,8 @@ import {
   CheckCircle, 
   TrendingUp,
   TrendingDown,
-  Minus
+  Minus,
+  Zap
 } from 'lucide-react';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 
@@ -26,6 +27,7 @@ interface BatchItem {
   quantity_sent: number;
   quantity_received: number;
   price_per_item: number;
+  express_delivery?: boolean;
   discrepancy_details?: string;
   category: {
     id: string;
@@ -140,9 +142,16 @@ export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdow
 
   const totalItems = items.length;
   const itemsWithDiscrepancy = items.filter(item => item.discrepancy.quantity !== 0).length;
+  const itemsWithExpressDelivery = items.filter(item => item.express_delivery && item.quantity_sent > 0).length;
   const totalSent = items.reduce((sum, item) => sum + item.quantity_sent, 0);
   const totalReceived = items.reduce((sum, item) => sum + item.quantity_received, 0);
   const totalDiscrepancyValue = items.reduce((sum, item) => sum + item.pricing.discrepancy_value, 0);
+  const totalExpressSurcharge = items.reduce((sum, item) => {
+    if (item.express_delivery) {
+      return sum + (item.pricing.total_sent_value * 0.5);
+    }
+    return sum;
+  }, 0);
 
   return (
     <Card>
@@ -179,7 +188,15 @@ export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdow
                 >
                   <TableCell>
                     <div className="space-y-1">
-                      <div className="font-medium">{item.category.name}</div>
+                      <div className="flex items-center space-x-2">
+                        <div className="font-medium">{item.category.name}</div>
+                        {item.express_delivery && (
+                          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">
+                            <Zap className="w-3 h-3 mr-1" />
+                            Express
+                          </Badge>
+                        )}
+                      </div>
                       {item.category.description && (
                         <div className="text-sm text-slate-500">
                           {item.category.description}
@@ -225,6 +242,11 @@ export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdow
                       <div className="font-medium">
                         {formatCurrency(item.pricing.total_sent_value)}
                       </div>
+                      {item.express_delivery && (
+                        <div className="text-xs text-yellow-600">
+                          +{formatCurrency(item.pricing.total_sent_value * 0.5)} express
+                        </div>
+                      )}
                       {item.discrepancy.value_impact !== 0 && (
                         <div className={`text-xs ${
                           item.discrepancy.value_impact > 0 
@@ -282,6 +304,19 @@ export default function ItemsBreakdown({ items, loading = false }: ItemsBreakdow
               </p>
             </div>
           </div>
+          {itemsWithExpressDelivery > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <div className="flex items-center space-x-2 text-sm">
+                <Zap className="w-4 h-4 text-yellow-500" />
+                <span className="text-slate-600">
+                  {itemsWithExpressDelivery} categor{itemsWithExpressDelivery !== 1 ? 'ies' : 'y'} with express delivery
+                </span>
+                <span className="text-yellow-600 font-semibold ml-auto">
+                  +{formatCurrency(totalExpressSurcharge)} surcharge
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

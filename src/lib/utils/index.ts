@@ -197,3 +197,32 @@ export function deepClone<T>(obj: T): T {
   }
   return obj;
 }
+
+/**
+ * Dashboard refresh utilities
+ * Used to trigger automatic refresh when navigating back to dashboard after batch updates
+ */
+const DASHBOARD_REFRESH_FLAG = 'dashboard_needs_refresh';
+
+/**
+ * Mark that the dashboard needs to refresh when navigated to
+ */
+export function markDashboardForRefresh(): void {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem(DASHBOARD_REFRESH_FLAG, Date.now().toString());
+  }
+}
+
+/**
+ * Check if dashboard needs refresh and clear the flag
+ * @returns true if dashboard should refresh, false otherwise
+ */
+export function shouldRefreshDashboard(): boolean {
+  if (typeof window === 'undefined') return false;
+  const flag = sessionStorage.getItem(DASHBOARD_REFRESH_FLAG);
+  if (flag) {
+    sessionStorage.removeItem(DASHBOARD_REFRESH_FLAG);
+    return true;
+  }
+  return false;
+}

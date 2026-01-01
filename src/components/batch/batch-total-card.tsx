@@ -187,10 +187,15 @@ export default function BatchTotalCard({
             <p className="text-4xl font-bold text-blue-900">{formatCurrency(totals.totalAmount)}</p>
             <p className="text-sm text-blue-600 mt-1">
               {totals.totalItems} items across {totals.itemsWithQuantity} categories
+              {totals.itemsWithExpressDelivery > 0 && (
+                <span className="ml-1">
+                  ({totals.itemsWithExpressDelivery} with express delivery)
+                </span>
+              )}
             </p>
             {totals.totalSurcharge > 0 && (
               <p className="text-xs text-yellow-600 mt-1">
-                Includes {formatCurrency(totals.totalSurcharge)} express delivery surcharge ({totals.itemsWithExpressDelivery} item{totals.itemsWithExpressDelivery > 1 ? 's' : ''})
+                Includes {formatCurrency(totals.totalSurcharge)} express delivery surcharge
               </p>
             )}
           </div>
