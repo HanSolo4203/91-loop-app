@@ -56,11 +56,11 @@ export async function GET(request: NextRequest) {
     const offsetNum = offset ? parseInt(offset, 10) : 0;
 
     // Validate limit
-    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
       return cachedJsonResponse(
         {
           success: false,
-          error: 'Limit must be between 1 and 100',
+          error: 'Limit must be between 1 and 1000',
           data: null,
         } as AnalyticsServiceResponse<null>,
         'noCache',
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     // When date filters are applied, fetch more batches to account for additional filtering
     // This ensures we have enough results after filtering by status/client/discrepancy
     const fetchLimit = (date_from || date_to || status || client_id || has_discrepancy) 
-      ? Math.min(limitNum * 5, 100) // Fetch up to 5x the limit or 100, whichever is smaller
+      ? Math.min(limitNum * 5, 1000) // Fetch up to 5x the limit or 1000, whichever is smaller
       : limitNum;
 
     // Get recent batches with date filters applied in the query (more efficient)
@@ -192,12 +192,19 @@ export async function GET(request: NextRequest) {
 
     // Calculate pagination metadata based on filtered results
     const totalCount = filteredBatches.length;
-    const hasMore = offsetNum + limitNum < totalCount;
-    const currentPage = Math.floor(offsetNum / limitNum) + 1;
-    const totalPages = Math.ceil(totalCount / limitNum);
+    
+    // When date filters are applied and limit is high (>= 100), return all batches without pagination
+    // This ensures all batches for a month are shown
+    const shouldReturnAll = (date_from || date_to) && limitNum >= 100 && !status && !client_id && !has_discrepancy;
+    
+    const hasMore = shouldReturnAll ? false : offsetNum + limitNum < totalCount;
+    const currentPage = shouldReturnAll ? 1 : Math.floor(offsetNum / limitNum) + 1;
+    const totalPages = shouldReturnAll ? 1 : Math.ceil(totalCount / limitNum);
 
-    // Apply pagination to filtered results
-    const paginatedBatches = filteredBatches.slice(offsetNum, offsetNum + limitNum);
+    // Apply pagination to filtered results (or return all if shouldReturnAll is true)
+    const paginatedBatches = shouldReturnAll 
+      ? filteredBatches 
+      : filteredBatches.slice(offsetNum, offsetNum + limitNum);
 
     const response = {
       batches: paginatedBatches,

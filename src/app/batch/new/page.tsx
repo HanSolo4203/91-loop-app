@@ -22,6 +22,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Client, LinenCategory } from '@/types/database';
+import { markDashboardForRefresh } from '@/lib/utils';
 
 // Loading component
 function NewBatchLoading() {
@@ -257,6 +258,8 @@ function NewBatchContent() {
       const result = await response.json();
 
       if (result.success) {
+        // Mark dashboard for refresh when user navigates back
+        markDashboardForRefresh();
         setCreateStatus('success');
         // Redirect to batch details after a short delay
         setTimeout(() => {

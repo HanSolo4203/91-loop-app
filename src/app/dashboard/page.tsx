@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { BatchStatus } from '@/types/database';
+import { shouldRefreshDashboard } from '@/lib/utils';
 
 type MetricsSummary = {
   totalBatches: number;
@@ -93,6 +94,7 @@ function DashboardContent() {
       let startDate: string;
       let endDate: string;
       let batchesResponse: Response | null = null;
+      let parsedBatchesResult: any = null;
 
       let metricsSummary: MetricsSummary = {
         totalBatches: 0,
@@ -156,7 +158,7 @@ function DashboardContent() {
         };
 
         batchesResponse = await fetch(
-          `/api/dashboard/batches?limit=20&date_from=${startDate}&date_to=${endDate}`
+          `/api/dashboard/batches?limit=200&date_from=${startDate}&date_to=${endDate}`
         );
       } else {
         // month is 0-indexed (0 = January, 11 = December)
@@ -169,17 +171,32 @@ function DashboardContent() {
 
         const [metricsResponse, batchesFetchResponse] = await Promise.all([
           fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`),
-          fetch(`/api/dashboard/batches?limit=20&date_from=${startDate}&date_to=${endDate}`)
+          fetch(`/api/dashboard/batches?limit=200&date_from=${startDate}&date_to=${endDate}`)
         ]);
 
         if (!metricsResponse.ok || !batchesFetchResponse.ok) {
-          throw new Error('Failed to fetch dashboard data from server');
+          const metricsText = await metricsResponse.text().catch(() => '');
+          const batchesText = await batchesFetchResponse.text().catch(() => '');
+          console.error('Dashboard fetch error:', {
+            metricsStatus: metricsResponse.status,
+            metricsText,
+            batchesStatus: batchesFetchResponse.status,
+            batchesText
+          });
+          throw new Error(`Failed to fetch dashboard data: ${metricsResponse.status} / ${batchesFetchResponse.status}`);
         }
 
         const metricsResult = await metricsResponse.json();
 
         if (!metricsResult.success) {
           throw new Error(metricsResult.error || 'Failed to fetch metrics');
+        }
+
+        // Parse the batches response and store it to avoid consuming the body twice
+        parsedBatchesResult = await batchesFetchResponse.json();
+        if (!parsedBatchesResult.success) {
+          console.error('Batches fetch error:', parsedBatchesResult.error);
+          throw new Error(parsedBatchesResult.error || 'Failed to fetch batches');
         }
 
         if (metricsResult.data) {
@@ -197,12 +214,24 @@ function DashboardContent() {
         batchesResponse = batchesFetchResponse;
       }
 
-      if (!batchesResponse || !batchesResponse.ok) {
-        throw new Error('Failed to fetch batches');
+      // For yearly view, we still need to parse the response
+      // For monthly view, we already parsed it above
+      let batchesResult;
+      if (parsedBatchesResult) {
+        batchesResult = parsedBatchesResult;
+      } else {
+        if (!batchesResponse || !batchesResponse.ok) {
+          const batchesText = await batchesResponse?.text().catch(() => '');
+          console.error('Batches response error:', {
+            status: batchesResponse?.status,
+            text: batchesText
+          });
+          throw new Error(`Failed to fetch batches: ${batchesResponse?.status || 'unknown'}`);
+        }
+        batchesResult = await batchesResponse.json();
       }
-
-      const batchesResult = await batchesResponse.json();
       if (!batchesResult.success) {
+        console.error('Batches result error:', batchesResult.error);
         throw new Error(batchesResult.error || 'Failed to fetch batches');
       }
 
@@ -254,10 +283,24 @@ function DashboardContent() {
     fetchDashboardData(selectedMonth.month, selectedMonth.year);
   }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
 
+  // Check if dashboard needs refresh when component mounts or becomes visible
+  useEffect(() => {
+    // Check immediately on mount
+    if (shouldRefreshDashboard()) {
+      fetchDashboardData(selectedMonth.month, selectedMonth.year);
+    }
+  }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
+
   // Refresh dashboard when window gains focus (e.g., returning from batch creation)
   useEffect(() => {
     const handleFocus = () => {
-      // Check if we should refresh (user might have created a batch)
+      // Check if dashboard was marked for refresh (e.g., after batch update)
+      if (shouldRefreshDashboard()) {
+        fetchDashboardData(selectedMonth.month, selectedMonth.year);
+        return;
+      }
+
+      // Otherwise, check if we should refresh based on time
       const lastRefresh = sessionStorage.getItem('dashboardLastRefresh');
       const now = Date.now();
       // Refresh if it's been more than 5 seconds since last refresh

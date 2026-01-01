@@ -66,6 +66,7 @@ interface BusinessInfo {
   bank_branch_code?: string | null;
   bank_account_type?: string | null;
   bank_payment_reference?: string | null;
+  payment_terms_days?: number | null;
 }
 
 const DEFAULT_LOGO_URL = 'https://bwuslachnnapmtenbdgq.supabase.co/storage/v1/object/public/business-logos/rsl_dynamic_italic_final444.svg';
@@ -279,7 +280,14 @@ export default function InvoicePage() {
               <p className="text-slate-600">Invoice #</p>
               <p className="font-semibold text-slate-900">{batchDetails.paper_batch_id}</p>
               <p className="text-slate-600">Date</p>
-              <p className="font-semibold text-slate-900">{new Date().toLocaleDateString()}</p>
+              <p className="font-semibold text-slate-900">
+                {(() => {
+                  const pickupDate = new Date(batchDetails.pickup_date);
+                  const invoiceDate = new Date(pickupDate);
+                  invoiceDate.setDate(invoiceDate.getDate() + 1);
+                  return invoiceDate.toLocaleDateString();
+                })()}
+              </p>
               <p className="text-slate-600">Reference</p>
               <p className="font-semibold text-slate-900">#{batchDetails.id.slice(-8).toUpperCase()}</p>
             </div>
@@ -505,7 +513,9 @@ export default function InvoicePage() {
 
           <div className="text-center">
             <h4 className="font-semibold text-slate-900 mb-2">Payment Terms:</h4>
-            <p className="text-slate-600 text-sm">Payment is due within 30 days of invoice date.</p>
+            <p className="text-slate-600 text-sm">
+              Payment is due within {businessInfo?.payment_terms_days ?? 8} days of invoice date.
+            </p>
             <p className="text-slate-600 text-sm mt-1">Thank you for your business!</p>
           </div>
         </div>

@@ -161,6 +161,7 @@ export interface Database {
           bank_branch_code: string | null;
           bank_account_type: string | null;
           bank_payment_reference: string | null;
+          payment_terms_days: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -178,6 +179,7 @@ export interface Database {
           bank_branch_code?: string | null;
           bank_account_type?: string | null;
           bank_payment_reference?: string | null;
+          payment_terms_days?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -195,6 +197,7 @@ export interface Database {
           bank_branch_code?: string | null;
           bank_account_type?: string | null;
           bank_payment_reference?: string | null;
+          payment_terms_days?: number | null;
           created_at?: string;
           updated_at?: string;
         };

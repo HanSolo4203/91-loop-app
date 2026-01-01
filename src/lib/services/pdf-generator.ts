@@ -246,7 +246,7 @@ export class PDFGenerator {
     // Terms
     this.doc.setFontSize(8);
     this.doc.text('This quotation is valid for 30 days from the date of issue.', this.margin, footerY + 18);
-    this.doc.text('Payment terms: Net 30 days', this.margin, footerY + 22);
+    this.doc.text('Payment terms: Net 8 days', this.margin, footerY + 22);
   }
 
   private generateQuotationNumber(): string {

@@ -395,7 +395,12 @@ async function getInvoiceSummaryByPeriod(
         has_discrepancy,
         pickup_date,
         client:clients(id, name, logo_url),
-        items:batch_items(quantity_received)
+        items:batch_items(
+          quantity_received,
+          quantity_sent,
+          price_per_item,
+          express_delivery
+        )
       `)
       .gte('pickup_date', startDate)
       .lte('pickup_date', endDate) as any;
@@ -426,12 +431,37 @@ async function getInvoiceSummaryByPeriod(
 
       const itemsCount = (batch.items || []).reduce((sum: number, it: any) => sum + (it.quantity_received || 0), 0);
 
+      // Recalculate batch total matching invoice summary page calculation exactly:
+      // The invoice summary page calculates totals WITHOUT discrepancy adjustments:
+      // 1. Subtotal (Received) = quantity_received * price
+      // 2. Express Delivery = (lineTotal * 0.5) if express_delivery
+      // 3. Batch Subtotal = Subtotal + Express Delivery
+      // Note: VAT is calculated at the summary level, so we return the batch subtotal (before VAT)
+      // Note: Discrepancy adjustments are NOT included in summary totals (only in individual invoice pages)
+      const items = batch.items || [];
+      let batchSubtotalBase = 0;
+      let batchExpressDelivery = 0;
+      
+      items.forEach((item: any) => {
+        const qtyReceived = item.quantity_received || 0;
+        const price = item.price_per_item || 0;
+        const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        batchSubtotalBase += lineTotal;
+        
+        if (item.express_delivery) {
+          const surcharge = Math.round(lineTotal * 0.5 * 100) / 100;
+          batchExpressDelivery += surcharge;
+        }
+      });
+      
+      const batchTotal = Math.round((batchSubtotalBase + batchExpressDelivery) * 100) / 100;
+      
       summaryMap.set(clientId, {
         client_id: clientId,
         client_name: clientName,
         logo_url: clientLogoUrl,
         total_items_washed: existing.total_items_washed + itemsCount,
-        total_amount: existing.total_amount + (batch.total_amount || 0),
+        total_amount: existing.total_amount + batchTotal,
         batch_count: existing.batch_count + 1,
         discrepancy_batches: existing.discrepancy_batches + (batch.has_discrepancy ? 1 : 0),
       });
@@ -540,6 +570,8 @@ export async function getMonthlyStats(
         items:batch_items(
           quantity_sent,
           quantity_received,
+          price_per_item,
+          express_delivery,
           linen_category:linen_categories(name)
         )
       `)
@@ -557,7 +589,15 @@ export async function getMonthlyStats(
     // Get previous month statistics for comparison
     const { data: previousMonthData, error: previousError } = await supabaseAdmin
       .from('batches')
-      .select('total_amount, status, has_discrepancy')
+      .select(`
+        status,
+        has_discrepancy,
+        batch_items (
+          quantity_sent,
+          price_per_item,
+          express_delivery
+        )
+      `)
       .gte('pickup_date', previousMonthStart)
       .lte('pickup_date', previousMonthEnd) as any;
 
@@ -571,7 +611,16 @@ export async function getMonthlyStats(
 
     // Calculate current month statistics
     const totalBatches = currentMonthData?.length || 0;
-    const totalRevenue = currentMonthData?.reduce((sum: number, batch: BatchWithItems) => sum + batch.total_amount, 0) || 0;
+    // Recalculate total revenue including express delivery surcharges
+    const totalRevenue = currentMonthData?.reduce((sum: number, batch: BatchWithItems) => {
+      const items = batch.items || [];
+      const batchTotal = items.reduce((itemSum: number, item: any) => {
+        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
+        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        return itemSum + baseAmount + surcharge;
+      }, 0);
+      return sum + batchTotal;
+    }, 0) || 0;
     const totalItemsProcessed = currentMonthData?.reduce((sum: number, batch: BatchWithItems) => 
       sum + (batch.items?.reduce((itemSum: number, item) => itemSum + item.quantity_received, 0) || 0), 0) || 0;
     const averageBatchValue = totalBatches > 0 ? totalRevenue / totalBatches : 0;
@@ -585,10 +634,17 @@ export async function getMonthlyStats(
     currentMonthData?.forEach((batch: BatchWithItems) => {
       const clientId = batch.client?.name || 'Unknown';
       const existing = clientStats.get(clientId) || { name: clientId, batchCount: 0, totalRevenue: 0 };
+      // Recalculate batch total including express delivery
+      const items = batch.items || [];
+      const batchTotal = items.reduce((itemSum: number, item: any) => {
+        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
+        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        return itemSum + baseAmount + surcharge;
+      }, 0);
       clientStats.set(clientId, {
         name: clientId,
         batchCount: existing.batchCount + 1,
-        totalRevenue: existing.totalRevenue + batch.total_amount
+        totalRevenue: existing.totalRevenue + batchTotal
       });
     });
 
@@ -628,7 +684,16 @@ export async function getMonthlyStats(
 
     // Calculate month-over-month growth
     const previousTotalBatches = previousMonthData?.length || 0;
-    const previousTotalRevenue = previousMonthData?.reduce((sum: number, batch: BatchWithItems) => sum + batch.total_amount, 0) || 0;
+    // Recalculate previous month revenue including express delivery surcharges
+    const previousTotalRevenue = previousMonthData?.reduce((sum: number, batch: any) => {
+      const items = batch.batch_items || [];
+      const batchTotal = items.reduce((itemSum: number, item: any) => {
+        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
+        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        return itemSum + baseAmount + surcharge;
+      }, 0);
+      return sum + batchTotal;
+    }, 0) || 0;
     const previousTotalItems = previousMonthData?.length || 0; // Simplified for now
 
     const batchGrowth = previousTotalBatches > 0 ? 
@@ -696,9 +761,9 @@ export async function getRecentBatches(
 ): Promise<AnalyticsServiceResponse<RecentBatch[]>> {
   try {
     // Validate inputs
-    if (limit < 1 || limit > 100) {
+    if (limit < 1 || limit > 1000) {
       throw new AnalyticsServiceError(
-        'Limit must be between 1 and 100',
+        'Limit must be between 1 and 1000',
         'INVALID_LIMIT',
         400
       );
@@ -724,7 +789,13 @@ export async function getRecentBatches(
         has_discrepancy,
         created_at,
         client:clients(name),
-        batch_items(id)
+        batch_items(
+          id,
+          quantity_sent,
+          quantity_received,
+          price_per_item,
+          express_delivery
+        )
       `);
 
     // Apply date filters if provided (filter by pickup_date)
@@ -749,18 +820,29 @@ export async function getRecentBatches(
       );
     }
 
-    const recentBatches: RecentBatch[] = (data || []).map((batch: any) => ({
-      id: batch.id,
-      paper_batch_id: batch.paper_batch_id,
-      system_batch_id: batch.system_batch_id,
-      client_name: (batch.client?.name) || 'Unknown Client',
-      pickup_date: batch.pickup_date,
-      status: batch.status,
-      total_amount: batch.total_amount,
-      has_discrepancy: batch.has_discrepancy,
-      item_count: Array.isArray(batch.batch_items) ? batch.batch_items.length : 0,
-      created_at: batch.created_at || new Date().toISOString()
-    }));
+    const recentBatches: RecentBatch[] = (data || []).map((batch: any) => {
+      // Recalculate total_amount including express delivery surcharges
+      // Use quantity_received to match batch details page calculation
+      const items = batch.batch_items || [];
+      const batchTotal = items.reduce((itemSum: number, item: any) => {
+        const baseAmount = item.quantity_received * (item.price_per_item || 0);
+        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        return itemSum + baseAmount + surcharge;
+      }, 0);
+      
+      return {
+        id: batch.id,
+        paper_batch_id: batch.paper_batch_id,
+        system_batch_id: batch.system_batch_id,
+        client_name: (batch.client?.name) || 'Unknown Client',
+        pickup_date: batch.pickup_date,
+        status: batch.status,
+        total_amount: batchTotal,
+        has_discrepancy: batch.has_discrepancy,
+        item_count: Array.isArray(batch.batch_items) ? batch.batch_items.length : 0,
+        created_at: batch.created_at || new Date().toISOString()
+      };
+    });
 
     return {
       data: recentBatches,
@@ -807,7 +889,14 @@ export async function getRevenueByMonth(
 
     const { data, error } = await supabaseAdmin
       .from('batches')
-      .select('total_amount, pickup_date')
+      .select(`
+        pickup_date,
+        batch_items (
+          quantity_sent,
+          price_per_item,
+          express_delivery
+        )
+      `)
       .gte('pickup_date', startDate)
       .lte('pickup_date', endDate) as any;
 
@@ -822,11 +911,18 @@ export async function getRevenueByMonth(
     // Group by month
     const monthlyData = new Map<number, { revenue: number; batchCount: number }>();
     
-    (data || []).forEach((batch: BatchWithClient) => {
+    (data || []).forEach((batch: any) => {
       const month = new Date(batch.pickup_date).getMonth();
       const existing = monthlyData.get(month) || { revenue: 0, batchCount: 0 };
+      // Recalculate batch total including express delivery surcharges
+      const items = batch.batch_items || [];
+      const batchTotal = items.reduce((itemSum: number, item: any) => {
+        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
+        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        return itemSum + baseAmount + surcharge;
+      }, 0);
       monthlyData.set(month, {
-        revenue: existing.revenue + batch.total_amount,
+        revenue: existing.revenue + batchTotal,
         batchCount: existing.batchCount + 1
       });
     });
@@ -888,9 +984,13 @@ export async function getTopClients(
       .from('batches')
       .select(`
         client_id,
-        total_amount,
         pickup_date,
-        client:clients(name)
+        client:clients(name),
+        batch_items (
+          quantity_sent,
+          price_per_item,
+          express_delivery
+        )
       `)
       .order('pickup_date', { ascending: false }) as any;
 
@@ -910,18 +1010,26 @@ export async function getTopClients(
       lastPickupDate: string;
     }>();
 
-    (data || []).forEach((batch: BatchWithClient) => {
+    (data || []).forEach((batch: any) => {
       const clientId = batch.client_id;
       const existing = clientStats.get(clientId) || {
-        name: batch.client_name || 'Unknown Client',
+        name: batch.client?.name || 'Unknown Client',
         totalRevenue: 0,
         batchCount: 0,
         lastPickupDate: batch.pickup_date
       };
+      
+      // Recalculate batch total including express delivery surcharges
+      const items = batch.batch_items || [];
+      const batchTotal = items.reduce((itemSum: number, item: any) => {
+        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
+        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        return itemSum + baseAmount + surcharge;
+      }, 0);
 
       clientStats.set(clientId, {
         name: existing.name,
-        totalRevenue: existing.totalRevenue + batch.total_amount,
+        totalRevenue: existing.totalRevenue + batchTotal,
         batchCount: existing.batchCount + 1,
         lastPickupDate: batch.pickup_date > existing.lastPickupDate ? batch.pickup_date : existing.lastPickupDate
       });
