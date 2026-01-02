@@ -307,11 +307,15 @@ export async function getRevenueAnalysis(
       };
       const { pickup_date, client_id, batch_items } = typedBatch;
       // Recalculate total_amount including express delivery surcharges
+      // Use quantity_received to match invoice summary calculation (invoices are based on what was received, not sent)
       const items = batch_items || [];
       const total_amount = items.reduce((sum: number, item: any) => {
-        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
-        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
-        return sum + baseAmount + surcharge;
+        const qtyReceived = item.quantity_received || 0;
+        const price = item.price_per_item || 0;
+        const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const baseAmount = lineTotal;
+        const surcharge = (item.express_delivery ? Math.round(lineTotal * 0.5 * 100) / 100 : 0);
+        return Math.round((sum + baseAmount + surcharge) * 100) / 100;
       }, 0);
       const date = new Date(pickup_date);
       let period: string;
@@ -583,11 +587,15 @@ export async function getClientPerformanceMetrics(
       const client = clientData.get(clientId)!;
       client.total_batches += 1;
       // Recalculate batch total including express delivery surcharges
+      // Use quantity_received to match invoice summary calculation (invoices are based on what was received, not sent)
       const items = batch.batch_items || [];
       const batchTotal = items.reduce((itemSum: number, item: any) => {
-        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
-        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
-        return itemSum + baseAmount + surcharge;
+        const qtyReceived = item.quantity_received || 0;
+        const price = item.price_per_item || 0;
+        const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const baseAmount = lineTotal;
+        const surcharge = (item.express_delivery ? Math.round(lineTotal * 0.5 * 100) / 100 : 0);
+        return Math.round((itemSum + baseAmount + surcharge) * 100) / 100;
       }, 0);
       client.total_revenue += batchTotal;
       
@@ -694,14 +702,18 @@ export async function getBatchStatistics(
     // Calculate statistics
     const totalBatches = batches?.length || 0;
     // Recalculate total revenue including express delivery surcharges
+    // Use quantity_received to match invoice summary calculation (invoices are based on what was received, not sent)
     const totalRevenue = batches?.reduce((sum: number, batch: any) => {
       const items = batch.batch_items || [];
       const batchTotal = items.reduce((itemSum: number, item: any) => {
-        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
-        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        const qtyReceived = item.quantity_received || 0;
+        const price = item.price_per_item || 0;
+        const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const baseAmount = lineTotal;
+        const surcharge = (item.express_delivery ? Math.round(lineTotal * 0.5 * 100) / 100 : 0);
         return itemSum + baseAmount + surcharge;
       }, 0);
-      return sum + batchTotal;
+      return sum + Math.round(batchTotal * 100) / 100;
     }, 0) || 0;
     const totalItems = batches?.reduce((sum: number, batch: any) => 
       sum + (batch.batch_items?.reduce((itemSum: number, item: any) => itemSum + item.quantity_sent, 0) || 0), 0) || 0;

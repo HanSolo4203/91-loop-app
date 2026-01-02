@@ -612,14 +612,18 @@ export async function getMonthlyStats(
     // Calculate current month statistics
     const totalBatches = currentMonthData?.length || 0;
     // Recalculate total revenue including express delivery surcharges
+    // Use quantity_received to match invoice summary calculation (invoices are based on what was received, not sent)
     const totalRevenue = currentMonthData?.reduce((sum: number, batch: BatchWithItems) => {
       const items = batch.items || [];
       const batchTotal = items.reduce((itemSum: number, item: any) => {
-        const baseAmount = item.quantity_sent * (item.price_per_item || 0);
-        const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
+        const qtyReceived = item.quantity_received || 0;
+        const price = item.price_per_item || 0;
+        const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const baseAmount = lineTotal;
+        const surcharge = (item.express_delivery ? Math.round(lineTotal * 0.5 * 100) / 100 : 0);
         return itemSum + baseAmount + surcharge;
       }, 0);
-      return sum + batchTotal;
+      return sum + Math.round(batchTotal * 100) / 100;
     }, 0) || 0;
     const totalItemsProcessed = currentMonthData?.reduce((sum: number, batch: BatchWithItems) => 
       sum + (batch.items?.reduce((itemSum: number, item) => itemSum + item.quantity_received, 0) || 0), 0) || 0;
