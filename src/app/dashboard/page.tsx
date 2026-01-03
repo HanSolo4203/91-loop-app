@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import Navigation from '@/components/navigation';
 import MetricCard from '@/components/dashboard/metric-card';
@@ -21,16 +21,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { BatchStatus } from '@/types/database';
-import { shouldRefreshDashboard } from '@/lib/utils';
-
-type MetricsSummary = {
-  totalBatches: number;
-  totalRevenue: number;
-  totalItemsProcessed: number;
-  averageBatchValue: number;
-  completedBatches: number;
-  discrepancyCount: number;
-};
+import { useDashboardStats } from '@/lib/hooks/use-dashboard-stats';
+import { useBatches } from '@/lib/hooks/use-batches';
+import { useQueryClient } from '@tanstack/react-query';
 
 type DashboardMetrics = {
   totalBatches: number;
@@ -64,283 +57,109 @@ function Breadcrumb() {
 
 // Main dashboard content
 function DashboardContent() {
+  const queryClient = useQueryClient();
   const [selectedMonth, setSelectedMonth] = useState<{ month: number | null; year: number }>({
     month: new Date().getMonth(), // Current month (0-based index)
     year: new Date().getFullYear() // Current year
   });
 
-  const [metrics, setMetrics] = useState<DashboardMetrics>({
-    totalBatches: 0,
-    totalRevenue: 0,
-    totalItems: 0,
-    avgBatchValue: 0,
-    completedBatches: 0,
-    discrepancies: 0
+  const isYearlyView = selectedMonth.month === null;
+  
+  // Prepare query parameters
+  const statsParams = useMemo(() => {
+    if (isYearlyView) {
+      return {
+        year: String(selectedMonth.year),
+        type: 'yearly' as const
+      };
+    } else {
+      const monthNum = selectedMonth.month! + 1; // Convert to 1-indexed
+      return {
+        month: `${selectedMonth.year}-${String(monthNum).padStart(2, '0')}`,
+        type: 'monthly' as const
+      };
+    }
+  }, [selectedMonth, isYearlyView]);
+
+  const dateRange = useMemo(() => {
+    if (isYearlyView) {
+      return {
+        date_from: `${selectedMonth.year}-01-01`,
+        date_to: `${selectedMonth.year}-12-31`
+      };
+    } else {
+      const monthNum = selectedMonth.month! + 1;
+      const lastDayOfMonth = new Date(selectedMonth.year, selectedMonth.month! + 1, 0).getDate();
+      return {
+        date_from: `${selectedMonth.year}-${String(monthNum).padStart(2, '0')}-01`,
+        date_to: `${selectedMonth.year}-${String(monthNum).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`
+      };
+    }
+  }, [selectedMonth, isYearlyView]);
+
+  // Use React Query hooks for data fetching with caching
+  const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats(statsParams);
+  const { data: batchesData, isLoading: batchesLoading, error: batchesError, refetch: refetchBatches } = useBatches({
+    limit: 200,
+    ...dateRange
   });
 
-  const [batches, setBatches] = useState<DashboardBatch[]>([]);
+  const loading = statsLoading || batchesLoading;
+  const error = statsError || batchesError;
 
-  // Simple loading and error states
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch dashboard data
-  const fetchDashboardData = useCallback(async (month: number | null, year: number) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const isYearlyView = month === null;
-      let startDate: string;
-      let endDate: string;
-      let batchesResponse: Response | null = null;
-      let parsedBatchesResult: any = null;
-
-      let metricsSummary: MetricsSummary = {
+  // Transform metrics data
+  const metrics = useMemo<DashboardMetrics>(() => {
+    if (!statsData?.success || !statsData.data) {
+      return {
         totalBatches: 0,
         totalRevenue: 0,
-        totalItemsProcessed: 0,
-        averageBatchValue: 0,
+        totalItems: 0,
+        avgBatchValue: 0,
         completedBatches: 0,
-        discrepancyCount: 0
+        discrepancies: 0
       };
-
-      if (isYearlyView) {
-        startDate = `${year}-01-01`;
-        endDate = `${year}-12-31`;
-
-        const monthlyRequests = Array.from({ length: 12 }, (_, index) => {
-          const formattedMonth = `${year}-${String(index + 1).padStart(2, '0')}`;
-          return fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`);
-        });
-
-        const monthResponses = await Promise.all(monthlyRequests);
-        if (monthResponses.some((response) => !response.ok)) {
-          throw new Error('Failed to fetch yearly dashboard data from server');
-        }
-
-        const monthPayloads = await Promise.all(monthResponses.map((response) => response.json()));
-        monthPayloads.forEach((payload, index) => {
-          if (!payload.success) {
-            throw new Error(payload.error || `Failed to fetch metrics for month ${index + 1}`);
-          }
-        });
-
-        const aggregated = monthPayloads.reduce(
-          (acc: Omit<MetricsSummary, 'averageBatchValue'>, payload) => {
-            if (!payload.data) {
-              return acc;
-            }
-
-            return {
-              totalBatches: acc.totalBatches + (payload.data.totalBatches || 0),
-              totalRevenue: acc.totalRevenue + (payload.data.totalRevenue || 0),
-              totalItemsProcessed: acc.totalItemsProcessed + (payload.data.totalItemsProcessed || 0),
-              completedBatches: acc.completedBatches + (payload.data.completedBatches || 0),
-              discrepancyCount: acc.discrepancyCount + (payload.data.discrepancyCount || 0)
-            };
-          },
-          {
-            totalBatches: 0,
-            totalRevenue: 0,
-            totalItemsProcessed: 0,
-            completedBatches: 0,
-            discrepancyCount: 0
-          }
-        );
-
-        metricsSummary = {
-          ...aggregated,
-          averageBatchValue:
-            aggregated.totalBatches > 0
-              ? aggregated.totalRevenue / aggregated.totalBatches
-              : 0
-        };
-
-        batchesResponse = await fetch(
-          `/api/dashboard/batches?limit=200&date_from=${startDate}&date_to=${endDate}`
-        );
-      } else {
-        // month is 0-indexed (0 = January, 11 = December)
-        const monthNum = month + 1; // Convert to 1-indexed for date strings
-        const formattedMonth = `${year}-${String(monthNum).padStart(2, '0')}`;
-        startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
-        // Get last day of the month without timezone issues
-        const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-        endDate = `${year}-${String(monthNum).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
-
-        const [metricsResponse, batchesFetchResponse] = await Promise.all([
-          fetch(`/api/dashboard/stats?month=${formattedMonth}&type=monthly`),
-          fetch(`/api/dashboard/batches?limit=200&date_from=${startDate}&date_to=${endDate}`)
-        ]);
-
-        if (!metricsResponse.ok || !batchesFetchResponse.ok) {
-          const metricsText = await metricsResponse.text().catch(() => '');
-          const batchesText = await batchesFetchResponse.text().catch(() => '');
-          console.error('Dashboard fetch error:', {
-            metricsStatus: metricsResponse.status,
-            metricsText,
-            batchesStatus: batchesFetchResponse.status,
-            batchesText
-          });
-          throw new Error(`Failed to fetch dashboard data: ${metricsResponse.status} / ${batchesFetchResponse.status}`);
-        }
-
-        const metricsResult = await metricsResponse.json();
-
-        if (!metricsResult.success) {
-          throw new Error(metricsResult.error || 'Failed to fetch metrics');
-        }
-
-        // Parse the batches response and store it to avoid consuming the body twice
-        parsedBatchesResult = await batchesFetchResponse.json();
-        if (!parsedBatchesResult.success) {
-          console.error('Batches fetch error:', parsedBatchesResult.error);
-          throw new Error(parsedBatchesResult.error || 'Failed to fetch batches');
-        }
-
-        if (metricsResult.data) {
-          const data = metricsResult.data;
-          metricsSummary = {
-            totalBatches: data.totalBatches || 0,
-            totalRevenue: data.totalRevenue || 0,
-            totalItemsProcessed: data.totalItemsProcessed || 0,
-            averageBatchValue: data.averageBatchValue || 0,
-            completedBatches: data.completedBatches || 0,
-            discrepancyCount: data.discrepancyCount || 0
-          };
-        }
-
-        batchesResponse = batchesFetchResponse;
-      }
-
-      // For yearly view, we still need to parse the response
-      // For monthly view, we already parsed it above
-      let batchesResult;
-      if (parsedBatchesResult) {
-        batchesResult = parsedBatchesResult;
-      } else {
-        if (!batchesResponse || !batchesResponse.ok) {
-          const batchesText = await batchesResponse?.text().catch(() => '');
-          console.error('Batches response error:', {
-            status: batchesResponse?.status,
-            text: batchesText
-          });
-          throw new Error(`Failed to fetch batches: ${batchesResponse?.status || 'unknown'}`);
-        }
-        batchesResult = await batchesResponse.json();
-      }
-      if (!batchesResult.success) {
-        console.error('Batches result error:', batchesResult.error);
-        throw new Error(batchesResult.error || 'Failed to fetch batches');
-      }
-
-      setMetrics({
-        totalBatches: metricsSummary.totalBatches,
-        totalRevenue: metricsSummary.totalRevenue,
-        totalItems: metricsSummary.totalItemsProcessed,
-        avgBatchValue: metricsSummary.averageBatchValue,
-        completedBatches: metricsSummary.completedBatches,
-        discrepancies: metricsSummary.discrepancyCount
-      });
-
-      if (batchesResult.data) {
-        const transformedBatches =
-          batchesResult.data.batches?.map(
-            (batch: {
-              id: string;
-              paper_batch_id: string;
-              client_name: string;
-              pickup_date: string;
-              status: string;
-              total_amount: number;
-              created_at: string;
-            }) => ({
-              id: batch.id,
-              paper_batch_id: batch.paper_batch_id,
-              client: {
-                name: batch.client_name
-              },
-              pickup_date: batch.pickup_date,
-              status: batch.status as BatchStatus,
-              total_amount: batch.total_amount,
-              created_at: batch.created_at
-            })
-          ) || [];
-
-        setBatches(transformedBatches);
-      }
-    } catch (err) {
-      console.error('❌ Error fetching dashboard data:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Load data on mount and when month changes
-  useEffect(() => {
-    fetchDashboardData(selectedMonth.month, selectedMonth.year);
-  }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
-
-  // Check if dashboard needs refresh when component mounts or becomes visible
-  useEffect(() => {
-    // Check immediately on mount
-    if (shouldRefreshDashboard()) {
-      fetchDashboardData(selectedMonth.month, selectedMonth.year);
-    }
-  }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
-
-  // Refresh dashboard when window gains focus (e.g., returning from batch creation)
-  useEffect(() => {
-    const handleFocus = () => {
-      // Check if dashboard was marked for refresh (e.g., after batch update)
-      if (shouldRefreshDashboard()) {
-        fetchDashboardData(selectedMonth.month, selectedMonth.year);
-        return;
-      }
-
-      // Otherwise, check if we should refresh based on time
-      const lastRefresh = sessionStorage.getItem('dashboardLastRefresh');
-      const now = Date.now();
-      // Refresh if it's been more than 5 seconds since last refresh
-      if (!lastRefresh || now - parseInt(lastRefresh, 10) > 5000) {
-        fetchDashboardData(selectedMonth.month, selectedMonth.year);
-        sessionStorage.setItem('dashboardLastRefresh', now.toString());
-      }
-    };
-
-    // Refresh on visibility change (when tab becomes visible)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        handleFocus();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Also refresh if URL has refresh parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('refresh') === 'true') {
-      fetchDashboardData(selectedMonth.month, selectedMonth.year);
-      // Remove the parameter from URL
-      window.history.replaceState({}, '', window.location.pathname);
     }
 
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    const data = statsData.data as any;
+    return {
+      totalBatches: data.totalBatches || 0,
+      totalRevenue: data.totalRevenue || 0,
+      totalItems: data.totalItemsProcessed || 0,
+      avgBatchValue: data.averageBatchValue || 0,
+      completedBatches: data.completedBatches || 0,
+      discrepancies: data.discrepancyCount || 0
     };
-  }, [fetchDashboardData, selectedMonth.month, selectedMonth.year]);
+  }, [statsData]);
+
+  // Transform batches data
+  const batches = useMemo<DashboardBatch[]>(() => {
+    if (!batchesData?.success || !batchesData.data?.batches) {
+      return [];
+    }
+
+    return batchesData.data.batches.map((batch) => ({
+      id: batch.id,
+      paper_batch_id: batch.paper_batch_id,
+      client: {
+        name: batch.client_name
+      },
+      pickup_date: batch.pickup_date,
+      status: batch.status as BatchStatus,
+      total_amount: batch.total_amount,
+      created_at: batch.created_at
+    }));
+  }, [batchesData]);
+
+  // Handle refresh
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['batches'] });
+    refetchStats();
+    refetchBatches();
+  };
   
   const handleMonthChange = (month: number | null, year: number) => {
     setSelectedMonth({ month, year });
-  };
-
-  const handleRefresh = () => {
-    setError(null);
-    fetchDashboardData(selectedMonth.month, selectedMonth.year);
   };
 
   const handleBatchClick = (batch: { id: string }) => {
@@ -349,7 +168,9 @@ function DashboardContent() {
   };
 
   // Show error state if there's an error
-  if (error) {
+  const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : 'Something went wrong while loading the dashboard data.');
+  
+  if (error && !loading) {
     return (
       <div className="min-h-screen bg-slate-50">
         <Navigation />
@@ -358,7 +179,7 @@ function DashboardContent() {
           <EmptyState
             icon={<AlertTriangle className="w-full h-full" />}
             title="Failed to load dashboard"
-            description={error || 'Something went wrong while loading the dashboard data.'}
+            description={errorMessage}
             action={{
               label: 'Try Again',
               onClick: handleRefresh

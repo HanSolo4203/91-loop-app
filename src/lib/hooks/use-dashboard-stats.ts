@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 interface DashboardStatsParams {
   month?: string | null;
   year?: string | null;
-  type?: 'overview' | 'monthly' | 'revenue' | 'clients' | 'discrepancies';
+  type?: 'overview' | 'monthly' | 'yearly' | 'revenue' | 'clients' | 'discrepancies';
 }
 
 interface DashboardStatsResponse {
