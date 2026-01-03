@@ -5,7 +5,8 @@ import {
   getRevenueByMonth, 
   getTopClients, 
   getDiscrepancyReport,
-  getDashboardOverview
+  getDashboardOverview,
+  getYearlyStats
 } from '@/lib/services/analytics';
 import type { 
   AnalyticsServiceResponse 
@@ -33,6 +34,9 @@ export async function GET(request: NextRequest) {
       case 'monthly':
         return handleMonthlyRequest(month, year);
       
+      case 'yearly':
+        return handleYearlyRequest(year);
+      
       case 'revenue':
         return handleRevenueRequest(year);
       
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
     return cachedJsonResponse(
       {
         success: false,
-        error: 'Invalid type parameter. Must be one of: overview, monthly, revenue, clients, discrepancies',
+        error: 'Invalid type parameter. Must be one of: overview, monthly, yearly, revenue, clients, discrepancies',
         data: null,
       } as AnalyticsServiceResponse<null>,
       'noCache',
@@ -103,6 +107,63 @@ async function handleOverviewRequest() {
       } as AnalyticsServiceResponse<null>,
       'noCache',
       500
+    );
+  }
+}
+
+// Handle yearly statistics request
+async function handleYearlyRequest(year: string | null) {
+  try {
+    let targetYear: number;
+
+    if (year) {
+      targetYear = parseInt(year, 10);
+      if (isNaN(targetYear)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid year format',
+            data: null,
+          } as AnalyticsServiceResponse<null>,
+          { status: 400 }
+        );
+      }
+    } else {
+      // Use current year
+      targetYear = new Date().getFullYear();
+    }
+
+    const result = await getYearlyStats(targetYear);
+    
+    if (!result.success) {
+      return cachedJsonResponse(
+        {
+          success: false,
+          error: result.error,
+          data: null,
+        } as AnalyticsServiceResponse<null>,
+        'noCache',
+        500
+      );
+    }
+
+    return cachedJsonResponse(
+      {
+        success: true,
+        error: null,
+        data: result.data,
+      } as AnalyticsServiceResponse<any>,
+      'dynamic' // Stats change frequently
+    );
+  } catch (error) {
+    console.error('Yearly request error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to fetch yearly statistics',
+        data: null,
+      } as AnalyticsServiceResponse<null>,
+      { status: 500 }
     );
   }
 }

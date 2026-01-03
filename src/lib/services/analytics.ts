@@ -750,6 +750,119 @@ export async function getMonthlyStats(
 }
 
 /**
+ * Get yearly statistics aggregated from all months
+ * @param year - Year for statistics
+ * @returns Promise<AnalyticsServiceResponse<{ totalBatches: number; totalRevenue: number; totalItemsProcessed: number; averageBatchValue: number; completedBatches: number; discrepancyCount: number }>>
+ */
+export async function getYearlyStats(
+  year: number
+): Promise<AnalyticsServiceResponse<{
+  totalBatches: number;
+  totalRevenue: number;
+  totalItemsProcessed: number;
+  averageBatchValue: number;
+  completedBatches: number;
+  discrepancyCount: number;
+}>> {
+  try {
+    // Validate input
+    if (year < 2020 || year > 2030) {
+      throw new AnalyticsServiceError(
+        'Year must be between 2020 and 2030',
+        'INVALID_YEAR',
+        400
+      );
+    }
+
+    const formatDate = (y: number, m: number, d: number): string => {
+      const monthStr = String(m).padStart(2, '0');
+      const dayStr = String(d).padStart(2, '0');
+      return `${y}-${monthStr}-${dayStr}`;
+    };
+
+    const startDate = formatDate(year, 1, 1);
+    const endDate = formatDate(year, 12, 31);
+
+    // Get all batches for the year in a single query
+    const { data: yearData, error } = await supabaseAdmin
+      .from('batches')
+      .select(`
+        id,
+        total_amount,
+        status,
+        has_discrepancy,
+        items:batch_items(
+          quantity_sent,
+          quantity_received,
+          price_per_item,
+          express_delivery
+        )
+      `)
+      .gte('pickup_date', startDate)
+      .lte('pickup_date', endDate) as any;
+
+    if (error) {
+      throw new AnalyticsServiceError(
+        `Failed to fetch yearly data: ${error.message}`,
+        'FETCH_YEARLY_ERROR',
+        500
+      );
+    }
+
+    // Calculate aggregated statistics
+    const totalBatches = yearData?.length || 0;
+    
+    // Recalculate total revenue including express delivery surcharges
+    const totalRevenue = yearData?.reduce((sum: number, batch: BatchWithItems) => {
+      const items = batch.items || [];
+      const batchTotal = items.reduce((itemSum: number, item: any) => {
+        const qtyReceived = item.quantity_received || 0;
+        const price = item.price_per_item || 0;
+        const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const baseAmount = lineTotal;
+        const surcharge = (item.express_delivery ? Math.round(lineTotal * 0.5 * 100) / 100 : 0);
+        return itemSum + baseAmount + surcharge;
+      }, 0);
+      return sum + Math.round(batchTotal * 100) / 100;
+    }, 0) || 0;
+    
+    const totalItemsProcessed = yearData?.reduce((sum: number, batch: BatchWithItems) => 
+      sum + (batch.items?.reduce((itemSum: number, item) => itemSum + (item.quantity_received || 0), 0) || 0), 0) || 0;
+    
+    const averageBatchValue = totalBatches > 0 ? totalRevenue / totalBatches : 0;
+    const completedBatches = yearData?.filter((batch: BatchWithItems) => batch.status === 'delivered').length || 0;
+    const discrepancyCount = yearData?.filter((batch: BatchWithItems) => batch.has_discrepancy).length || 0;
+
+    return {
+      data: {
+        totalBatches,
+        totalRevenue,
+        totalItemsProcessed,
+        averageBatchValue,
+        completedBatches,
+        discrepancyCount
+      },
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    if (error instanceof AnalyticsServiceError) {
+      return {
+        data: null,
+        error: error.message,
+        success: false,
+      };
+    }
+
+    return {
+      data: null,
+      error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      success: false,
+    };
+  }
+}
+
+/**
  * Get recent batches with pagination
  * @param limit - Number of batches to return
  * @param offset - Number of batches to skip
