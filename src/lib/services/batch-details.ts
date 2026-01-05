@@ -178,11 +178,19 @@ export async function getBatchById(
       };
     }) || [];
 
-    // Calculate financial summary (including express delivery surcharges)
+    // Calculate financial summary (including express delivery surcharges AND discrepancy adjustments)
+    // This must match the invoice calculation exactly:
+    // 1. Subtotal (Received) = quantity_received * price
+    // 2. Discrepancy Adjustment = (quantity_received - quantity_sent) * price
+    // 3. Express Delivery = (lineTotal * 0.5) if express_delivery
+    // 4. Total = Subtotal + Discrepancy Adjustment + Express Delivery
     const totalAmount = itemsWithDetails.reduce((sum, item) => {
-      const baseAmount = item.pricing.total_received_value;
-      const surcharge = (item.express_delivery ? baseAmount * 0.5 : 0);
-      return sum + baseAmount + surcharge;
+      const baseAmount = item.pricing.total_received_value; // quantity_received * price
+      // discrepancy_value is (sent - received) * price, but invoice uses (received - sent) * price
+      // So we negate it to match invoice calculation
+      const discrepancyAdjustment = -item.pricing.discrepancy_value;
+      const surcharge = (item.express_delivery ? Math.round(baseAmount * 0.5 * 100) / 100 : 0);
+      return Math.round((sum + baseAmount + discrepancyAdjustment + surcharge) * 100) / 100;
     }, 0);
     const totalItemsSent = itemsWithDetails.reduce((sum, item) => sum + item.quantity_sent, 0);
     const totalItemsReceived = itemsWithDetails.reduce((sum, item) => sum + item.quantity_received, 0);
