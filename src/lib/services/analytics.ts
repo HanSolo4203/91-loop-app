@@ -431,22 +431,22 @@ async function getInvoiceSummaryByPeriod(
 
       const itemsCount = (batch.items || []).reduce((sum: number, it: any) => sum + (it.quantity_received || 0), 0);
 
-      // Recalculate batch total matching invoice summary page calculation exactly:
-      // The invoice summary page calculates totals WITHOUT discrepancy adjustments:
-      // 1. Subtotal (Received) = quantity_received * price
-      // 2. Express Delivery = (lineTotal * 0.5) if express_delivery
-      // 3. Batch Subtotal = Subtotal + Express Delivery
-      // Note: VAT is calculated at the summary level, so we return the batch subtotal (before VAT)
-      // Note: Discrepancy adjustments are NOT included in summary totals (only in individual invoice pages)
+      // Match invoice/PDF: Subtotal (Received) + Discrepancy Adjustment + Express Delivery
+      // VAT is calculated at the summary level, so we return the batch subtotal (before VAT)
       const items = batch.items || [];
       let batchSubtotalBase = 0;
+      let batchDiscrepancyValue = 0;
       let batchExpressDelivery = 0;
       
       items.forEach((item: any) => {
         const qtyReceived = item.quantity_received || 0;
+        const qtySent = item.quantity_sent || 0;
         const price = item.price_per_item || 0;
         const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const discrepancy = qtyReceived - qtySent;
+        const discrepancyValue = Math.round(discrepancy * price * 100) / 100;
         batchSubtotalBase += lineTotal;
+        batchDiscrepancyValue += discrepancyValue;
         
         if (item.express_delivery) {
           const surcharge = Math.round(lineTotal * 0.5 * 100) / 100;
@@ -454,7 +454,7 @@ async function getInvoiceSummaryByPeriod(
         }
       });
       
-      const batchTotal = Math.round((batchSubtotalBase + batchExpressDelivery) * 100) / 100;
+      const batchTotal = Math.round((batchSubtotalBase + batchDiscrepancyValue + batchExpressDelivery) * 100) / 100;
       
       summaryMap.set(clientId, {
         client_id: clientId,

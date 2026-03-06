@@ -498,6 +498,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate totals
+    let totalSubtotalBase = 0;
+    let totalDiscrepancy = 0;
     let totalSubtotal = 0;
     let totalExpressDelivery = 0;
     let totalVat = 0;
@@ -546,16 +548,21 @@ export async function GET(request: NextRequest) {
         addNewPage();
       }
 
-      // Calculate batch subtotal including express delivery surcharges
+      // Calculate batch subtotal including discrepancy adjustment and express delivery surcharges
       const items = batch.items || [];
       let batchSubtotalBase = 0;
+      let batchDiscrepancyValue = 0;
       let batchExpressDelivery = 0;
       
       items.forEach((item: any) => {
         const qtyReceived = item.quantity_received || 0;
+        const qtySent = item.quantity_sent || 0;
         const price = item.price_per_item || 0;
         const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const discrepancy = qtyReceived - qtySent;
+        const discrepancyValue = Math.round(discrepancy * price * 100) / 100;
         batchSubtotalBase += lineTotal;
+        batchDiscrepancyValue += discrepancyValue;
         
         if (item.express_delivery) {
           const surcharge = Math.round(lineTotal * 0.5 * 100) / 100;
@@ -563,10 +570,12 @@ export async function GET(request: NextRequest) {
         }
       });
       
-      const batchSubtotal = Math.round((batchSubtotalBase + batchExpressDelivery) * 100) / 100;
+      const batchSubtotal = Math.round((batchSubtotalBase + batchDiscrepancyValue + batchExpressDelivery) * 100) / 100;
       const batchVat = Math.round(batchSubtotal * 0.15 * 100) / 100;
       const batchTotal = Math.round((batchSubtotal + batchVat) * 100) / 100;
 
+      totalSubtotalBase += batchSubtotalBase;
+      totalDiscrepancy += batchDiscrepancyValue;
       totalSubtotal += batchSubtotal;
       totalExpressDelivery += batchExpressDelivery;
       totalVat += batchVat;
@@ -633,10 +642,16 @@ export async function GET(request: NextRequest) {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    const totalSubtotalBase = totalSubtotal - totalExpressDelivery;
     doc.text('Total Subtotal (base):', tableStartX, currentY);
     doc.text(formatCurrency(totalSubtotalBase), totalsRightAlign - 2, currentY, { align: 'right' });
     currentY += 8;
+
+    if (totalDiscrepancy !== 0) {
+      doc.text('Total Discrepancy Adjustment:', tableStartX, currentY);
+      const discText = totalDiscrepancy > 0 ? `+${formatCurrency(totalDiscrepancy)}` : formatCurrency(totalDiscrepancy);
+      doc.text(discText, totalsRightAlign - 2, currentY, { align: 'right' });
+      currentY += 8;
+    }
 
     if (totalExpressDelivery > 0) {
       doc.text('Total Express Delivery:', tableStartX, currentY);
