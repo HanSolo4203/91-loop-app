@@ -1,6 +1,36 @@
 // RSL Express Linen Category Pricing
 // This matches the pricing from the linen_categories table in the database
 
+// RSL Express wash-cycle pricing (per wash, ZAR) for 91 Loop Hostel workflow
+export const RSL_WASH_PRICING: { [key: string]: number } = {
+  'Bed Sheets': 12.50,
+  'Bed Sheet': 12.50,
+  'Duvet Covers': 18.00,
+  'Duvet Cover': 18.00,
+  'Pillow Cases': 6.50,
+  'Pillow Case': 6.50,
+  // Map specific subcategories
+  'Fitted Sheet - 3/4': 12.50,
+  'Fitted Sheet - Cot': 12.50,
+  'Fitted Sheet - Double': 12.50,
+  'Fitted Sheet - King': 12.50,
+  'Fitted Sheet - Queen': 12.50,
+  'Fitted Sheet - Single': 12.50,
+  'Flat Sheet - 3/4': 12.50,
+  'Flat Sheet - Cot': 12.50,
+  'Flat Sheet - Double': 12.50,
+  'Flat Sheet - King': 12.50,
+  'Flat Sheet - Queen': 12.50,
+  'Flat Sheet - Single': 12.50,
+  'Duvet Covers - Cot': 18.00,
+  'Duvet Covers - Double': 18.00,
+  'Duvet Covers - King': 18.00,
+  'Duvet Covers - Queen': 18.00,
+  'Duvet Covers - Single': 18.00,
+  'Pillow Cases - Continental (Square)': 6.50,
+  'Pillow Cases - Standard': 6.50,
+};
+
 export const LINEN_CATEGORY_PRICING: { [key: string]: number } = {
   // Front of House
   'Napkins': 2.73,
@@ -128,9 +158,21 @@ export function getCategoryPrice(categoryName: string): number {
   return 10.00;
 }
 
+/** Get price per wash (ZAR) for RSL Express laundry workflow. Uses RSL_WASH_PRICING, then LINEN_CATEGORY_PRICING. */
+export function getPricePerWash(categoryName: string): number {
+  if (!categoryName) return 10.00;
+  if (RSL_WASH_PRICING[categoryName] != null) return RSL_WASH_PRICING[categoryName];
+  const normalized = categoryName.toLowerCase().trim();
+  for (const [key, value] of Object.entries(RSL_WASH_PRICING)) {
+    if (key.toLowerCase() === normalized) return value;
+  }
+  return getCategoryPrice(categoryName);
+}
+
 // Helper function to format price in Rands
 export function formatPrice(price: number): string {
-  return `R${price.toFixed(2)}`;
+  const value = typeof price === 'number' && !Number.isNaN(price) ? price : 0;
+  return `R${value.toFixed(2)}`;
 }
 
 // Get all available categories

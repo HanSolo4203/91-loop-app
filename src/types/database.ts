@@ -39,6 +39,7 @@ export interface Database {
           id: string;
           name: string;
           price_per_item: number;
+          price_per_wash?: number | null;
           is_active: boolean;
           section: string | null;
           created_at: string;
@@ -48,6 +49,7 @@ export interface Database {
           id?: string;
           name: string;
           price_per_item?: number;
+          price_per_wash?: number | null;
           is_active?: boolean;
           section?: string | null;
           created_at?: string;
@@ -57,6 +59,7 @@ export interface Database {
           id?: string;
           name?: string;
           price_per_item?: number;
+          price_per_wash?: number | null;
           is_active?: boolean;
           section?: string | null;
           created_at?: string;
@@ -292,6 +295,312 @@ export interface Database {
         Relationships: [];
       };
 
+      // Staff: employees table
+      employees: {
+        Row: {
+          id: string;
+          full_name: string;
+          phone: string | null;
+          email: string | null;
+          role: string | null;
+          shift_type: 'day' | 'night' | 'both';
+          bi_weekly_salary: number;
+          bank_name: string | null;
+          bank_account_number: string | null;
+          bank_branch_code: string | null;
+          account_type: 'cheque' | 'savings' | null;
+          id_number: string | null;
+          id_document_url: string | null;
+          status: 'active' | 'inactive';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          full_name: string;
+          phone?: string | null;
+          email?: string | null;
+          role?: string | null;
+          shift_type: 'day' | 'night' | 'both';
+          bi_weekly_salary?: number;
+          bank_name?: string | null;
+          bank_account_number?: string | null;
+          bank_branch_code?: string | null;
+          account_type?: 'cheque' | 'savings' | null;
+          id_number?: string | null;
+          id_document_url?: string | null;
+          status?: 'active' | 'inactive';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          full_name?: string;
+          phone?: string | null;
+          email?: string | null;
+          role?: string | null;
+          shift_type?: 'day' | 'night' | 'both';
+          bi_weekly_salary?: number;
+          bank_name?: string | null;
+          bank_account_number?: string | null;
+          bank_branch_code?: string | null;
+          account_type?: 'cheque' | 'savings' | null;
+          id_number?: string | null;
+          id_document_url?: string | null;
+          status?: 'active' | 'inactive';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // Staff: shift_schedule table
+      shift_schedule: {
+        Row: {
+          id: string;
+          employee_id: string;
+          day_of_week: number;
+          shift_type: 'day' | 'night';
+          is_default: boolean;
+          week_start_date: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          day_of_week: number;
+          shift_type: 'day' | 'night';
+          is_default?: boolean;
+          week_start_date?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_id?: string;
+          day_of_week?: number;
+          shift_type?: 'day' | 'night';
+          is_default?: boolean;
+          week_start_date?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'shift_schedule_employee_id_fkey';
+            columns: ['employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
+      // Staff: absences table
+      absences: {
+        Row: {
+          id: string;
+          employee_id: string;
+          absence_date: string;
+          shift_type: 'day' | 'night';
+          cover_employee_id: string | null;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          absence_date: string;
+          shift_type: 'day' | 'night';
+          cover_employee_id?: string | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_id?: string;
+          absence_date?: string;
+          shift_type?: 'day' | 'night';
+          cover_employee_id?: string | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'absences_employee_id_fkey';
+            columns: ['employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'absences_cover_employee_id_fkey';
+            columns: ['cover_employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
+      // Staff: payroll_runs table
+      payroll_runs: {
+        Row: {
+          id: string;
+          period_start: string;
+          period_end: string;
+          status: 'draft' | 'approved' | 'paid';
+          total_amount: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          period_start: string;
+          period_end: string;
+          status?: 'draft' | 'approved' | 'paid';
+          total_amount?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          period_start?: string;
+          period_end?: string;
+          status?: 'draft' | 'approved' | 'paid';
+          total_amount?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // Staff: payroll_entries table
+      payroll_entries: {
+        Row: {
+          id: string;
+          payroll_run_id: string;
+          employee_id: string;
+          bi_weekly_salary: number;
+          deductions: number;
+          net_pay: number;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          payroll_run_id: string;
+          employee_id: string;
+          bi_weekly_salary?: number;
+          deductions?: number;
+          net_pay?: number;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          payroll_run_id?: string;
+          employee_id?: string;
+          bi_weekly_salary?: number;
+          deductions?: number;
+          net_pay?: number;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'payroll_entries_payroll_run_id_fkey';
+            columns: ['payroll_run_id'];
+            referencedRelation: 'payroll_runs';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'payroll_entries_employee_id_fkey';
+            columns: ['employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
+      // RFID Invoices table
+      rfid_invoices: {
+        Row: {
+          id: string;
+          invoice_number: string;
+          location: string;
+          generated_by: string | null;
+          period_date: string;
+          total_items: number;
+          subtotal: number;
+          vat_amount: number;
+          grand_total: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_number: string;
+          location: string;
+          generated_by?: string | null;
+          period_date?: string;
+          total_items?: number;
+          subtotal?: number;
+          vat_amount?: number;
+          grand_total?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          invoice_number?: string;
+          location?: string;
+          generated_by?: string | null;
+          period_date?: string;
+          total_items?: number;
+          subtotal?: number;
+          vat_amount?: number;
+          grand_total?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // RFID Invoice Items table
+      rfid_invoice_items: {
+        Row: {
+          id: string;
+          rfid_invoice_id: string;
+          rfid_number: string;
+          category: string;
+          qty_washed: number;
+          washes_remaining: number;
+          price_per_wash: number;
+          line_total: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          rfid_invoice_id: string;
+          rfid_number: string;
+          category: string;
+          qty_washed?: number;
+          washes_remaining?: number;
+          price_per_wash?: number;
+          line_total?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          rfid_invoice_id?: string;
+          rfid_number?: string;
+          category?: string;
+          qty_washed?: number;
+          washes_remaining?: number;
+          price_per_wash?: number;
+          line_total?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rfid_invoice_items_rfid_invoice_id_fkey';
+            columns: ['rfid_invoice_id'];
+            referencedRelation: 'rfid_invoices';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
       // RFID Data table
       rfid_data: {
         Row: {
@@ -343,6 +652,139 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [];
+      };
+
+      // RFID Items (RSL Express lifecycle tracking)
+      rfid_items: {
+        Row: {
+          id: string;
+          rfid_number: string;
+          category: string;
+          total_washes_lifetime: number;
+          washes_remaining: number;
+          status: 'active' | 'near_end' | 'retired';
+          last_seen: string | null;
+          location: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          rfid_number: string;
+          category: string;
+          total_washes_lifetime?: number;
+          washes_remaining?: number;
+          status?: 'active' | 'near_end' | 'retired';
+          last_seen?: string | null;
+          location?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          rfid_number?: string;
+          category?: string;
+          total_washes_lifetime?: number;
+          washes_remaining?: number;
+          status?: 'active' | 'near_end' | 'retired';
+          last_seen?: string | null;
+          location?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // RFID Batches
+      rfid_batches: {
+        Row: {
+          id: string;
+          batch_ref: string;
+          location: string;
+          scanned_by: string | null;
+          scan_date: string;
+          total_items: number;
+          total_washes: number;
+          subtotal: number;
+          vat_amount: number;
+          grand_total: number;
+          status: 'draft' | 'invoiced' | 'paid';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          batch_ref: string;
+          location: string;
+          scanned_by?: string | null;
+          scan_date?: string;
+          total_items?: number;
+          total_washes?: number;
+          subtotal?: number;
+          vat_amount?: number;
+          grand_total?: number;
+          status?: 'draft' | 'invoiced' | 'paid';
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          batch_ref?: string;
+          location?: string;
+          scanned_by?: string | null;
+          scan_date?: string;
+          total_items?: number;
+          total_washes?: number;
+          subtotal?: number;
+          vat_amount?: number;
+          grand_total?: number;
+          status?: 'draft' | 'invoiced' | 'paid';
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // RFID Batch Items
+      rfid_batch_items: {
+        Row: {
+          id: string;
+          batch_id: string;
+          rfid_number: string;
+          category: string;
+          qty_washed_this_batch: number;
+          washes_remaining_after: number;
+          price_per_wash: number;
+          line_total: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          batch_id: string;
+          rfid_number: string;
+          category: string;
+          qty_washed_this_batch?: number;
+          washes_remaining_after?: number;
+          price_per_wash?: number;
+          line_total?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          batch_id?: string;
+          rfid_number?: string;
+          category?: string;
+          qty_washed_this_batch?: number;
+          washes_remaining_after?: number;
+          price_per_wash?: number;
+          line_total?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rfid_batch_items_batch_id_fkey';
+            columns: ['batch_id'];
+            referencedRelation: 'rfid_batches';
+            referencedColumns: ['id'];
+          }
+        ];
       };
     };
 
@@ -514,7 +956,14 @@ export type ClientFavoriteCategory = Tables<'client_favorite_categories'>;
 export type BusinessSettings = Tables<'business_settings'>;
 export type Batch = Tables<'batches'>;
 export type BatchItem = Tables<'batch_items'>;
+export type RFIDInvoice = Tables<'rfid_invoices'>;
+export type RFIDInvoiceItem = Tables<'rfid_invoice_items'>;
 export type RFIDData = Tables<'rfid_data'>;
+export type Employee = Tables<'employees'>;
+export type ShiftSchedule = Tables<'shift_schedule'>;
+export type Absence = Tables<'absences'>;
+export type PayrollRun = Tables<'payroll_runs'>;
+export type PayrollEntry = Tables<'payroll_entries'>;
 
 // View types
 export type BatchReportView = Views<'batch_report_view'>;
@@ -527,7 +976,14 @@ export type ClientInsert = Database['public']['Tables']['clients']['Insert'];
 export type ClientFavoriteCategoryInsert = Database['public']['Tables']['client_favorite_categories']['Insert'];
 export type BatchInsert = Database['public']['Tables']['batches']['Insert'];
 export type BatchItemInsert = Database['public']['Tables']['batch_items']['Insert'];
+export type RFIDInvoiceInsert = Database['public']['Tables']['rfid_invoices']['Insert'];
+export type RFIDInvoiceItemInsert = Database['public']['Tables']['rfid_invoice_items']['Insert'];
 export type RFIDDataInsert = Database['public']['Tables']['rfid_data']['Insert'];
+export type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
+export type ShiftScheduleInsert = Database['public']['Tables']['shift_schedule']['Insert'];
+export type AbsenceInsert = Database['public']['Tables']['absences']['Insert'];
+export type PayrollRunInsert = Database['public']['Tables']['payroll_runs']['Insert'];
+export type PayrollEntryInsert = Database['public']['Tables']['payroll_entries']['Insert'];
 
 // Update types
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
@@ -536,7 +992,14 @@ export type ClientUpdate = Database['public']['Tables']['clients']['Update'];
 export type ClientFavoriteCategoryUpdate = Database['public']['Tables']['client_favorite_categories']['Update'];
 export type BatchUpdate = Database['public']['Tables']['batches']['Update'];
 export type BatchItemUpdate = Database['public']['Tables']['batch_items']['Update'];
+export type RFIDInvoiceUpdate = Database['public']['Tables']['rfid_invoices']['Update'];
+export type RFIDInvoiceItemUpdate = Database['public']['Tables']['rfid_invoice_items']['Update'];
 export type RFIDDataUpdate = Database['public']['Tables']['rfid_data']['Update'];
+export type EmployeeUpdate = Database['public']['Tables']['employees']['Update'];
+export type ShiftScheduleUpdate = Database['public']['Tables']['shift_schedule']['Update'];
+export type AbsenceUpdate = Database['public']['Tables']['absences']['Update'];
+export type PayrollRunUpdate = Database['public']['Tables']['payroll_runs']['Update'];
+export type PayrollEntryUpdate = Database['public']['Tables']['payroll_entries']['Update'];
 
 // Enum types
 export type BatchStatus = Enums<'batch_status'>;
@@ -575,6 +1038,26 @@ export interface LinenCategoryWithUsage extends LinenCategory {
   total_quantity_sent: number;
   total_quantity_received: number;
   total_revenue: number;
+}
+
+// Staff helper types
+export interface EmployeeWithSchedule extends Employee {
+  shift_schedule?: ShiftSchedule[];
+}
+
+export interface DayRoster {
+  dayOfWeek: number;
+  date: string;
+  day: Employee[];
+  night: Employee[];
+}
+
+export interface PayrollEntryWithEmployee extends PayrollEntry {
+  employee: Employee;
+}
+
+export interface PayrollRunWithEntries extends PayrollRun {
+  entries: PayrollEntryWithEmployee[];
 }
 
 // Utility types for form handling

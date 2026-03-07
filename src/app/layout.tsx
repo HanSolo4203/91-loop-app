@@ -4,6 +4,7 @@ import "./globals.css";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { QueryProvider } from "@/lib/providers/query-provider";
 import { RefreshTokenGuard } from "@/components/auth/refresh-token-guard";
+import { AuthProvider } from "@/components/auth/auth-provider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -42,9 +43,11 @@ export default function RootLayout({
         <ErrorBoundary>
           <RefreshTokenGuard />
           <QueryProvider>
-            <div className="min-h-screen flex flex-col">
-              {children}
-            </div>
+            <AuthProvider>
+              <div className="min-h-screen flex flex-col">
+                {children}
+              </div>
+            </AuthProvider>
           </QueryProvider>
         </ErrorBoundary>
       </body>

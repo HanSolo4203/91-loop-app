@@ -231,16 +231,19 @@ export default function ManualEntryForm({ onSave, isLoading = false }: ManualEnt
             <div className="space-y-2">
               <Label htmlFor="condition">Condition</Label>
               <Select
-                value={formData.condition || ''}
+                value={formData.condition || '__none__'}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, condition: value || null })
+                  setFormData({
+                    ...formData,
+                    condition: value === '__none__' ? null : value,
+                  })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select condition" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   {conditionOptions.map((condition) => (
                     <SelectItem key={condition} value={condition}>
                       {condition}

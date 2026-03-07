@@ -27,45 +27,50 @@ const existingBrowserClient = globalStore[SUPABASE_BROWSER_KEY] as ReturnType<
   typeof createClient<Database>
 > | undefined;
 
+function createBrowserClient() {
+  validateEnvVars();
+  return createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  });
+}
+
 export const supabase =
-  existingBrowserClient ||
-  createClient<Database>(
-    supabaseUrl || 'https://placeholder.supabase.co',
-    supabaseAnonKey || 'placeholder-key',
-    {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    }
-  );
+  existingBrowserClient ?? createBrowserClient();
 
 if (!existingBrowserClient) {
   globalStore[SUPABASE_BROWSER_KEY] = supabase;
 }
 
-// Create or reuse Supabase client for server-side usage (with service role key)
-const existingAdminClient = globalStore[SUPABASE_ADMIN_KEY] as ReturnType<
-  typeof createClient<Database>
-> | undefined;
-
-export const supabaseAdmin =
-  existingAdminClient ||
-  createClient<Database>(
-    supabaseUrl || 'https://placeholder.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-key',
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
-
-if (!existingAdminClient) {
-  globalStore[SUPABASE_ADMIN_KEY] = supabaseAdmin;
+// Create or reuse Supabase client for server-side usage (with service role key).
+// Lazy so the client is only created when first used (e.g. in API routes), not when
+// the module loads in the browser where SUPABASE_SERVICE_ROLE_KEY is not available.
+function createAdminClient(): ReturnType<typeof createClient<Database>> {
+  const cached = globalStore[SUPABASE_ADMIN_KEY] as ReturnType<typeof createClient<Database>> | undefined;
+  if (cached) return cached;
+  validateEnvVars();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+  }
+  const client = createClient<Database>(supabaseUrl!, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+  globalStore[SUPABASE_ADMIN_KEY] = client;
+  return client;
 }
+
+export const supabaseAdmin = new Proxy({} as ReturnType<typeof createClient<Database>>, {
+  get(_, prop) {
+    return (createAdminClient() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
 
 // Helper function to validate environment variables before making requests
 export const validateSupabaseConfig = () => {
