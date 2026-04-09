@@ -4,6 +4,8 @@ import { getInvoiceSummaryByMonth, getInvoiceSummaryByYear } from '@/lib/service
 import type { AnalyticsServiceResponse } from '@/lib/services/analytics';
 import { cachedJsonResponse } from '@/lib/utils/api-cache';
 
+export const maxDuration = 30;
+
 // GET /api/dashboard/reports?month=YYYY-MM
 export async function GET(request: NextRequest) {
   try {
@@ -55,10 +57,13 @@ export async function GET(request: NextRequest) {
       ? await getInvoiceSummaryByYear(targetYear)
       : await getInvoiceSummaryByMonth(targetYear, targetMonth as number);
     if (!result.success) {
+      console.error('GET /api/dashboard/reports service error:', result.error);
+      const message =
+        process.env.NODE_ENV === 'development' ? result.error : 'Internal server error';
       return NextResponse.json(
         {
           success: false,
-          error: result.error,
+          error: message,
           data: null,
         } as AnalyticsServiceResponse<null>,
         { status: 500 }
@@ -74,11 +79,12 @@ export async function GET(request: NextRequest) {
       'dynamic' // Reports change frequently
     );
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('GET /api/dashboard/reports error:', error);
     return cachedJsonResponse(
       {
         success: false,
-        error: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? message : 'Internal server error',
         data: null,
       } as AnalyticsServiceResponse<null>,
       'noCache',

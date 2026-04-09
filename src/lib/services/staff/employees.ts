@@ -19,6 +19,10 @@ export interface CreateEmployeeRequest {
   role?: string;
   shift_type: 'day' | 'night' | 'both';
   bi_weekly_salary?: number;
+  monthly_salary?: number;
+  salary_payment_day_1?: number;
+  salary_payment_day_2?: number;
+  bank_reference?: string;
   bank_name?: string;
   bank_account_number?: string;
   bank_branch_code?: string;
@@ -105,7 +109,11 @@ export async function createEmployee(
       email: payload.email?.trim() || null,
       role: payload.role?.trim() || null,
       shift_type: payload.shift_type,
-      bi_weekly_salary: payload.bi_weekly_salary ?? 0,
+      bi_weekly_salary: payload.monthly_salary != null ? payload.monthly_salary / 2 : (payload.bi_weekly_salary ?? 0),
+      monthly_salary: payload.monthly_salary ?? null,
+      salary_payment_day_1: payload.salary_payment_day_1 ?? 1,
+      salary_payment_day_2: payload.salary_payment_day_2 ?? 15,
+      bank_reference: payload.bank_reference?.trim() || null,
       bank_name: payload.bank_name?.trim() || null,
       bank_account_number: payload.bank_account_number?.trim() || null,
       bank_branch_code: payload.bank_branch_code?.trim() || null,
@@ -166,6 +174,13 @@ export async function updateEmployee(
     if (payload.role !== undefined) update.role = payload.role?.trim() || null;
     if (payload.shift_type !== undefined) update.shift_type = payload.shift_type;
     if (payload.bi_weekly_salary !== undefined) update.bi_weekly_salary = payload.bi_weekly_salary;
+    if (payload.monthly_salary !== undefined) {
+      update.monthly_salary = payload.monthly_salary;
+      update.bi_weekly_salary = payload.monthly_salary / 2;
+    }
+    if (payload.salary_payment_day_1 !== undefined) update.salary_payment_day_1 = payload.salary_payment_day_1;
+    if (payload.salary_payment_day_2 !== undefined) update.salary_payment_day_2 = payload.salary_payment_day_2;
+    if (payload.bank_reference !== undefined) update.bank_reference = payload.bank_reference?.trim() || null;
     if (payload.bank_name !== undefined) update.bank_name = payload.bank_name?.trim() || null;
     if (payload.bank_account_number !== undefined)
       update.bank_account_number = payload.bank_account_number?.trim() || null;

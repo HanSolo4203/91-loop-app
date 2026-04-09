@@ -9,6 +9,8 @@ export const dynamic = 'force-dynamic';
 // Revalidate every 60 seconds
 export const revalidate = 60;
 
+export const maxDuration = 30;
+
 // GET /api/dashboard/reports/pdf-stats?month=YYYY-MM
 export async function GET(request: NextRequest) {
   try {
@@ -61,10 +63,13 @@ export async function GET(request: NextRequest) {
       ? await getInvoiceSummaryByYear(targetYear)
       : await getInvoiceSummaryByMonth(targetYear, targetMonth as number);
     if (!summaryResult.success) {
+      console.error('GET /api/dashboard/reports/pdf-stats summary error:', summaryResult.error);
+      const message =
+        process.env.NODE_ENV === 'development' ? summaryResult.error : 'Internal server error';
       return cachedJsonResponse(
         {
           success: false,
-          error: summaryResult.error,
+          error: message,
           data: null,
         },
         'noCache',
@@ -76,28 +81,30 @@ export async function GET(request: NextRequest) {
     
     // Calculate overall statistics
     const totalClients = summaryData.length;
-    const totalItems = summaryData.reduce((sum: number, client: any) => sum + client.total_items_washed, 0);
-    const totalRevenueBeforeVat = summaryData.reduce((sum: number, client: any) => sum + client.total_amount, 0);
+    const totalItems = summaryData.reduce((sum: number, client: any) => sum + (client.total_items_washed ?? 0), 0);
+    const totalRevenueBeforeVat = summaryData.reduce((sum: number, client: any) => sum + (client.total_amount ?? 0), 0);
     const totalVatAmount = Math.round(totalRevenueBeforeVat * 0.15 * 100) / 100;
     const totalRevenueInclVat = Math.round((totalRevenueBeforeVat + totalVatAmount) * 100) / 100;
-    const totalBatches = summaryData.reduce((sum: number, client: any) => sum + client.batch_count, 0);
-    const totalDiscrepancies = summaryData.reduce((sum: number, client: any) => sum + client.discrepancy_batches, 0);
+    const totalBatches = summaryData.reduce((sum: number, client: any) => sum + (client.batch_count ?? 0), 0);
+    const totalDiscrepancies = summaryData.reduce((sum: number, client: any) => sum + (client.discrepancy_batches ?? 0), 0);
     const discrepancyRate = totalBatches > 0 ? (totalDiscrepancies / totalBatches) * 100 : 0;
 
-    // Get detailed batch data for each client
-    const detailedStats = [];
-    for (const client of summaryData) {
-      const clientBatchesResult = isAllMonths
-        ? await getClientBatchesByYear(client.client_id, targetYear)
-        : await getClientBatchesByMonth(client.client_id, targetYear, targetMonth as number);
-      
+    // Get detailed batch data for each client in parallel (avoids N+1 timeout)
+    const clientBatchPromises = summaryData.map((client: any) =>
+      isAllMonths
+        ? getClientBatchesByYear(client.client_id, targetYear)
+        : getClientBatchesByMonth(client.client_id, targetYear, targetMonth as number)
+    );
+    const clientBatchResults = await Promise.all(clientBatchPromises);
+
+    const detailedStats = summaryData.map((client: any, index: number) => {
+      const clientBatchesResult = clientBatchResults[index];
       if (clientBatchesResult.success && clientBatchesResult.data) {
         const batches = clientBatchesResult.data;
-        const clientItemsSent = batches.reduce((sum: number, batch: any) => sum + batch.total_items_sent, 0);
-        const clientItemsReceived = batches.reduce((sum: number, batch: any) => sum + batch.total_items_received, 0);
+        const clientItemsSent = batches.reduce((sum: number, batch: any) => sum + (batch.total_items_sent ?? 0), 0);
+        const clientItemsReceived = batches.reduce((sum: number, batch: any) => sum + (batch.total_items_received ?? 0), 0);
         const clientDiscrepancyItems = clientItemsSent - clientItemsReceived;
-        
-        detailedStats.push({
+        return {
           ...client,
           batches: batches.map((batch: any) => ({
             id: batch.id,
@@ -107,24 +114,23 @@ export async function GET(request: NextRequest) {
             items_sent: batch.total_items_sent,
             items_received: batch.total_items_received,
             amount: batch.total_amount,
-            discrepancy: batch.total_items_sent - batch.total_items_received
+            discrepancy: (batch.total_items_sent ?? 0) - (batch.total_items_received ?? 0)
           })),
           items_sent: clientItemsSent,
           items_received: clientItemsReceived,
           discrepancy_items: clientDiscrepancyItems,
           discrepancy_rate: clientItemsSent > 0 ? (clientDiscrepancyItems / clientItemsSent) * 100 : 0
-        });
-      } else {
-        detailedStats.push({
-          ...client,
-          batches: [],
-          items_sent: 0,
-          items_received: 0,
-          discrepancy_items: 0,
-          discrepancy_rate: 0
-        });
+        };
       }
-    }
+      return {
+        ...client,
+        batches: [],
+        items_sent: 0,
+        items_received: 0,
+        discrepancy_items: 0,
+        discrepancy_rate: 0
+      };
+    });
 
     // Calculate additional statistics
     const averageBatchValue = totalBatches > 0 ? totalRevenueBeforeVat / totalBatches : 0;
@@ -174,11 +180,12 @@ export async function GET(request: NextRequest) {
     );
 
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('GET /api/dashboard/reports/pdf-stats error:', error);
     return cachedJsonResponse(
       {
         success: false,
-        error: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? message : 'Internal server error',
         data: null,
       },
       'noCache',

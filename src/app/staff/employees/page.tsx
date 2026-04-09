@@ -5,6 +5,7 @@ import { AuthGuard } from '@/components/auth/auth-guard';
 import Navigation from '@/components/navigation';
 import EmployeesTable from '@/components/staff/employees-table';
 import EmployeeFormDrawer, { type EmployeeFormData } from '@/components/staff/employee-form-drawer';
+import SalarySchedule from '@/components/staff/salary-schedule';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Users } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Users, Calendar } from 'lucide-react';
 import {
   useEmployees,
   useCreateEmployee,
@@ -91,16 +93,32 @@ function EmployeesContent() {
           </p>
         </div>
 
-        <EmployeesTable
-          employees={employees}
-          loading={isLoading}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onAdd={handleAdd}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onRefresh={() => refetch()}
-        />
+        <Tabs defaultValue="employees" className="space-y-4">
+          <TabsList className="bg-white border border-slate-200">
+            <TabsTrigger value="employees" className="data-[state=active]:bg-slate-100">
+              Employees
+            </TabsTrigger>
+            <TabsTrigger value="salary" className="data-[state=active]:bg-slate-100">
+              <Calendar className="w-4 h-4 mr-1.5" />
+              Salary Schedule
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="employees" className="mt-4">
+            <EmployeesTable
+              employees={employees}
+              loading={isLoading}
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              onAdd={handleAdd}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onRefresh={() => refetch()}
+            />
+          </TabsContent>
+          <TabsContent value="salary" className="mt-4">
+            <SalarySchedule />
+          </TabsContent>
+        </Tabs>
 
         <EmployeeFormDrawer
           open={drawerOpen}

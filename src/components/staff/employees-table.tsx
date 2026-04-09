@@ -127,7 +127,7 @@ export default function EmployeesTable({
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Shift</TableHead>
-                  <TableHead>Salary</TableHead>
+                  <TableHead>Monthly Salary</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-20"></TableHead>
                 </TableRow>
@@ -142,7 +142,11 @@ export default function EmployeesTable({
                     <TableCell>
                       <Badge variant="outline">{shiftLabel(emp.shift_type)}</Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{formatCurrency(emp.bi_weekly_salary ?? 0)}</TableCell>
+                    <TableCell className="text-sm">
+                      {formatCurrency(
+                        emp.monthly_salary ?? (emp.bi_weekly_salary != null ? emp.bi_weekly_salary * 2 : 0)
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         className={

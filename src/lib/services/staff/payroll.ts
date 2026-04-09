@@ -112,7 +112,7 @@ export async function createPayrollRun(
 
     const { data: employees } = await supabaseAdmin
       .from('employees')
-      .select('id, bi_weekly_salary')
+      .select('id, monthly_salary, bi_weekly_salary')
       .eq('status', 'active');
 
     const { data: run, error: runError } = await (supabaseAdmin as any)
@@ -130,13 +130,37 @@ export async function createPayrollRun(
       return { data: null, error: runError?.message || 'Failed to create run', success: false };
     }
 
-    const entries = (employees || []).map((e: { id: string; bi_weekly_salary: number }) => ({
-      payroll_run_id: run.id,
-      employee_id: e.id,
-      bi_weekly_salary: e.bi_weekly_salary ?? 0,
-      deductions: 0,
-      net_pay: e.bi_weekly_salary ?? 0,
-    }));
+    const halfMonthly = (e: { monthly_salary?: number | null; bi_weekly_salary?: number }) => {
+      const monthly = e.monthly_salary ?? (e.bi_weekly_salary != null ? e.bi_weekly_salary * 2 : 0);
+      return Math.round((monthly / 2) * 100) / 100;
+    };
+
+    const entries: Array<{
+      payroll_run_id: string;
+      employee_id: string;
+      bi_weekly_salary: number;
+      deductions: number;
+      net_pay: number;
+    }> = [];
+    for (const e of employees || []) {
+      const emp = e as { id: string; monthly_salary?: number | null; bi_weekly_salary?: number };
+      const amount = halfMonthly(emp);
+      if (amount <= 0) continue;
+      entries.push({
+        payroll_run_id: run.id,
+        employee_id: emp.id,
+        bi_weekly_salary: amount,
+        deductions: 0,
+        net_pay: amount,
+      });
+      entries.push({
+        payroll_run_id: run.id,
+        employee_id: emp.id,
+        bi_weekly_salary: amount,
+        deductions: 0,
+        net_pay: amount,
+      });
+    }
 
     const totalAmount = entries.reduce((sum: number, e: { net_pay: number }) => sum + e.net_pay, 0);
 

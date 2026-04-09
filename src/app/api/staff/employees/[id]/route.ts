@@ -76,6 +76,10 @@ export async function PUT(
     if (body.role !== undefined) payload.role = body.role;
     if (body.shift_type !== undefined) payload.shift_type = body.shift_type;
     if (body.bi_weekly_salary !== undefined) payload.bi_weekly_salary = body.bi_weekly_salary;
+    if (body.monthly_salary !== undefined) payload.monthly_salary = body.monthly_salary;
+    if (body.salary_payment_day_1 !== undefined) payload.salary_payment_day_1 = body.salary_payment_day_1;
+    if (body.salary_payment_day_2 !== undefined) payload.salary_payment_day_2 = body.salary_payment_day_2;
+    if (body.bank_reference !== undefined) payload.bank_reference = body.bank_reference;
     if (body.bank_name !== undefined) payload.bank_name = body.bank_name;
     if (body.bank_account_number !== undefined) payload.bank_account_number = body.bank_account_number;
     if (body.bank_branch_code !== undefined) payload.bank_branch_code = body.bank_branch_code;

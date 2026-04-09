@@ -7,6 +7,7 @@ import MetricCard from '@/components/dashboard/metric-card';
 import MonthSelector from '@/components/dashboard/month-selector';
 import BatchesTable from '@/components/dashboard/batches-table';
 import { EmptyState, EmptyBatches } from '@/components/ui/empty-state';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import {
   LayoutDashboard,
@@ -23,6 +24,7 @@ import Link from 'next/link';
 import { BatchStatus } from '@/types/database';
 import { useDashboardStats } from '@/lib/hooks/use-dashboard-stats';
 import { useBatches } from '@/lib/hooks/use-batches';
+import { useExpenseSummary } from '@/lib/hooks/use-expenses';
 import { useQueryClient } from '@tanstack/react-query';
 
 type DashboardMetrics = {
@@ -43,6 +45,68 @@ type DashboardBatch = {
   total_amount: number;
   created_at: string;
 };
+
+// This Month at a Glance cards
+function ThisMonthGlance({
+  revenue,
+  expenses,
+}: {
+  revenue: number;
+  expenses: number;
+}) {
+  const netProfit = revenue - expenses;
+  const isProfitable = netProfit >= 0;
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <Card className="border-green-200 bg-gradient-to-br from-green-50 to-green-100/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-slate-600">
+            Revenue This Month
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-2xl font-bold text-slate-900">
+            R {revenue.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+          </p>
+        </CardContent>
+      </Card>
+      <Card className="border-slate-200">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-slate-600">
+            Expenses This Month
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-2xl font-bold text-slate-900">
+            R {expenses.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+          </p>
+        </CardContent>
+      </Card>
+      <Card
+        className={
+          isProfitable
+            ? 'border-green-200 bg-gradient-to-br from-green-50 to-green-100/50'
+            : 'border-red-200 bg-gradient-to-br from-red-50 to-red-100/50'
+        }
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-slate-600">
+            Net Profit This Month
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p
+            className={`text-2xl font-bold ${
+              isProfitable ? 'text-green-700' : 'text-red-700'
+            }`}
+          >
+            R {netProfit.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 // Breadcrumb component
 function Breadcrumb() {
@@ -96,6 +160,16 @@ function DashboardContent() {
       };
     }
   }, [selectedMonth, isYearlyView]);
+
+  // Current month for "This Month at a Glance"
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const { data: expenseSummaryData } = useExpenseSummary(currentMonth, currentYear);
+  const { data: currentMonthStatsData } = useDashboardStats({
+    month: `${currentYear}-${String(currentMonth).padStart(2, '0')}`,
+    type: 'monthly',
+  });
 
   // Use React Query hooks for data fetching with caching
   const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats(statsParams);
@@ -298,6 +372,25 @@ function DashboardContent() {
             icon={AlertTriangle}
             variant="discrepancies"
             loading={loading}
+          />
+        </div>
+
+        {/* This Month at a Glance */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+            This Month at a Glance
+          </h2>
+          <ThisMonthGlance
+            revenue={
+              currentMonthStatsData?.success && currentMonthStatsData.data
+                ? (currentMonthStatsData.data as { totalRevenue?: number }).totalRevenue ?? 0
+                : 0
+            }
+            expenses={
+              expenseSummaryData?.success && expenseSummaryData.data
+                ? expenseSummaryData.data.total ?? 0
+                : 0
+            }
           />
         </div>
 

@@ -305,6 +305,10 @@ export interface Database {
           role: string | null;
           shift_type: 'day' | 'night' | 'both';
           bi_weekly_salary: number;
+          monthly_salary: number | null;
+          salary_payment_day_1: number;
+          salary_payment_day_2: number;
+          bank_reference: string | null;
           bank_name: string | null;
           bank_account_number: string | null;
           bank_branch_code: string | null;
@@ -323,6 +327,10 @@ export interface Database {
           role?: string | null;
           shift_type: 'day' | 'night' | 'both';
           bi_weekly_salary?: number;
+          monthly_salary?: number | null;
+          salary_payment_day_1?: number;
+          salary_payment_day_2?: number;
+          bank_reference?: string | null;
           bank_name?: string | null;
           bank_account_number?: string | null;
           bank_branch_code?: string | null;
@@ -341,6 +349,10 @@ export interface Database {
           role?: string | null;
           shift_type?: 'day' | 'night' | 'both';
           bi_weekly_salary?: number;
+          monthly_salary?: number | null;
+          salary_payment_day_1?: number;
+          salary_payment_day_2?: number;
+          bank_reference?: string | null;
           bank_name?: string | null;
           bank_account_number?: string | null;
           bank_branch_code?: string | null;
@@ -508,6 +520,69 @@ export interface Database {
           },
           {
             foreignKeyName: 'payroll_entries_employee_id_fkey';
+            columns: ['employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
+      // Staff: salary_payments table
+      salary_payments: {
+        Row: {
+          id: string;
+          employee_id: string;
+          payment_date: string;
+          payment_number: 1 | 2;
+          period_month: number;
+          period_year: number;
+          gross_amount: number;
+          deductions: number;
+          net_amount: number;
+          status: 'pending' | 'paid' | 'skipped';
+          payment_method: string | null;
+          notes: string | null;
+          paid_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          payment_date: string;
+          payment_number: 1 | 2;
+          period_month: number;
+          period_year: number;
+          gross_amount: number;
+          deductions?: number;
+          net_amount: number;
+          status?: 'pending' | 'paid' | 'skipped';
+          payment_method?: string | null;
+          notes?: string | null;
+          paid_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_id?: string;
+          payment_date?: string;
+          payment_number?: 1 | 2;
+          period_month?: number;
+          period_year?: number;
+          gross_amount?: number;
+          deductions?: number;
+          net_amount?: number;
+          status?: 'pending' | 'paid' | 'skipped';
+          payment_method?: string | null;
+          notes?: string | null;
+          paid_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'salary_payments_employee_id_fkey';
             columns: ['employee_id'];
             referencedRelation: 'employees';
             referencedColumns: ['id'];
@@ -786,6 +861,86 @@ export interface Database {
           }
         ];
       };
+
+      // Expenses Categories
+      expenses_categories: {
+        Row: {
+          id: string;
+          name: string;
+          icon: string | null;
+          is_fixed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          icon?: string | null;
+          is_fixed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          icon?: string | null;
+          is_fixed?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // Expenses
+      expenses: {
+        Row: {
+          id: string;
+          category_id: string;
+          name: string;
+          amount: number;
+          expense_date: string;
+          period_month: number;
+          period_year: number;
+          is_recurring: boolean;
+          notes: string | null;
+          receipt_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          category_id: string;
+          name: string;
+          amount: number;
+          expense_date: string;
+          period_month: number;
+          period_year: number;
+          is_recurring?: boolean;
+          notes?: string | null;
+          receipt_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          category_id?: string;
+          name?: string;
+          amount?: number;
+          expense_date?: string;
+          period_month?: number;
+          period_year?: number;
+          is_recurring?: boolean;
+          notes?: string | null;
+          receipt_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'expenses_category_id_fkey';
+            columns: ['category_id'];
+            referencedRelation: 'expenses_categories';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
     };
 
     Views: {
@@ -964,6 +1119,7 @@ export type ShiftSchedule = Tables<'shift_schedule'>;
 export type Absence = Tables<'absences'>;
 export type PayrollRun = Tables<'payroll_runs'>;
 export type PayrollEntry = Tables<'payroll_entries'>;
+export type SalaryPayment = Tables<'salary_payments'>;
 
 // View types
 export type BatchReportView = Views<'batch_report_view'>;
@@ -984,6 +1140,7 @@ export type ShiftScheduleInsert = Database['public']['Tables']['shift_schedule']
 export type AbsenceInsert = Database['public']['Tables']['absences']['Insert'];
 export type PayrollRunInsert = Database['public']['Tables']['payroll_runs']['Insert'];
 export type PayrollEntryInsert = Database['public']['Tables']['payroll_entries']['Insert'];
+export type SalaryPaymentInsert = Database['public']['Tables']['salary_payments']['Insert'];
 
 // Update types
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
@@ -1000,6 +1157,7 @@ export type ShiftScheduleUpdate = Database['public']['Tables']['shift_schedule']
 export type AbsenceUpdate = Database['public']['Tables']['absences']['Update'];
 export type PayrollRunUpdate = Database['public']['Tables']['payroll_runs']['Update'];
 export type PayrollEntryUpdate = Database['public']['Tables']['payroll_entries']['Update'];
+export type SalaryPaymentUpdate = Database['public']['Tables']['salary_payments']['Update'];
 
 // Enum types
 export type BatchStatus = Enums<'batch_status'>;
@@ -1060,6 +1218,17 @@ export interface PayrollRunWithEntries extends PayrollRun {
   entries: PayrollEntryWithEmployee[];
 }
 
+export interface SalaryPaymentWithEmployee extends SalaryPayment {
+  employee: Employee;
+}
+
+export interface EmployeeSalarySchedule {
+  employee: Employee;
+  payment_1: { date: string; amount: number; status: string };
+  payment_2: { date: string; amount: number; status: string };
+  monthly_total: number;
+}
+
 // Utility types for form handling
 export interface BatchFormData {
   paper_batch_id: string;
@@ -1107,6 +1276,32 @@ export interface BatchItemSearchFilters {
   batch_id?: string;
   linen_category_id?: string;
   has_discrepancy?: boolean;
+}
+
+// Expense types
+export type ExpenseCategory = Tables<'expenses_categories'>;
+export type Expense = Tables<'expenses'>;
+export interface ExpenseWithCategory extends Expense {
+  category: ExpenseCategory;
+}
+export interface MonthlyExpenseSummary {
+  month: number;
+  year: number;
+  total: number;
+  by_category: Array<{
+    category_name: string;
+    total: number;
+    count: number;
+    is_fixed?: boolean;
+  }>;
+}
+export interface ProfitLossSummary {
+  period: string;
+  revenue: number;
+  expenses: number;
+  gross_profit: number;
+  net_profit: number;
+  margin_percentage: number;
 }
 
 // Statistics and reporting types

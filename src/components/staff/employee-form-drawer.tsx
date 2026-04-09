@@ -24,7 +24,10 @@ export interface EmployeeFormData {
   email?: string;
   role?: string;
   shift_type: 'day' | 'night' | 'both';
-  bi_weekly_salary?: number;
+  monthly_salary?: number;
+  salary_payment_day_1?: number;
+  salary_payment_day_2?: number;
+  bank_reference?: string;
   bank_name?: string;
   bank_account_number?: string;
   bank_branch_code?: string;
@@ -53,7 +56,10 @@ export default function EmployeeFormDrawer({
     email: '',
     role: '',
     shift_type: 'both',
-    bi_weekly_salary: 0,
+    monthly_salary: undefined,
+    salary_payment_day_1: 1,
+    salary_payment_day_2: 15,
+    bank_reference: '',
     bank_name: '',
     bank_account_number: '',
     bank_branch_code: '',
@@ -73,7 +79,10 @@ export default function EmployeeFormDrawer({
         email: employee.email || '',
         role: employee.role || '',
         shift_type: employee.shift_type ?? 'both',
-        bi_weekly_salary: employee.bi_weekly_salary ?? 0,
+        monthly_salary: employee.monthly_salary ?? employee.bi_weekly_salary != null ? employee.bi_weekly_salary * 2 : undefined,
+        salary_payment_day_1: employee.salary_payment_day_1 ?? 1,
+        salary_payment_day_2: employee.salary_payment_day_2 ?? 15,
+        bank_reference: employee.bank_reference || '',
         bank_name: employee.bank_name || '',
         bank_account_number: employee.bank_account_number || '',
         bank_branch_code: employee.bank_branch_code || '',
@@ -89,7 +98,10 @@ export default function EmployeeFormDrawer({
         email: '',
         role: '',
         shift_type: 'both',
-        bi_weekly_salary: 0,
+        monthly_salary: undefined,
+        salary_payment_day_1: 1,
+        salary_payment_day_2: 15,
+        bank_reference: '',
         bank_name: '',
         bank_account_number: '',
         bank_branch_code: '',
@@ -110,8 +122,8 @@ export default function EmployeeFormDrawer({
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
     }
-    if (formData.bi_weekly_salary !== undefined && formData.bi_weekly_salary < 0) {
-      newErrors.bi_weekly_salary = 'Salary cannot be negative';
+    if (formData.monthly_salary !== undefined && formData.monthly_salary < 0) {
+      newErrors.monthly_salary = 'Salary cannot be negative';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -234,25 +246,75 @@ export default function EmployeeFormDrawer({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bi_weekly_salary" className={labelClass}>Bi-weekly Salary (ZAR)</Label>
+            <Label htmlFor="monthly_salary" className={labelClass}>Monthly Salary (ZAR)</Label>
             <Input
-              id="bi_weekly_salary"
+              id="monthly_salary"
               type="number"
               min={0}
               step={0.01}
-              value={formData.bi_weekly_salary ?? ''}
-              onChange={(e) => update('bi_weekly_salary', e.target.value ? parseFloat(e.target.value) : 0)}
+              value={formData.monthly_salary ?? ''}
+              onChange={(e) => update('monthly_salary', e.target.value ? parseFloat(e.target.value) : undefined)}
               placeholder="0.00"
-              className={cn(inputClass, errors.bi_weekly_salary && 'border-red-400')}
+              className={cn(inputClass, errors.monthly_salary && 'border-red-400')}
               disabled={isSubmitting}
             />
-            {errors.bi_weekly_salary && (
+            {errors.monthly_salary && (
               <p className="text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="w-4 h-4" />
-                {errors.bi_weekly_salary}
+                {errors.monthly_salary}
               </p>
             )}
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="salary_payment_day_1" className={labelClass}>1st Payment — Day of Month</Label>
+              <Input
+                id="salary_payment_day_1"
+                type="number"
+                min={1}
+                max={28}
+                value={formData.salary_payment_day_1 ?? 1}
+                onChange={(e) => update('salary_payment_day_1', Math.min(28, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                disabled={isSubmitting}
+                className={inputClass}
+              />
+              <p className="text-xs text-slate-500">e.g. 1 = paid on the 1st of each month</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="salary_payment_day_2" className={labelClass}>2nd Payment — Day of Month</Label>
+              <Input
+                id="salary_payment_day_2"
+                type="number"
+                min={1}
+                max={28}
+                value={formData.salary_payment_day_2 ?? 15}
+                onChange={(e) => update('salary_payment_day_2', Math.min(28, Math.max(1, parseInt(e.target.value, 10) || 15)))}
+                disabled={isSubmitting}
+                className={inputClass}
+              />
+              <p className="text-xs text-slate-500">e.g. 15 = paid on the 15th of each month</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bank_reference" className={labelClass}>Bank Payment Reference</Label>
+            <Input
+              id="bank_reference"
+              value={formData.bank_reference || ''}
+              onChange={(e) => update('bank_reference', e.target.value)}
+              placeholder="Reference on bank statement"
+              disabled={isSubmitting}
+              className={inputClass}
+            />
+            <p className="text-xs text-slate-500">Reference shown on employee&apos;s bank statement</p>
+          </div>
+
+          {(formData.monthly_salary != null && formData.monthly_salary > 0) && (
+            <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
+              Each payment: R {((formData.monthly_salary ?? 0) / 2).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — Paid on the {formData.salary_payment_day_1 ?? 1} and {formData.salary_payment_day_2 ?? 15} of each month
+            </p>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="bank_name" className={labelClass}>Bank Name</Label>

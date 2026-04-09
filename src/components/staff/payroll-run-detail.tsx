@@ -71,14 +71,29 @@ export default function PayrollRunDetail({
     );
   };
 
+  const sortedEntries = [...(run.entries || [])].sort(
+    (a, b) => a.employee_id.localeCompare(b.employee_id) || a.id.localeCompare(b.id)
+  );
+  const entryPaymentNumber = new Map<string, number>();
+  let currentEmp = '';
+  let num = 0;
+  for (const e of sortedEntries) {
+    if (e.employee_id !== currentEmp) {
+      currentEmp = e.employee_id;
+      num = 0;
+    }
+    num += 1;
+    entryPaymentNumber.set(e.id, num);
+  }
+
   const handleExportPDF = async () => {
     await pdfGenerator.generatePayrollPDF({
       periodStart: run.period_start,
       periodEnd: run.period_end,
       status: run.status,
       date: new Date().toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' }),
-      items: (run.entries || []).map((e) => ({
-        employeeName: e.employee?.full_name ?? 'Unknown',
+      items: sortedEntries.map((e) => ({
+        employeeName: `${e.employee?.full_name ?? 'Unknown'} (Payment ${entryPaymentNumber.get(e.id) ?? 1})`,
         biWeeklySalary: e.bi_weekly_salary ?? 0,
         deductions: e.deductions ?? 0,
         netPay: e.net_pay ?? 0,
@@ -147,21 +162,24 @@ export default function PayrollRunDetail({
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
-                <TableHead>Bi-weekly Salary</TableHead>
+                <TableHead>Payment</TableHead>
+                <TableHead>Amount</TableHead>
                 <TableHead>Deductions</TableHead>
                 <TableHead>Net Pay</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(run.entries || []).map((entry) => {
+              {sortedEntries.map((entry) => {
                 const salary = entry.bi_weekly_salary ?? 0;
                 const deductions = localDeductions[entry.id] ?? entry.deductions ?? 0;
                 const netPay = Math.max(0, salary - deductions);
+                const paymentNum = entryPaymentNumber.get(entry.id) ?? 1;
                 return (
                   <TableRow key={entry.id}>
                     <TableCell className="font-medium">
                       {entry.employee?.full_name ?? 'Unknown'}
                     </TableCell>
+                    <TableCell>Payment {paymentNum}</TableCell>
                     <TableCell>{formatCurrency(salary)}</TableCell>
                     <TableCell>
                       {run.status === 'draft' ? (
