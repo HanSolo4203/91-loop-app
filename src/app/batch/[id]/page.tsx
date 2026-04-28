@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Navigation from '@/components/navigation';
 import BatchHeader from '@/components/batch/batch-header';
-import StatusUpdater from '@/components/batch/status-updater';
 import ItemsBreakdown from '@/components/batch/items-breakdown';
 import FinancialSummary from '@/components/batch/financial-summary';
 
@@ -24,7 +23,6 @@ import {
   FileEdit
 } from 'lucide-react';
 import Link from 'next/link';
-import { markDashboardForRefresh } from '@/lib/utils';
 
 // Types
 interface BatchDetails {
@@ -51,6 +49,7 @@ interface BatchDetails {
     quantity_sent: number;
     quantity_received: number;
     price_per_item: number;
+    express_delivery?: boolean;
     category: {
       id: string;
       name: string;
@@ -168,35 +167,6 @@ function BatchDetailsContent() {
     }
   }, [batchId]);
 
-  // Handle status update
-  const handleStatusUpdate = async (newStatus: string, notes?: string) => {
-    try {
-      const response = await fetch(`/api/batches/${batchId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: newStatus,
-          notes: notes || null
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Mark dashboard for refresh when user navigates back
-        markDashboardForRefresh();
-        // Refresh the batch details
-        await fetchBatchDetails(true);
-      } else {
-        throw new Error(result.error || 'Failed to update status');
-      }
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'Failed to update status');
-    }
-  };
-
   // Handle invoice generation
   const handleGenerateInvoice = () => {
     // Open invoice in new tab
@@ -257,6 +227,8 @@ function BatchDetailsContent() {
     );
   }
 
+  const hasExpressDelivery = batchDetails.items.some((item) => Boolean(item.express_delivery));
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
@@ -300,19 +272,12 @@ function BatchDetailsContent() {
           </div>
         </div>
 
-        {/* Top Row - Batch Header and Status Management */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Batch Header */}
+        {/* Batch Header */}
+        <div className="mb-8">
           <BatchHeader
             batch={batchDetails}
             client={batchDetails.client}
-            loading={refreshing}
-          />
-
-          {/* Status Management */}
-          <StatusUpdater
-            currentStatus={batchDetails.status}
-            onStatusUpdate={handleStatusUpdate}
+            hasExpressDelivery={hasExpressDelivery}
             loading={refreshing}
           />
         </div>

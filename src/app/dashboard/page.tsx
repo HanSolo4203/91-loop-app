@@ -26,6 +26,7 @@ import { useDashboardStats } from '@/lib/hooks/use-dashboard-stats';
 import { useBatches } from '@/lib/hooks/use-batches';
 import { useExpenseSummary } from '@/lib/hooks/use-expenses';
 import { useQueryClient } from '@tanstack/react-query';
+import { shouldRefreshDashboard } from '@/lib/utils';
 
 type DashboardMetrics = {
   totalBatches: number;
@@ -43,6 +44,7 @@ type DashboardBatch = {
   pickup_date: string;
   status: BatchStatus;
   total_amount: number;
+  has_express_delivery: boolean;
   created_at: string;
 };
 
@@ -220,6 +222,7 @@ function DashboardContent() {
       pickup_date: batch.pickup_date,
       status: batch.status as BatchStatus,
       total_amount: batch.total_amount,
+      has_express_delivery: batch.has_express_delivery,
       created_at: batch.created_at
     }));
   }, [batchesData]);
@@ -240,6 +243,17 @@ function DashboardContent() {
     // Navigate to batch details
     window.location.href = `/batch/${batch.id}`;
   };
+
+  useEffect(() => {
+    if (!shouldRefreshDashboard()) {
+      return;
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['batches'] });
+    refetchStats();
+    refetchBatches();
+  }, [queryClient, refetchBatches, refetchStats]);
 
   // Show error state if there's an error
   const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : 'Something went wrong while loading the dashboard data.');

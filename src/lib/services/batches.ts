@@ -52,6 +52,7 @@ export interface UpdateBatchItemsRequest {
   items: BatchItemData[];
   notes?: string | null;
   pickup_date?: string;
+  status?: BatchStatus;
 }
 
 export interface BatchWithDetails extends Batch {
@@ -577,6 +578,17 @@ export async function updateBatchItems(
       batchUpdatePayload.pickup_date = payload.pickup_date;
     }
 
+    if (payload.status !== undefined) {
+      if (!['pickup', 'washing', 'completed', 'delivered'].includes(payload.status)) {
+        throw new BatchServiceError(
+          'Invalid batch status',
+          'VALIDATION_ERROR',
+          400
+        );
+      }
+      batchUpdatePayload.status = payload.status;
+    }
+
     const { data: updatedBatch, error: batchUpdateError } = await (supabaseAdmin as any)
       .from('batches')
       .update(batchUpdatePayload)
@@ -688,7 +700,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
       ...(trimmedPaperId ? { paper_batch_id: trimmedPaperId } : {}),
       client_id: batchData.client_id,
       pickup_date: batchData.pickup_date,
-      status: batchData.status || 'pickup',
+      status: 'delivered',
       total_amount: totalAmount,
       notes: batchData.notes || null,
     };

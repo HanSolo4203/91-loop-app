@@ -28,6 +28,8 @@ interface BatchRow {
   paper_batch_id: string | null;
   status: string;
   has_discrepancy: boolean;
+  has_express_delivery: boolean;
+  express_surcharge: number;
   total_items_received: number;
   total_amount: number;
 }
@@ -37,7 +39,10 @@ interface InvoiceItem {
   quantity_sent: number | null;
   quantity_received: number | null;
   unit_price: number | null;
+  express_delivery: boolean;
+  express_surcharge: number;
   line_total: number;
+  line_total_with_surcharge: number;
   discrepancy: number;
 }
 
@@ -46,6 +51,9 @@ interface InvoiceData {
   client_logo_url: string | null;
   pickup_date: string;
   paper_batch_id: string | null;
+  has_express_delivery: boolean;
+  express_surcharge_total: number;
+  subtotal_amount: number;
   has_discrepancy: boolean;
   total_amount: number;
   items: InvoiceItem[];
@@ -357,8 +365,10 @@ export default function ReportsTable({
                                       <th className="py-2 pr-4">Paper Batch ID</th>
                                       <th className="py-2 pr-4">Status</th>
                                       <th className="py-2 pr-4">Discrepancy</th>
+                                      <th className="py-2 pr-4">Express</th>
                                       <th className="py-2 pr-4 text-right">Items</th>
-                                      <th className="py-2 pr-0 text-right">Amount</th>
+                                      <th className="py-2 pr-4 text-right">Surcharge</th>
+                                      <th className="py-2 pr-0 text-right">Total Amount</th>
                                       <th className="py-2 pl-4 text-right">Actions</th>
                                     </tr>
                                   </thead>
@@ -378,7 +388,19 @@ export default function ReportsTable({
                                             <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">OK</span>
                                           )}
                                         </td>
+                                        <td className="py-2 pr-4">
+                                          {b.has_express_delivery ? (
+                                            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-orange-100 text-orange-700 border border-orange-200">
+                                              Express
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                              Standard
+                                            </span>
+                                          )}
+                                        </td>
                                         <td className="py-2 pr-4 text-right">{b.total_items_received}</td>
+                                        <td className="py-2 pr-4 text-right">{formatCurrencySSR(b.express_surcharge || 0)}</td>
                                         <td className="py-2 pr-0 text-right">{formatCurrencySSR(b.total_amount)}</td>
                                         <td className="py-2 pl-4 text-right">
                                           <div className="flex justify-end gap-2">
@@ -475,6 +497,16 @@ export default function ReportsTable({
                     <p className="text-slate-500">Discrepancy</p>
                     <p className={`font-medium ${invoiceData.has_discrepancy ? 'text-red-600' : 'text-green-600'}`}>{invoiceData.has_discrepancy ? 'Yes' : 'No'}</p>
                   </div>
+                  <div>
+                    <p className="text-slate-500">Express Batch</p>
+                    <p className={`font-medium ${invoiceData.has_express_delivery ? 'text-orange-600' : 'text-slate-700'}`}>
+                      {invoiceData.has_express_delivery ? 'Yes' : 'No'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Express Surcharge</p>
+                    <p className="font-medium">{formatCurrencySSR(invoiceData.express_surcharge_total || 0)}</p>
+                  </div>
                 </div>
 
                 <div className="border rounded-md overflow-hidden">
@@ -485,6 +517,8 @@ export default function ReportsTable({
                         <th className="text-right py-2 px-3">Qty Sent</th>
                         <th className="text-right py-2 px-3">Qty Received</th>
                         <th className="text-right py-2 px-3">Unit Price</th>
+                        <th className="text-right py-2 px-3">Express</th>
+                        <th className="text-right py-2 px-3">Surcharge</th>
                         <th className="text-right py-2 px-3">Line Total</th>
                         <th className="text-right py-2 px-3">Discrepancy</th>
                       </tr>
@@ -496,14 +530,26 @@ export default function ReportsTable({
                           <td className="py-2 px-3 text-right">{it.quantity_sent ?? '-'}</td>
                           <td className="py-2 px-3 text-right">{it.quantity_received ?? '-'}</td>
                           <td className="py-2 px-3 text-right">{it.unit_price !== null ? formatCurrencySSR(it.unit_price) : '-'}</td>
-                          <td className="py-2 px-3 text-right">{formatCurrencySSR(it.line_total)}</td>
+                          <td className="py-2 px-3 text-right">{it.express_delivery ? 'Yes' : 'No'}</td>
+                          <td className="py-2 px-3 text-right">{formatCurrencySSR(it.express_surcharge || 0)}</td>
+                          <td className="py-2 px-3 text-right">{formatCurrencySSR(it.line_total_with_surcharge ?? it.line_total)}</td>
                           <td className={`py-2 px-3 text-right ${it.discrepancy !== 0 ? 'text-red-600' : 'text-slate-600'}`}>{it.discrepancy}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-slate-50">
                       <tr className="border-t-2 border-slate-200">
-                        <td colSpan={4} className="py-3 px-3 font-semibold text-slate-900">Total</td>
+                        <td colSpan={6} className="py-3 px-3 font-semibold text-slate-900">Subtotal</td>
+                        <td className="py-3 px-3 text-right font-semibold text-slate-900">{formatCurrencySSR(invoiceData.subtotal_amount || 0)}</td>
+                        <td className="py-3 px-3"></td>
+                      </tr>
+                      <tr className="border-t border-slate-200">
+                        <td colSpan={6} className="py-3 px-3 font-semibold text-slate-900">Express Surcharge</td>
+                        <td className="py-3 px-3 text-right font-semibold text-slate-900">{formatCurrencySSR(invoiceData.express_surcharge_total || 0)}</td>
+                        <td className="py-3 px-3"></td>
+                      </tr>
+                      <tr className="border-t border-slate-200">
+                        <td colSpan={6} className="py-3 px-3 font-semibold text-slate-900">Total</td>
                         <td className="py-3 px-3 text-right font-semibold text-slate-900">{formatCurrencySSR(invoiceData.total_amount)}</td>
                         <td className="py-3 px-3"></td>
                       </tr>

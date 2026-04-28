@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { 
   getBatchItems
 } from '@/lib/services/batch-details';
@@ -139,7 +140,7 @@ export async function PUT(
       );
     }
 
-    let payload: { items?: unknown; notes?: string; pickup_date?: string };
+    let payload: { items?: unknown; notes?: string; pickup_date?: string; status?: string };
     try {
       payload = await request.json();
     } catch {
@@ -168,6 +169,7 @@ export async function PUT(
       items: payload.items,
       notes: payload.notes ?? undefined,
       pickup_date: payload.pickup_date,
+      status: payload.status as 'pickup' | 'washing' | 'completed' | 'delivered' | undefined,
     });
 
     if (!result.success) {
@@ -179,6 +181,17 @@ export async function PUT(
         } as BatchDetailsServiceResponse<null>,
         { status: result.statusCode || (result.error?.includes('not found') ? 404 : 400) }
       );
+    }
+
+    try {
+      revalidatePath('/dashboard');
+      revalidatePath('/api/dashboard/batches');
+      revalidatePath('/api/dashboard/stats');
+      revalidatePath('/api/batches');
+      revalidatePath(`/batch/${id}`);
+      revalidatePath(`/invoice/${id}`);
+    } catch (revalidateError) {
+      console.warn('Failed to revalidate cache after batch amend:', revalidateError);
     }
 
     return NextResponse.json(

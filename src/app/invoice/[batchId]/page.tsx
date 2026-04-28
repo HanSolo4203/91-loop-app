@@ -9,7 +9,6 @@ interface BatchDetails {
   id: string;
   paper_batch_id: string;
   pickup_date: string;
-  status: string;
   client: {
     name: string;
     email?: string;
@@ -324,10 +323,6 @@ export default function InvoicePage() {
                   <span className="font-medium">{new Date(batchDetails.pickup_date).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600">Status:</span>
-                  <span className="font-medium capitalize">{batchDetails.status}</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-slate-600">Items Processed:</span>
                   <span className="font-medium">{batchDetails.financial_summary.total_items_received}</span>
                 </div>
@@ -392,7 +387,7 @@ export default function InvoicePage() {
 
         {/* Totals Section */}
         <div className="flex justify-end">
-          <div className="w-80 space-y-3">
+          <div className="w-[40rem] max-w-full space-y-3">
             <div className="flex justify-between py-2 border-b border-slate-200">
               <span className="text-slate-700">Subtotal (Received):</span>
               <span className="font-semibold">{formatCurrencySSR(subtotalReceived)}</span>
@@ -426,9 +421,9 @@ export default function InvoicePage() {
               <span className="font-semibold text-slate-700">{formatCurrencySSR(vat)}</span>
             </div>
             
-            <div className="flex justify-between py-3 bg-blue-50 rounded-lg px-4 border-2 border-blue-200">
-              <span className="text-lg font-bold text-blue-900">Total Amount (incl. VAT):</span>
-              <span className="text-xl font-bold text-blue-900">{formatCurrencySSR(total)}</span>
+            <div className="flex items-center justify-between gap-4 py-3 bg-blue-50 rounded-lg px-4 border-2 border-blue-200 whitespace-nowrap">
+              <span className="text-lg font-bold text-blue-900 whitespace-nowrap">Total Amount (incl. VAT):</span>
+              <span className="text-xl font-bold text-blue-900 whitespace-nowrap">{formatCurrencySSR(total)}</span>
             </div>
             
             <div className="mt-4 p-3 bg-slate-50 rounded-lg border text-sm">

@@ -234,7 +234,6 @@ function NewBatchContent() {
         paper_batch_id: paperBatchId.trim() || undefined,
         client_id: selectedClient!.id,
         pickup_date: pickupDate,
-        status: 'pickup',
         notes: notes.trim() || null,
         items: currentItems
           .filter(item => item.quantity_sent > 0)
@@ -373,7 +372,7 @@ function NewBatchContent() {
             <span>Create New Batch</span>
           </h1>
           <p className="text-sm sm:text-base text-slate-600 mt-2">
-            Set up a new linen batch for tracking and management. Configure batch details, assign items, and set up tracking parameters.
+            Set up a new linen batch for invoicing. Configure batch details and assign linen items.
           </p>
         </div>
 

@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -23,7 +22,8 @@ import {
   ChevronRight,
   Package,
   CheckCircle,
-  Clock
+  Clock,
+  Zap
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,6 +36,7 @@ interface Batch {
   pickup_date: string;
   status: 'pickup' | 'washing' | 'completed' | 'delivered';
   total_amount: number;
+  has_express_delivery: boolean;
   created_at: string;
 }
 
@@ -80,24 +81,12 @@ const ITEMS_PER_PAGE = 10;
 
 export default function BatchesTable({ batches, loading = false, onBatchClick, selectedMonth }: BatchesTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('washing,completed,delivered');
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filter and search batches
   const filteredBatches = useMemo(() => {
     let filtered = batches;
-    
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'washing,completed,delivered') {
-        filtered = filtered.filter(batch => 
-          ['washing', 'completed', 'delivered'].includes(batch.status)
-        );
-      } else {
-        filtered = filtered.filter(batch => batch.status === statusFilter);
-      }
-    }
-    
+
     // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -109,7 +98,7 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
     }
     
     return filtered;
-  }, [batches, searchTerm, statusFilter]);
+  }, [batches, searchTerm]);
 
   // Pagination
   const totalPages = Math.ceil(filteredBatches.length / ITEMS_PER_PAGE);
@@ -120,12 +109,6 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
   // Reset to first page when search changes
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1);
-  };
-
-  // Reset to first page when status filter changes
-  const handleStatusFilterChange = (value: string) => {
-    setStatusFilter(value);
     setCurrentPage(1);
   };
 
@@ -193,30 +176,10 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
                       selectedMonth.year,
                       selectedMonth.month
                     ).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`)}
-              {statusFilter !== 'all' && (
-                <span className="text-blue-600">
-                  {statusFilter === 'washing,completed,delivered' 
-                    ? ' (Washing + Completed + Delivered)' 
-                    : ` (${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)})`}
-                </span>
-              )}
               {searchTerm && ` matching "${searchTerm}"`}
             </CardDescription>
           </div>
           <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-3">
-            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="pickup">Pickup</SelectItem>
-                <SelectItem value="washing">Washing</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="washing,completed,delivered">Washing + Completed + Delivered</SelectItem>
-              </SelectContent>
-            </Select>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
@@ -276,6 +239,7 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
                     <TableHead className="whitespace-nowrap text-xs sm:text-sm">Client</TableHead>
                     <TableHead className="whitespace-nowrap text-xs sm:text-sm">Date</TableHead>
                     <TableHead className="whitespace-nowrap text-xs sm:text-sm">Status</TableHead>
+                    <TableHead className="whitespace-nowrap text-xs sm:text-sm">Express</TableHead>
                     <TableHead className="text-right whitespace-nowrap text-xs sm:text-sm">Amount</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
@@ -297,6 +261,18 @@ export default function BatchesTable({ batches, loading = false, onBatchClick, s
                       <TableCell>{formatDate(batch.pickup_date)}</TableCell>
                       <TableCell>
                         {getStatusBadge(batch.status)}
+                      </TableCell>
+                      <TableCell>
+                        {batch.has_express_delivery ? (
+                          <Badge className="bg-orange-100 text-orange-800 border-orange-200">
+                            <Zap className="w-3 h-3 mr-1" />
+                            Express
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-slate-600">
+                            Standard
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(batch.total_amount)}

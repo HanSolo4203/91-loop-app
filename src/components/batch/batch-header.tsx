@@ -8,7 +8,8 @@ import {
   FileText,
   Clock,
   RefreshCw,
-  CheckCircle
+  CheckCircle,
+  Zap
 } from 'lucide-react';
 
 interface BatchHeaderProps {
@@ -31,6 +32,7 @@ interface BatchHeaderProps {
     address?: string;
     billing_address?: string;
   };
+  hasExpressDelivery?: boolean;
   loading?: boolean;
 }
 
@@ -61,7 +63,7 @@ const statusConfig = {
   }
 };
 
-export default function BatchHeader({ batch, client, loading = false }: BatchHeaderProps) {
+export default function BatchHeader({ batch, client, hasExpressDelivery = false, loading = false }: BatchHeaderProps) {
   if (loading) {
     return (
       <Card className="animate-pulse">
@@ -137,10 +139,18 @@ export default function BatchHeader({ batch, client, loading = false }: BatchHea
               </p>
             </div>
           </div>
-          <Badge className={statusInfo.className}>
-            <StatusIcon className="w-3 h-3 mr-1" />
-            {statusInfo.label}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {hasExpressDelivery && (
+              <Badge className="bg-orange-100 text-orange-800 border-orange-200">
+                <Zap className="w-3 h-3 mr-1" />
+                Express
+              </Badge>
+            )}
+            <Badge className={statusInfo.className}>
+              <StatusIcon className="w-3 h-3 mr-1" />
+              {statusInfo.label}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       paper_batch_id: body.paper_batch_id,
       client_id: body.client_id,
       pickup_date: body.pickup_date,
-      status: body.status || 'pickup',
+      status: 'delivered',
       notes: body.notes || null,
       items: body.items,
     };

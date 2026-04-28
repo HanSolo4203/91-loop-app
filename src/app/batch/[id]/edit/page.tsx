@@ -13,9 +13,11 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertCircle, ArrowLeft, FileEdit, RefreshCw, Calendar } from 'lucide-react';
 import type { LinenCategory } from '@/types/database';
 import { markDashboardForRefresh } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface BatchItemPayload {
   linen_category_id: string;
@@ -91,6 +93,7 @@ function Breadcrumb() {
 function EditBatchContent() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const batchId = params.id as string;
 
   const linenGridRef = useRef<LinenCountGridRef>(null);
@@ -106,6 +109,8 @@ function EditBatchContent() {
   const [amendStatus, setAmendStatus] = useState<'draft' | 'creating' | 'success' | 'error'>('draft');
   const [errorMessage, setErrorMessage] = useState('');
   const [pickupDate, setPickupDate] = useState<string>('');
+  const [batchWorkflowStatus, setBatchWorkflowStatus] = useState<BatchDetails['status']>('delivered');
+  const [showSavedToast, setShowSavedToast] = useState(false);
 
   const loadPageData = useCallback(
     async (isRefresh = false) => {
@@ -145,6 +150,10 @@ function EditBatchContent() {
           const date = new Date(batchResponse.data.pickup_date);
           const formattedDate = date.toISOString().split('T')[0];
           setPickupDate(formattedDate);
+        }
+
+        if (batchResponse.data.status) {
+          setBatchWorkflowStatus(batchResponse.data.status);
         }
 
         const mappedItems: BatchItemPayload[] = (batchResponse.data.items || []).map((item: BatchDetails['items'][number]) => ({
@@ -219,14 +228,31 @@ function EditBatchContent() {
         body: JSON.stringify({ 
           items: payloadItems,
           pickup_date: pickupDate || undefined,
+          status: batchWorkflowStatus,
         }),
       });
 
       const result = await response.json();
 
       if (result.success) {
+        const updatedBatch = result.data?.batch;
+        if (updatedBatch) {
+          setBatchDetails((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              status: updatedBatch.status ?? prev.status,
+              pickup_date: updatedBatch.pickup_date ?? prev.pickup_date,
+            };
+          });
+        }
+
         // Mark dashboard for refresh when user navigates back
         markDashboardForRefresh();
+        await queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        await queryClient.invalidateQueries({ queryKey: ['batches'] });
+        setShowSavedToast(true);
+        setTimeout(() => setShowSavedToast(false), 1600);
         setAmendStatus('success');
         setTimeout(() => {
           router.push(`/batch/${batchId}`);
@@ -274,6 +300,11 @@ function EditBatchContent() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {showSavedToast && (
+        <div className="fixed top-4 right-4 z-50 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-800 shadow-md">
+          Saved status update
+        </div>
+      )}
       <Navigation />
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Breadcrumb />
@@ -315,15 +346,15 @@ function EditBatchContent() {
               <BatchHeader batch={batchDetails} client={batchDetails.client} loading={refreshing} />
             )}
 
-            {/* Pickup Date Editor */}
+            {/* Batch Details Editor */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base text-slate-900 flex items-center space-x-2">
                   <Calendar className="w-5 h-5 text-blue-600" />
-                  <span>Pickup Date</span>
+                  <span>Batch Details</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="pickup-date" className="text-sm text-slate-700">
                     Select or edit the pickup date (past dates allowed)
@@ -346,6 +377,26 @@ function EditBatchContent() {
                       })}
                     </p>
                   )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="batch-status" className="text-sm text-slate-700">
+                    Batch Status
+                  </Label>
+                  <Select
+                    value={batchWorkflowStatus}
+                    onValueChange={(value) => setBatchWorkflowStatus(value as BatchDetails['status'])}
+                    disabled={amendStatus === 'creating' || !batchDetails}
+                  >
+                    <SelectTrigger id="batch-status" className="w-full max-w-xs">
+                      <SelectValue placeholder="Select batch status" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200 shadow-lg">
+                      <SelectItem value="pickup">Pickup</SelectItem>
+                      <SelectItem value="washing">Washing</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>

@@ -105,6 +105,7 @@ export interface RecentBatch {
   status: BatchStatus;
   total_amount: number;
   has_discrepancy: boolean;
+  has_express_delivery: boolean;
   item_count: number;
   created_at: string;
 }
@@ -160,6 +161,8 @@ export interface ClientBatchSummaryItem {
   pickup_date: string;
   status: BatchStatus;
   total_amount: number;
+  express_surcharge: number;
+  has_express_delivery: boolean;
   has_discrepancy: boolean;
   total_items_sent: number;
   total_items_received: number;
@@ -215,7 +218,10 @@ export interface BatchInvoiceItem {
   quantity_sent: number | null;
   quantity_received: number | null;
   unit_price: number | null;
+  express_delivery: boolean;
+  express_surcharge: number;
   line_total: number;
+  line_total_with_surcharge: number;
   discrepancy: number; // sent - received
 }
 
@@ -226,6 +232,9 @@ export interface BatchInvoice {
   paper_batch_id: string | null;
   system_batch_id: string | null;
   pickup_date: string;
+  has_express_delivery: boolean;
+  express_surcharge_total: number;
+  subtotal_amount: number;
   total_amount: number;
   has_discrepancy: boolean;
   items: BatchInvoiceItem[];
@@ -255,6 +264,7 @@ export async function getBatchInvoice(
         items:batch_items(
           quantity_sent,
           quantity_received,
+          express_delivery,
           linen_category:linen_categories(name, price_per_item)
         )
       `)
@@ -268,17 +278,25 @@ export async function getBatchInvoice(
     const items: BatchInvoiceItem[] = (data.items || []).map((it: any) => {
       const unitPrice = it.linen_category?.price_per_item ?? null;
       const qty = it.quantity_received ?? 0;
-      const lineTotal = unitPrice !== null ? unitPrice * qty : 0;
+      const lineTotal = unitPrice !== null ? Math.round(unitPrice * qty * 100) / 100 : 0;
+      const expressSurcharge = it.express_delivery ? Math.round(lineTotal * 0.5 * 100) / 100 : 0;
       const discrepancy = (it.quantity_sent ?? 0) - (it.quantity_received ?? 0);
       return {
         category_name: it.linen_category?.name || 'Unknown',
         quantity_sent: it.quantity_sent ?? null,
         quantity_received: it.quantity_received ?? null,
         unit_price: unitPrice,
+        express_delivery: Boolean(it.express_delivery),
+        express_surcharge: expressSurcharge,
         line_total: lineTotal,
+        line_total_with_surcharge: Math.round((lineTotal + expressSurcharge) * 100) / 100,
         discrepancy,
       };
     });
+
+    const subtotalAmount = Math.round(items.reduce((sum, it) => sum + it.line_total, 0) * 100) / 100;
+    const expressSurchargeTotal = Math.round(items.reduce((sum, it) => sum + it.express_surcharge, 0) * 100) / 100;
+    const totalAmount = Math.round((subtotalAmount + expressSurchargeTotal) * 100) / 100;
 
     const invoice: BatchInvoice = {
       batch_id: data.id,
@@ -287,7 +305,10 @@ export async function getBatchInvoice(
       paper_batch_id: data.paper_batch_id ?? null,
       system_batch_id: data.system_batch_id ?? null,
       pickup_date: data.pickup_date,
-      total_amount: data.total_amount ?? 0,
+      has_express_delivery: items.some((it) => it.express_delivery),
+      express_surcharge_total: expressSurchargeTotal,
+      subtotal_amount: subtotalAmount,
+      total_amount: totalAmount,
       has_discrepancy: !!data.has_discrepancy,
       items,
     };
@@ -328,9 +349,8 @@ async function getClientBatchesByPeriod(
         system_batch_id,
         pickup_date,
         status,
-        total_amount,
         has_discrepancy,
-        items:batch_items(quantity_received, quantity_sent)
+        items:batch_items(quantity_received, quantity_sent, price_per_item, express_delivery)
       `)
       .eq('client_id', clientId)
       .gte('pickup_date', startDate)
@@ -340,17 +360,47 @@ async function getClientBatchesByPeriod(
       throw new AnalyticsServiceError(`Failed to fetch client batches: ${error.message}`, 'FETCH_CLIENT_BATCHES_ERROR', 500);
     }
 
-    const rows: ClientBatchSummaryItem[] = (data || []).map((b: any) => ({
-      id: b.id,
-      paper_batch_id: b.paper_batch_id,
-      system_batch_id: b.system_batch_id || '',
-      pickup_date: b.pickup_date,
-      status: b.status,
-      total_amount: b.total_amount || 0,
-      has_discrepancy: !!b.has_discrepancy,
-      total_items_sent: (b.items || []).reduce((s: number, it: any) => s + (it.quantity_sent || 0), 0),
-      total_items_received: (b.items || []).reduce((s: number, it: any) => s + (it.quantity_received || 0), 0),
-    }));
+    const rows: ClientBatchSummaryItem[] = (data || []).map((b: any) => {
+      const items = b.items || [];
+      const totalItemsSent = items.reduce((sum: number, it: any) => sum + (it.quantity_sent || 0), 0);
+      const totalItemsReceived = items.reduce((sum: number, it: any) => sum + (it.quantity_received || 0), 0);
+
+      let batchSubtotalBase = 0;
+      let batchDiscrepancyValue = 0;
+      let batchExpressSurcharge = 0;
+
+      items.forEach((item: any) => {
+        const qtyReceived = item.quantity_received || 0;
+        const qtySent = item.quantity_sent || 0;
+        const price = item.price_per_item || 0;
+        const lineTotal = Math.round(qtyReceived * price * 100) / 100;
+        const discrepancy = qtyReceived - qtySent;
+        const discrepancyValue = Math.round(discrepancy * price * 100) / 100;
+
+        batchSubtotalBase += lineTotal;
+        batchDiscrepancyValue += discrepancyValue;
+
+        if (item.express_delivery) {
+          batchExpressSurcharge += Math.round(lineTotal * 0.5 * 100) / 100;
+        }
+      });
+
+      const batchTotal = Math.round((batchSubtotalBase + batchDiscrepancyValue + batchExpressSurcharge) * 100) / 100;
+
+      return {
+        id: b.id,
+        paper_batch_id: b.paper_batch_id,
+        system_batch_id: b.system_batch_id || '',
+        pickup_date: b.pickup_date,
+        status: b.status,
+        total_amount: batchTotal,
+        express_surcharge: Math.round(batchExpressSurcharge * 100) / 100,
+        has_express_delivery: items.some((item: any) => Boolean(item.express_delivery)),
+        has_discrepancy: !!b.has_discrepancy,
+        total_items_sent: totalItemsSent,
+        total_items_received: totalItemsReceived,
+      };
+    });
 
     return { data: rows, error: null, success: true };
   } catch (error) {
@@ -956,6 +1006,7 @@ export async function getRecentBatches(
         status: batch.status,
         total_amount: batchTotal,
         has_discrepancy: batch.has_discrepancy,
+        has_express_delivery: items.some((item: any) => Boolean(item.express_delivery)),
         item_count: Array.isArray(batch.batch_items) ? batch.batch_items.length : 0,
         created_at: batch.created_at || new Date().toISOString()
       };

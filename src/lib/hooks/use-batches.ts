@@ -7,6 +7,7 @@ interface Batch {
   pickup_date: string;
   status: string;
   total_amount: number;
+  has_express_delivery: boolean;
   created_at: string;
 }
 
@@ -55,6 +56,8 @@ export function useBatches(params: BatchesParams = {}) {
     queryFn: () => fetchBatches(params),
     staleTime: 60 * 1000, // 1 minute
     gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 

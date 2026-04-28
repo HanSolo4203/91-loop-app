@@ -194,7 +194,7 @@ export async function updateSalaryPayment(
       updates.status = payload.status;
       if (payload.status === 'paid') {
         updates.paid_at = new Date().toISOString();
-      } else if (payload.status !== 'paid') {
+      } else {
         updates.paid_at = null;
       }
     }
