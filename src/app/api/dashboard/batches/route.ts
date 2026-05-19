@@ -231,7 +231,7 @@ export async function GET(request: NextRequest) {
         error: null,
         data: response,
       } as AnalyticsServiceResponse<any>,
-      'dynamic' // Batches change frequently
+      'noCache'
     );
   } catch (error) {
     console.error('GET /api/dashboard/batches error:', error);

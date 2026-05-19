@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
+import { createAuthLockWithTimeout } from '@/lib/supabase-auth-lock';
 
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,6 +35,8 @@ function createBrowserClient() {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
+      // Prevent indefinite hangs when multiple tabs compete for the auth lock
+      lock: typeof window !== 'undefined' ? createAuthLockWithTimeout() : undefined,
     },
   });
 }

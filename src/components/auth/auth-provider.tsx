@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { withAuthTimeout, AUTH_CHECK_TIMEOUT_MS } from '@/lib/auth-timeout';
 
 interface AuthState {
   loading: boolean;
@@ -15,6 +16,10 @@ const AuthContext = createContext<AuthState | null>(null);
 let cachedAdminStatus: { userId: string; isAdmin: boolean; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+function isRefreshTokenError(message: string | undefined): boolean {
+  return (message ?? '').toLowerCase().includes('refresh token');
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -22,82 +27,95 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
+  const checkInFlightRef = useRef(false);
 
   const checkAuth = useCallback(async () => {
+    if (checkInFlightRef.current) return;
+    checkInFlightRef.current = true;
+
     const currentPath = pathnameRef.current;
     try {
       const now = Date.now();
 
-      // Fast path: use cache if valid
-      if (cachedAdminStatus && (now - cachedAdminStatus.timestamp) < CACHE_DURATION) {
-        const { data: { session } } = await supabase.auth.getSession();
+      // Fast path: use cache if valid (single getSession, not getUser)
+      if (cachedAdminStatus && now - cachedAdminStatus.timestamp < CACHE_DURATION) {
+        const { data: { session } } = await withAuthTimeout(
+          supabase.auth.getSession(),
+          AUTH_CHECK_TIMEOUT_MS,
+          'Session cache check'
+        );
         if (session?.user?.id === cachedAdminStatus.userId && cachedAdminStatus.isAdmin) {
           setIsAdmin(true);
-          setLoading(false);
           return;
         }
       }
 
-      const [sessionResult, userResult] = await Promise.all([
+      const { data: { session }, error: sessionError } = await withAuthTimeout(
         supabase.auth.getSession(),
-        supabase.auth.getUser(),
-      ]);
+        AUTH_CHECK_TIMEOUT_MS,
+        'Session check'
+      );
 
-      const { data: { session }, error: sessionError } = sessionResult;
-      const { data: { user }, error: userError } = userResult;
-
-      if (sessionError || userError) {
-        const msg = (sessionError || userError)?.message?.toLowerCase() ?? '';
-        if (msg.includes('refresh token')) {
+      if (sessionError) {
+        if (isRefreshTokenError(sessionError.message)) {
           cachedAdminStatus = null;
           await supabase.auth.signOut();
           if (currentPath !== '/login') router.replace('/login');
         }
-        setLoading(false);
         return;
       }
 
-      if (!session || !user) {
+      if (!session?.user) {
         cachedAdminStatus = null;
         if (currentPath !== '/login') router.replace('/login');
-        setLoading(false);
         return;
       }
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', user.id)
+        .eq('id', session.user.id)
         .single<{ role: 'admin' | 'user' }>();
 
       if (profileError || profile?.role !== 'admin') {
         cachedAdminStatus = null;
         await supabase.auth.signOut();
         if (currentPath !== '/login') router.replace('/login');
-        setLoading(false);
         return;
       }
 
-      cachedAdminStatus = { userId: user.id, isAdmin: true, timestamp: now };
+      cachedAdminStatus = { userId: session.user.id, isAdmin: true, timestamp: now };
       setIsAdmin(true);
     } catch (err) {
       console.error('Auth check error:', err);
       cachedAdminStatus = null;
       if (currentPath !== '/login') router.replace('/login');
     } finally {
+      checkInFlightRef.current = false;
       setLoading(false);
     }
   }, [router]);
 
   useEffect(() => {
-    checkAuth();
+    // Never leave the loading screen stuck indefinitely
+    const loadingTimeout = setTimeout(() => {
+      setLoading(false);
+    }, AUTH_CHECK_TIMEOUT_MS + 500);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    void checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return;
+
       cachedAdminStatus = null;
 
       if (event === 'SIGNED_OUT' || !session) {
+        setIsAdmin(false);
         router.push('/login');
-      } else if (session) {
+        return;
+      }
+
+      void (async () => {
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -115,10 +133,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await supabase.auth.signOut();
           router.push('/login');
         }
-      }
+      })();
     });
 
-    return () => subscription?.unsubscribe();
+    return () => {
+      clearTimeout(loadingTimeout);
+      subscription?.unsubscribe();
+    };
   }, [checkAuth, router]);
 
   return (

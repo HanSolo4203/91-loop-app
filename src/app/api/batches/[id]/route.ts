@@ -56,7 +56,7 @@ export async function GET(
         error: null,
         data: result.data,
       } as BatchDetailsServiceResponse<any>,
-      'dynamic' // Batch details change frequently
+      'noCache'
     );
   } catch (error) {
     console.error('GET /api/batches/[id] error:', error);

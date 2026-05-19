@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { QueryProvider } from "@/lib/providers/query-provider";
-import { RefreshTokenGuard } from "@/components/auth/refresh-token-guard";
 import { AuthProvider } from "@/components/auth/auth-provider";
 
 const inter = Inter({
@@ -41,7 +40,6 @@ export default function RootLayout({
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="font-sans antialiased bg-slate-50 text-slate-900 overflow-x-hidden leading-relaxed">
         <ErrorBoundary>
-          <RefreshTokenGuard />
           <QueryProvider>
             <AuthProvider>
               <div className="min-h-screen flex flex-col">

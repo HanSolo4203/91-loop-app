@@ -42,6 +42,7 @@ interface LinenCountGridProps {
 
 export interface LinenCountGridRef {
   getItems: () => LinenCountItem[];
+  setExpressForAll: (enabled: boolean) => void;
 }
 
 const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
@@ -66,9 +67,19 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
     onItemsChangeRef.current = onItemsChange;
   }, [onItemsChange]);
 
+  const setExpressForAll = (enabled: boolean) => {
+    setItems((prevItems) =>
+      prevItems.map((item) => ({
+        ...item,
+        express_delivery: item.quantity_sent > 0 ? enabled : false,
+      }))
+    );
+  };
+
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
-    getItems: () => items
+    getItems: () => items,
+    setExpressForAll,
   }), [items]);
 
   // Initialize items when categories or initial selections change

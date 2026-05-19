@@ -43,7 +43,9 @@ async function fetchBatches(params: BatchesParams = {}): Promise<BatchesResponse
   if (params.date_from) searchParams.set('date_from', params.date_from);
   if (params.date_to) searchParams.set('date_to', params.date_to);
   
-  const response = await fetch(`/api/dashboard/batches?${searchParams.toString()}`);
+  const response = await fetch(`/api/dashboard/batches?${searchParams.toString()}`, {
+    cache: 'no-store',
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch batches');
   }
@@ -54,7 +56,7 @@ export function useBatches(params: BatchesParams = {}) {
   return useQuery({
     queryKey: ['batches', params],
     queryFn: () => fetchBatches(params),
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 0,
     gcTime: 5 * 60 * 1000, // 5 minutes
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,

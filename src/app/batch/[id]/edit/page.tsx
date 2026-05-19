@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertCircle, ArrowLeft, FileEdit, RefreshCw, Calendar } from 'lucide-react';
+import { AlertCircle, ArrowLeft, FileEdit, RefreshCw, Calendar, Zap } from 'lucide-react';
 import type { LinenCategory } from '@/types/database';
 import { markDashboardForRefresh } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
@@ -111,6 +111,7 @@ function EditBatchContent() {
   const [pickupDate, setPickupDate] = useState<string>('');
   const [batchWorkflowStatus, setBatchWorkflowStatus] = useState<BatchDetails['status']>('delivered');
   const [showSavedToast, setShowSavedToast] = useState(false);
+  const [isExpressBatch, setIsExpressBatch] = useState(false);
 
   const loadPageData = useCallback(
     async (isRefresh = false) => {
@@ -130,7 +131,7 @@ function EditBatchContent() {
       try {
         const [categoriesResponse, batchResponse] = await Promise.all([
           fetch('/api/categories?includeInactive=false').then((res) => res.json()),
-          fetch(`/api/batches/${batchId}`).then((res) => res.json()),
+          fetch(`/api/batches/${batchId}`, { cache: 'no-store' }).then((res) => res.json()),
         ]);
 
         if (!categoriesResponse.success) {
@@ -165,6 +166,10 @@ function EditBatchContent() {
           express_delivery: item.express_delivery || false,
         }));
         setInitialSelections(mappedItems);
+        const activeMapped = mappedItems.filter((item) => item.quantity_sent > 0);
+        setIsExpressBatch(
+          activeMapped.length > 0 && activeMapped.every((item) => item.express_delivery)
+        );
       } catch (error) {
         setPageError(error instanceof Error ? error.message : 'Failed to load batch information');
       } finally {
@@ -184,7 +189,16 @@ function EditBatchContent() {
 
   const handleLinenItemsChange = useCallback((items: LinenCountItem[]) => {
     setLinenItems(items);
+    const activeItems = items.filter((item) => item.quantity_sent > 0);
+    setIsExpressBatch(
+      activeItems.length > 0 && activeItems.every((item) => item.express_delivery)
+    );
   }, []);
+
+  const handleExpressBatchToggle = (checked: boolean) => {
+    setIsExpressBatch(checked);
+    linenGridRef.current?.setExpressForAll(checked);
+  };
 
   const getCurrentItems = () => {
     return linenGridRef.current?.getItems() || [];
@@ -217,7 +231,7 @@ function EditBatchContent() {
         quantity_received: item.quantity_received,
         price_per_item: item.price_per_item,
         discrepancy_details: item.discrepancy_details || null,
-        express_delivery: item.express_delivery || false,
+        express_delivery: isExpressBatch ? true : Boolean(item.express_delivery),
       }));
 
       const response = await fetch(`/api/batches/${batchId}/items`, {
@@ -247,16 +261,12 @@ function EditBatchContent() {
           });
         }
 
-        // Mark dashboard for refresh when user navigates back
         markDashboardForRefresh();
-        await queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-        await queryClient.invalidateQueries({ queryKey: ['batches'] });
+        await queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], refetchType: 'all' });
+        await queryClient.invalidateQueries({ queryKey: ['batches'], refetchType: 'all' });
         setShowSavedToast(true);
-        setTimeout(() => setShowSavedToast(false), 1600);
         setAmendStatus('success');
-        setTimeout(() => {
-          router.push(`/batch/${batchId}`);
-        }, 2000);
+        router.push(`/batch/${batchId}?updated=1`);
       } else {
         setAmendStatus('error');
         setErrorMessage(result.error || 'Failed to amend batch items');
@@ -343,7 +353,15 @@ function EditBatchContent() {
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
           <div className="lg:col-span-2 xl:col-span-3 space-y-6">
             {batchDetails && (
-              <BatchHeader batch={batchDetails} client={batchDetails.client} loading={refreshing} />
+              <BatchHeader
+                batch={batchDetails}
+                client={batchDetails.client}
+                hasExpressDelivery={
+                  linenItems.some((item) => item.quantity_sent > 0 && item.express_delivery) ||
+                  isExpressBatch
+                }
+                loading={refreshing}
+              />
             )}
 
             {/* Batch Details Editor */}
@@ -377,6 +395,25 @@ function EditBatchContent() {
                       })}
                     </p>
                   )}
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 max-w-md">
+                  <div className="space-y-0.5 pr-4">
+                    <Label htmlFor="express-batch" className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-orange-600" />
+                      Express batch
+                    </Label>
+                    <p className="text-xs text-slate-600">
+                      Applies 50% express surcharge to all categories with quantities
+                    </p>
+                  </div>
+                  <input
+                    id="express-batch"
+                    type="checkbox"
+                    checked={isExpressBatch}
+                    onChange={(e) => handleExpressBatchToggle(e.target.checked)}
+                    disabled={amendStatus === 'creating' || !batchDetails}
+                    className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-orange-500 focus:ring-2"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="batch-status" className="text-sm text-slate-700">

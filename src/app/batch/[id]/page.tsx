@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Navigation from '@/components/navigation';
@@ -132,6 +132,7 @@ function Breadcrumb() {
 // Main batch details content
 function BatchDetailsContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const batchId = params.id as string;
 
   const [batchDetails, setBatchDetails] = useState<BatchDetails | null>(null);
@@ -151,7 +152,7 @@ function BatchDetailsContent() {
     setError('');
 
     try {
-      const response = await fetch(`/api/batches/${batchId}`);
+      const response = await fetch(`/api/batches/${batchId}`, { cache: 'no-store' });
       const result = await response.json();
 
       if (result.success) {
@@ -180,6 +181,13 @@ function BatchDetailsContent() {
       fetchBatchDetails();
     }
   }, [batchId, fetchBatchDetails]);
+
+  // Refetch immediately after invoice amendment redirect
+  useEffect(() => {
+    if (searchParams.get('updated') === '1' && batchId) {
+      fetchBatchDetails(true);
+    }
+  }, [searchParams, batchId, fetchBatchDetails]);
 
   // Prevent hydration mismatch by not rendering until client-side
   if (!isClient) {
@@ -306,6 +314,7 @@ function BatchDetailsContent() {
               quantity_sent: it.quantity_sent,
               quantity_received: it.quantity_received, 
               price_per_item: it.price_per_item,
+              express_delivery: it.express_delivery,
               discrepancy_details: null
             }))}
             subtotal={batchDetails.financial_summary.total_amount}

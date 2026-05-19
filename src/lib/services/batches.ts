@@ -429,7 +429,9 @@ export async function updateBatchItems(
     });
 
     const totalAmount = preparedItems.reduce((sum, item) => {
-      return sum + item.quantity_received * item.price_per_item;
+      const baseAmount = item.quantity_received * item.price_per_item;
+      const surcharge = item.express_delivery ? baseAmount * 0.5 : 0;
+      return sum + baseAmount + surcharge;
     }, 0);
     const hasDiscrepancy = preparedItems.some(
       (item) => item.quantity_sent !== item.quantity_received
@@ -774,6 +776,7 @@ export async function createBatch(batchData: CreateBatchRequest): Promise<BatchS
         quantity_received: quantityReceived,
         price_per_item: price,
         discrepancy_details: item.discrepancy_details || null,
+        express_delivery: item.express_delivery || false,
       });
     }
 

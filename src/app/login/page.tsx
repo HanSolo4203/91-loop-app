@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
+import { withAuthTimeout, AUTH_CHECK_TIMEOUT_MS } from '@/lib/auth-timeout';
 import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
 
 type ProfileRole = { role: 'admin' | 'user' };
@@ -24,9 +25,17 @@ export default function LoginPage() {
 
   // Check if user is already logged in
   useEffect(() => {
+    const loadingTimeout = setTimeout(() => {
+      setCheckingAuth(false);
+    }, AUTH_CHECK_TIMEOUT_MS + 500);
+
     const checkSession = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await withAuthTimeout(
+          supabase.auth.getSession(),
+          AUTH_CHECK_TIMEOUT_MS,
+          'Login session check'
+        );
 
         if (sessionError) {
           console.error('Session check error:', sessionError);
@@ -69,7 +78,9 @@ export default function LoginPage() {
       }
     };
 
-    checkSession();
+    void checkSession();
+
+    return () => clearTimeout(loadingTimeout);
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
