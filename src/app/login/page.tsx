@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { withAuthTimeout, AUTH_CHECK_TIMEOUT_MS } from '@/lib/auth-timeout';
+import { clearStaleAuthSession, isRefreshTokenError } from '@/lib/auth-session';
 import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
 
 type ProfileRole = { role: 'admin' | 'user' };
@@ -38,12 +39,12 @@ export default function LoginPage() {
         );
 
         if (sessionError) {
-          console.error('Session check error:', sessionError);
-          if (sessionError.message?.toLowerCase().includes('refresh token')) {
-            await supabase.auth.signOut();
+          if (isRefreshTokenError(sessionError)) {
+            await clearStaleAuthSession();
             setCheckingAuth(false);
             return;
           }
+          console.error('Session check error:', sessionError);
         }
 
         if (!session) {

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { withAuthTimeout, AUTH_CHECK_TIMEOUT_MS } from '@/lib/auth-timeout';
+import { clearStaleAuthSession, isRefreshTokenError } from '@/lib/auth-session';
 
 interface AuthState {
   loading: boolean;
@@ -15,10 +16,6 @@ const AuthContext = createContext<AuthState | null>(null);
 // Cache admin status in memory - persists across navigations
 let cachedAdminStatus: { userId: string; isAdmin: boolean; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-function isRefreshTokenError(message: string | undefined): boolean {
-  return (message ?? '').toLowerCase().includes('refresh token');
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -39,11 +36,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Fast path: use cache if valid (single getSession, not getUser)
       if (cachedAdminStatus && now - cachedAdminStatus.timestamp < CACHE_DURATION) {
-        const { data: { session } } = await withAuthTimeout(
+        const { data: { session }, error: cacheError } = await withAuthTimeout(
           supabase.auth.getSession(),
           AUTH_CHECK_TIMEOUT_MS,
           'Session cache check'
         );
+        if (cacheError && isRefreshTokenError(cacheError)) {
+          cachedAdminStatus = null;
+          await clearStaleAuthSession();
+          if (currentPath !== '/login') router.replace('/login');
+          return;
+        }
         if (session?.user?.id === cachedAdminStatus.userId && cachedAdminStatus.isAdmin) {
           setIsAdmin(true);
           return;
@@ -57,9 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
 
       if (sessionError) {
-        if (isRefreshTokenError(sessionError.message)) {
+        if (isRefreshTokenError(sessionError)) {
           cachedAdminStatus = null;
-          await supabase.auth.signOut();
+          await clearStaleAuthSession();
           if (currentPath !== '/login') router.replace('/login');
         }
         return;

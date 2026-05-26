@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { clearStaleAuthSession, isRefreshTokenError } from '@/lib/auth-session';
 
 export default function Home() {
   const router = useRouter();
@@ -11,8 +12,14 @@ export default function Home() {
   useEffect(() => {
     const checkAuthAndRedirect = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError && isRefreshTokenError(sessionError)) {
+          await clearStaleAuthSession();
+          router.push('/login');
+          return;
+        }
+
         if (session) {
           // User is logged in, redirect to dashboard
           router.push('/dashboard');
