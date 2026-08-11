@@ -440,6 +440,8 @@ export interface Database {
           regular_minutes: number | null;
           overtime_minutes: number | null;
           is_overnight: boolean | null;
+          is_manual_edit: boolean | null;
+          admin_notes: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -458,6 +460,8 @@ export interface Database {
           regular_minutes?: number | null;
           overtime_minutes?: number | null;
           is_overnight?: boolean | null;
+          is_manual_edit?: boolean | null;
+          admin_notes?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -476,6 +480,8 @@ export interface Database {
           regular_minutes?: number | null;
           overtime_minutes?: number | null;
           is_overnight?: boolean | null;
+          is_manual_edit?: boolean | null;
+          admin_notes?: string | null;
           created_at?: string;
           updated_at?: string;
         };

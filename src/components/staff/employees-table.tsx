@@ -73,7 +73,7 @@ export default function EmployeesTable({
           </div>
         </CardHeader>
         <CardContent>
-          <LoadingTable rows={5} columns={8} />
+          <LoadingTable rows={5} columns={9} />
         </CardContent>
       </Card>
     );
@@ -137,6 +137,7 @@ export default function EmployeesTable({
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Shift</TableHead>
+                  <TableHead>Clock-In PIN</TableHead>
                   <TableHead>Monthly Salary</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-20"></TableHead>
@@ -168,6 +169,9 @@ export default function EmployeesTable({
                     <TableCell className="text-sm">{emp.role || '-'}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{shiftLabel(emp.shift_type)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm font-mono tracking-wider">
+                      {emp.clock_pin ?? '—'}
                     </TableCell>
                     <TableCell className="text-sm">
                       {formatCurrency(

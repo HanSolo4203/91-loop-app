@@ -217,6 +217,11 @@ export async function updateEmployee(
       return { data: null, error: error.message, success: false };
     }
 
+    if (payload.monthly_salary !== undefined && payload.monthly_salary != null) {
+      const { syncPendingSalaryPaymentsForEmployee } = await import('@/lib/services/staff/salary');
+      await syncPendingSalaryPaymentsForEmployee(id, payload.monthly_salary);
+    }
+
     return { data: sanitizeEmployee(data as Employee), error: null, success: true };
   } catch (err) {
     return {

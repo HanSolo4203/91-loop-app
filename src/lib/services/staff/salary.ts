@@ -21,8 +21,56 @@ function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
+/** Split monthly salary into two payments that always sum exactly to monthly. */
+export function splitMonthlySalary(monthly: number): [number, number] {
+  const payment1 = Math.round((monthly / 2) * 100) / 100;
+  const payment2 = Math.round((monthly - payment1) * 100) / 100;
+  return [payment1, payment2];
+}
+
+function resolveMonthlySalary(emp: {
+  monthly_salary?: number | null;
+  bi_weekly_salary?: number | null;
+}): number {
+  return emp.monthly_salary ?? (emp.bi_weekly_salary != null ? emp.bi_weekly_salary * 2 : 0);
+}
+
+/**
+ * Sync pending salary payment amounts for an employee to match their current monthly salary.
+ * Paid/skipped payments are left unchanged.
+ */
+export async function syncPendingSalaryPaymentsForEmployee(
+  employeeId: string,
+  monthlySalary: number
+): Promise<void> {
+  validateUuid(employeeId);
+  if (monthlySalary < 0) return;
+
+  const [amount1, amount2] = splitMonthlySalary(monthlySalary);
+
+  const { data: pending } = await supabaseAdmin
+    .from('salary_payments')
+    .select('id, payment_number, deductions')
+    .eq('employee_id', employeeId)
+    .eq('status', 'pending');
+
+  for (const row of (pending || []) as { id: string; payment_number: number; deductions: number }[]) {
+    const gross = row.payment_number === 1 ? amount1 : amount2;
+    const deductions = row.deductions ?? 0;
+    await (supabaseAdmin as any)
+      .from('salary_payments')
+      .update({
+        gross_amount: gross,
+        net_amount: Math.max(0, gross - deductions),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id);
+  }
+}
+
 /**
  * GET salary payments for a month/year with employee details.
+ * Pending payment amounts are refreshed to match each employee's current monthly salary.
  */
 export async function getSalaryPaymentsForPeriod(
   month: number,
@@ -41,7 +89,7 @@ export async function getSalaryPaymentsForPeriod(
       return { data: null, error: payError.message, success: false };
     }
 
-    const list = (payments || []) as SalaryPayment[];
+    let list = (payments || []) as SalaryPayment[];
     const employeeIds = [...new Set(list.map((p) => p.employee_id))];
     const { data: employees } = await supabaseAdmin
       .from('employees')
@@ -50,6 +98,32 @@ export async function getSalaryPaymentsForPeriod(
 
     const empMap = new Map<string, Employee>();
     (employees || []).forEach((e: Employee) => empMap.set(e.id, e));
+
+    // Keep pending payment amounts in sync with current monthly salary (including R0)
+    for (const p of list) {
+      if (p.status !== 'pending') continue;
+      const emp = empMap.get(p.employee_id);
+      if (!emp) continue;
+      const monthly = Math.max(0, resolveMonthlySalary(emp));
+      const [amount1, amount2] = splitMonthlySalary(monthly);
+      const expectedGross = p.payment_number === 1 ? amount1 : amount2;
+      if (p.gross_amount === expectedGross) continue;
+
+      const deductions = p.deductions ?? 0;
+      const net = Math.max(0, expectedGross - deductions);
+      const { error: syncError } = await (supabaseAdmin as any)
+        .from('salary_payments')
+        .update({
+          gross_amount: expectedGross,
+          net_amount: net,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', p.id);
+      if (!syncError) {
+        p.gross_amount = expectedGross;
+        p.net_amount = net;
+      }
+    }
 
     const withEmployee: SalaryPaymentWithEmployee[] = list.map((p) => ({
       ...p,
@@ -68,13 +142,14 @@ export async function getSalaryPaymentsForPeriod(
 
 /**
  * Generate salary payment schedule for a month/year: create two pending
- * salary_payments per active employee. Skip employees that already have
- * records for that period.
+ * salary_payments per active employee. For employees that already have
+ * pending payments, refresh amounts so Payment 1 + Payment 2 = monthly salary.
+ * Paid/skipped payments are left unchanged.
  */
 export async function generateSalarySchedule(
   month: number,
   year: number
-): Promise<StaffServiceResponse<{ created: number }>> {
+): Promise<StaffServiceResponse<{ created: number; updated: number }>> {
   try {
     const { data: employees, error: empError } = await supabaseAdmin
       .from('employees')
@@ -87,16 +162,29 @@ export async function generateSalarySchedule(
 
     const existing = await supabaseAdmin
       .from('salary_payments')
-      .select('employee_id')
+      .select('id, employee_id, payment_number, status, deductions, gross_amount')
       .eq('period_month', month)
       .eq('period_year', year);
 
-    const existingSet = new Set(
-      ((existing.data || []) as { employee_id: string }[]).map((r) => r.employee_id)
-    );
+    type ExistingPayment = {
+      id: string;
+      employee_id: string;
+      payment_number: number;
+      status: string;
+      deductions: number;
+      gross_amount: number;
+    };
+
+    const existingByEmployee = new Map<string, ExistingPayment[]>();
+    for (const row of (existing.data || []) as ExistingPayment[]) {
+      const list = existingByEmployee.get(row.employee_id) ?? [];
+      list.push(row);
+      existingByEmployee.set(row.employee_id, list);
+    }
 
     const daysInMonth = getDaysInMonth(year, month);
     let created = 0;
+    let updated = 0;
 
     for (const emp of employees || []) {
       const e = emp as {
@@ -106,12 +194,33 @@ export async function generateSalarySchedule(
         salary_payment_day_1: number;
         salary_payment_day_2: number;
       };
-      if (existingSet.has(e.id)) continue;
 
-      const monthly = e.monthly_salary ?? (e.bi_weekly_salary != null ? e.bi_weekly_salary * 2 : 0);
+      const monthly = Math.max(0, resolveMonthlySalary(e));
+      const [amount1, amount2] = splitMonthlySalary(monthly);
+      const existingPayments = existingByEmployee.get(e.id);
+
+      if (existingPayments && existingPayments.length > 0) {
+        for (const payment of existingPayments) {
+          if (payment.status !== 'pending') continue;
+          const gross = payment.payment_number === 1 ? amount1 : amount2;
+          if (payment.gross_amount === gross) continue;
+          const deductions = payment.deductions ?? 0;
+          const { error: updateError } = await (supabaseAdmin as any)
+            .from('salary_payments')
+            .update({
+              gross_amount: gross,
+              net_amount: Math.max(0, gross - deductions),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', payment.id);
+          if (!updateError) updated += 1;
+        }
+        continue;
+      }
+
+      // Don't create new schedule rows for employees with no salary
       if (monthly <= 0) continue;
 
-      const half = Math.round((monthly / 2) * 100) / 100;
       const day1 = Math.min(Math.max(1, e.salary_payment_day_1 ?? 1), daysInMonth);
       const day2 = Math.min(Math.max(1, e.salary_payment_day_2 ?? 15), daysInMonth);
 
@@ -125,9 +234,9 @@ export async function generateSalarySchedule(
           payment_number: 1,
           period_month: month,
           period_year: year,
-          gross_amount: half,
+          gross_amount: amount1,
           deductions: 0,
-          net_amount: half,
+          net_amount: amount1,
           status: 'pending',
           payment_method: 'bank_transfer',
         },
@@ -137,9 +246,9 @@ export async function generateSalarySchedule(
           payment_number: 2,
           period_month: month,
           period_year: year,
-          gross_amount: half,
+          gross_amount: amount2,
           deductions: 0,
-          net_amount: half,
+          net_amount: amount2,
           status: 'pending',
           payment_method: 'bank_transfer',
         },
@@ -152,7 +261,7 @@ export async function generateSalarySchedule(
       if (!insertError) created += 2;
     }
 
-    return { data: { created }, error: null, success: true };
+    return { data: { created, updated }, error: null, success: true };
   } catch (err) {
     return {
       data: null,
@@ -321,9 +430,7 @@ export async function getSalarySummary(
     for (const [, row] of byEmployee) {
       const p1Amount = row.payment_1?.net_amount ?? 0;
       const p2Amount = row.payment_2?.net_amount ?? 0;
-      const monthly = row.payment_1?.gross_amount != null && row.payment_2?.gross_amount != null
-        ? (row.payment_1.gross_amount + row.payment_2.gross_amount)
-        : (row.employee.monthly_salary ?? (row.employee.bi_weekly_salary ?? 0) * 2);
+      const monthly = resolveMonthlySalary(row.employee);
       const total = p1Amount + p2Amount;
 
       total_monthly_payroll += monthly;

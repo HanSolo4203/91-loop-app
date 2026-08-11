@@ -90,7 +90,9 @@ export default function EmployeeFormDrawer({
         email: employee.email || '',
         role: employee.role || '',
         shift_type: employee.shift_type ?? 'both',
-        monthly_salary: employee.monthly_salary ?? employee.bi_weekly_salary != null ? employee.bi_weekly_salary * 2 : undefined,
+        monthly_salary:
+          employee.monthly_salary ??
+          (employee.bi_weekly_salary != null ? employee.bi_weekly_salary * 2 : undefined),
         salary_payment_day_1: employee.salary_payment_day_1 ?? 1,
         salary_payment_day_2: employee.salary_payment_day_2 ?? 15,
         bank_reference: employee.bank_reference || '',

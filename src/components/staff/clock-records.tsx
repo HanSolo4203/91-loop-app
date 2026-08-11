@@ -5,6 +5,9 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -35,8 +38,17 @@ import {
   Award,
   AlertTriangle,
   CheckCircle,
+  LogOut,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
-import { useActiveClockEntries, useClockStats } from '@/lib/hooks/use-clocking';
+import {
+  useActiveClockEntries,
+  useClockStats,
+  useDeleteClockSession,
+  useForceClockOut,
+  type ActiveClockEntry,
+} from '@/lib/hooks/use-clocking';
 import {
   formatDurationMinutes,
   formatSastDateTime,
@@ -47,6 +59,11 @@ import {
 import type { ClockStats, ClockSession } from '@/types/database';
 import { cn } from '@/lib/utils';
 import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
+import EditSessionDialog, {
+  fromSastLocalInput,
+  toSastLocalInput,
+  type EditSessionDialogSession,
+} from './edit-session-dialog';
 
 const ShiftHoursChart = dynamic(() => import('./shift-hours-chart'), {
   ssr: false,
@@ -75,6 +92,7 @@ const monthOptions = [
 ];
 
 interface DaySessionEntry {
+  id: string;
   employee_id: string;
   full_name: string;
   photo_url: string | null;
@@ -85,6 +103,53 @@ interface DaySessionEntry {
   shift_type: 'day' | 'night' | null;
   regular_minutes: number | null;
   overtime_minutes: number | null;
+  is_manual_edit: boolean | null;
+  session: ClockSession;
+}
+
+function ManualEditBadge({ session }: { session: Pick<ClockSession, 'is_manual_edit' | 'admin_notes'> }) {
+  const notes = session.admin_notes ?? '';
+  const show =
+    session.is_manual_edit === true ||
+    /admin|manual/i.test(notes);
+  if (!show) return null;
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs bg-slate-100 text-slate-500 rounded px-1">
+      <Pencil className="w-3 h-3 text-slate-400" />
+      Edited
+    </span>
+  );
+}
+
+function toEditSession(
+  session: ClockSession,
+  employee: { full_name: string; photo_url: string | null }
+): EditSessionDialogSession {
+  return { ...session, employee };
+}
+
+function activeEntryToEditSession(entry: ActiveClockEntry): EditSessionDialogSession {
+  return {
+    id: entry.session_id,
+    employee_id: entry.employee_id,
+    clock_in_id: null,
+    clock_out_id: null,
+    clocked_in_at: entry.clocked_in_at,
+    clocked_out_at: null,
+    shift_date: entry.shift_date,
+    duration_minutes: null,
+    shift_type: entry.shift_type === 'night' ? 'night' : 'day',
+    scheduled_start: null,
+    scheduled_end: null,
+    regular_minutes: null,
+    overtime_minutes: 0,
+    is_overnight: entry.shift_type === 'night',
+    is_manual_edit: false,
+    admin_notes: null,
+    created_at: entry.clocked_in_at,
+    updated_at: entry.clocked_in_at,
+    employee: { full_name: entry.full_name, photo_url: entry.photo_url },
+  };
 }
 
 function employeeInitials(fullName: string): string {
@@ -278,7 +343,19 @@ function SummaryCard({
   );
 }
 
-function SessionsSubTable({ sessions }: { sessions: ClockSession[] }) {
+function SessionsSubTable({
+  sessions,
+  employee,
+  onEdit,
+  onForceOut,
+  onDelete,
+}: {
+  sessions: ClockSession[];
+  employee: { full_name: string; photo_url: string | null };
+  onEdit: (session: EditSessionDialogSession) => void;
+  onForceOut: (session: ClockSession, employeeName: string) => void;
+  onDelete: (session: ClockSession, employeeName: string) => void;
+}) {
   if (sessions.length === 0) {
     return (
       <p className="text-sm text-slate-500 px-4 py-3">No sessions this month</p>
@@ -297,23 +374,48 @@ function SessionsSubTable({ sessions }: { sessions: ClockSession[] }) {
             <TableHead>Regular</TableHead>
             <TableHead>Overtime</TableHead>
             <TableHead>Duration</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sessions.map((s) => (
             <TableRow key={s.id}>
-              <TableCell className="pl-8 text-slate-700">{s.shift_date}</TableCell>
+              <TableCell className="pl-8 text-slate-700">
+                <div className="flex items-center gap-1.5">
+                  {s.shift_date}
+                  <ManualEditBadge session={s} />
+                </div>
+              </TableCell>
               <TableCell>
                 <Badge variant="outline">{formatShiftShort(s.shift_type)}</Badge>
               </TableCell>
               <TableCell className="tabular-nums">
-                {s.clocked_in_at ? formatSastTime(s.clocked_in_at) : '—'}
+                <span className="inline-flex items-center gap-1">
+                  {s.clocked_in_at ? formatSastTime(s.clocked_in_at) : '—'}
+                  {s.is_manual_edit && (
+                    <Pencil className="w-3 h-3 text-slate-400" />
+                  )}
+                </span>
               </TableCell>
               <TableCell className="tabular-nums">
                 {s.clocked_out_at ? (
-                  formatSastTime(s.clocked_out_at)
+                  <span className="inline-flex items-center gap-1">
+                    {formatSastTime(s.clocked_out_at)}
+                    {s.is_manual_edit && (
+                      <Pencil className="w-3 h-3 text-slate-400" />
+                    )}
+                  </span>
                 ) : (
-                  <Badge className="bg-amber-100 text-amber-800 border-amber-200">Open</Badge>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => onForceOut(s, employee.full_name)}
+                  >
+                    <LogOut className="w-3 h-3 mr-1" />
+                    Force Out
+                  </Button>
                 )}
               </TableCell>
               <TableCell className="tabular-nums">
@@ -336,6 +438,30 @@ function SessionsSubTable({ sessions }: { sessions: ClockSession[] }) {
                   ? formatDurationMinutes(s.duration_minutes)
                   : '—'}
               </TableCell>
+              <TableCell className="text-right">
+                <div className="inline-flex items-center justify-end gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => onEdit(toEditSession(s, employee))}
+                  >
+                    <Pencil className="w-3 h-3 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => onDelete(s, employee.full_name)}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -348,10 +474,14 @@ function AttendanceCalendar({
   year,
   month,
   daySessionsMap,
+  onEditSession,
+  onDeleteSession,
 }: {
   year: number;
   month: number;
   daySessionsMap: Map<string, DaySessionEntry[]>;
+  onEditSession: (session: EditSessionDialogSession) => void;
+  onDeleteSession: (session: ClockSession, employeeName: string) => void;
 }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const todayKey = getSastDateString();
@@ -490,11 +620,12 @@ function AttendanceCalendar({
                     <TableHead>Regular</TableHead>
                     <TableHead>Overtime</TableHead>
                     <TableHead>Duration</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedSessions.map((s, idx) => (
-                    <TableRow key={`${s.employee_id}-${s.clocked_in_at}-${idx}`}>
+                  {selectedSessions.map((s) => (
+                    <TableRow key={s.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <EmployeeAvatar
@@ -502,18 +633,33 @@ function AttendanceCalendar({
                             photoUrl={s.photo_url}
                             size={32}
                           />
-                          <span className="font-medium text-slate-900">{s.full_name}</span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-medium text-slate-900 truncate">
+                              {s.full_name}
+                            </span>
+                            <ManualEditBadge session={s.session} />
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         {s.shift_type === 'night' ? '🌙 Night Shift' : '☀️ Day Shift'}
                       </TableCell>
                       <TableCell className="tabular-nums">
-                        {formatSastTime(s.clocked_in_at)}
+                        <span className="inline-flex items-center gap-1">
+                          {formatSastTime(s.clocked_in_at)}
+                          {s.is_manual_edit && (
+                            <Pencil className="w-3 h-3 text-slate-400" />
+                          )}
+                        </span>
                       </TableCell>
                       <TableCell className="tabular-nums">
                         {s.clocked_out_at ? (
-                          formatSastTime(s.clocked_out_at)
+                          <span className="inline-flex items-center gap-1">
+                            {formatSastTime(s.clocked_out_at)}
+                            {s.is_manual_edit && (
+                              <Pencil className="w-3 h-3 text-slate-400" />
+                            )}
+                          </span>
                         ) : (
                           <span className="text-emerald-600">Still on shift</span>
                         )}
@@ -532,6 +678,37 @@ function AttendanceCalendar({
                       </TableCell>
                       <TableCell className="tabular-nums">
                         {formatDurationMinutes(sessionMinutes(s))}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={() =>
+                              onEditSession(
+                                toEditSession(s.session, {
+                                  full_name: s.full_name,
+                                  photo_url: s.photo_url,
+                                })
+                              )
+                            }
+                            aria-label={`Edit session for ${s.full_name}`}
+                          >
+                            <Pencil className="w-4 h-4 text-slate-500" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={() => onDeleteSession(s.session, s.full_name)}
+                            aria-label={`Delete session for ${s.full_name}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -554,16 +731,288 @@ function AttendanceCalendar({
   );
 }
 
+function ForceClockOutDialog({
+  open,
+  onOpenChange,
+  target,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  target: {
+    employee_id: string;
+    full_name: string;
+    clocked_in_at: string;
+  } | null;
+  onSuccess: () => void;
+}) {
+  const forceClockOut = useForceClockOut();
+  const [clockOutLocal, setClockOutLocal] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [liveDuration, setLiveDuration] = useState('');
+
+  useEffect(() => {
+    if (!open || !target) return;
+    setClockOutLocal(toSastLocalInput(new Date().toISOString()));
+    setNotes('');
+    setError(null);
+    setSuccessMsg(null);
+    forceClockOut.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, target?.employee_id]);
+
+  useEffect(() => {
+    if (!target?.clocked_in_at || !open) return;
+    const tick = () => {
+      const mins = Math.round(
+        (Date.now() - new Date(target.clocked_in_at).getTime()) / 60000
+      );
+      setLiveDuration(formatDurationMinutes(mins));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target?.clocked_in_at, open]);
+
+  const handleConfirm = async () => {
+    if (!target) return;
+    setError(null);
+    try {
+      const result = await forceClockOut.mutateAsync({
+        employee_id: target.employee_id,
+        clocked_out_at: clockOutLocal ? fromSastLocalInput(clockOutLocal) : null,
+        notes: notes.trim() || null,
+      });
+      setSuccessMsg(
+        `Clocked out successfully${
+          result?.duration_formatted ? ` · ${result.duration_formatted}` : ''
+        }`
+      );
+      onSuccess();
+      setTimeout(() => onOpenChange(false), 800);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Force clock-out failed');
+    }
+  };
+
+  if (!target) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Force Clock-Out</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Clock out <span className="font-semibold text-slate-900">{target.full_name}</span>?
+            They have been on shift for{' '}
+            <span className="font-semibold tabular-nums">{liveDuration || '…'}</span>.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="force-clock-out-time">Clock-out time</Label>
+            <Input
+              id="force-clock-out-time"
+              type="datetime-local"
+              value={clockOutLocal}
+              onChange={(e) => setClockOutLocal(e.target.value)}
+              disabled={forceClockOut.isPending}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="force-clock-out-notes">Reason / notes</Label>
+            <Textarea
+              id="force-clock-out-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional"
+              rows={2}
+              disabled={forceClockOut.isPending}
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
+          {successMsg && (
+            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+              {successMsg}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            disabled={forceClockOut.isPending}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={forceClockOut.isPending}
+            onClick={() => void handleConfirm()}
+          >
+            {forceClockOut.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              'Clock Out Now'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteSessionDialog({
+  open,
+  onOpenChange,
+  target,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  target: {
+    id: string;
+    full_name: string;
+    shift_date: string;
+    clocked_in_at: string;
+    clocked_out_at: string | null;
+  } | null;
+  onSuccess: () => void;
+}) {
+  const deleteMutation = useDeleteClockSession();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    deleteMutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, target?.id]);
+
+  const handleConfirm = async () => {
+    if (!target) return;
+    setError(null);
+    try {
+      await deleteMutation.mutateAsync(target.id);
+      onSuccess();
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete session');
+    }
+  };
+
+  if (!target) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete Clock Session</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Delete this session for{' '}
+            <span className="font-semibold text-slate-900">{target.full_name}</span>?
+            This cannot be undone.
+          </p>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <div>{target.shift_date}</div>
+            <div className="tabular-nums">
+              {formatSastTime(target.clocked_in_at)}
+              {' → '}
+              {target.clocked_out_at
+                ? formatSastTime(target.clocked_out_at)
+                : 'Still on shift'}
+            </div>
+          </div>
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            disabled={deleteMutation.isPending}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={deleteMutation.isPending}
+            onClick={() => void handleConfirm()}
+          >
+            {deleteMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              'Delete Session'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ClockRecords() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [editSession, setEditSession] = useState<EditSessionDialogSession | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [forceTarget, setForceTarget] = useState<{
+    employee_id: string;
+    full_name: string;
+    clocked_in_at: string;
+  } | null>(null);
+  const [forceOpen, setForceOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    full_name: string;
+    shift_date: string;
+    clocked_in_at: string;
+    clocked_out_at: string | null;
+  } | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data, isLoading, error, refetch, isFetching } = useClockStats(month, year);
   const { data: activeData } = useActiveClockEntries();
   const stats = data?.success && Array.isArray(data.data) ? data.data : [];
   const activeEntries = Array.isArray(activeData?.data) ? activeData.data : [];
+
+  const openEdit = (session: EditSessionDialogSession) => {
+    setEditSession(session);
+    setEditOpen(true);
+  };
+
+  const openForceOut = (target: {
+    employee_id: string;
+    full_name: string;
+    clocked_in_at: string;
+  }) => {
+    setForceTarget(target);
+    setForceOpen(true);
+  };
+
+  const openDelete = (session: ClockSession, employeeName: string) => {
+    setDeleteTarget({
+      id: session.id,
+      full_name: employeeName,
+      shift_date: session.shift_date,
+      clocked_in_at: session.clocked_in_at,
+      clocked_out_at: session.clocked_out_at,
+    });
+    setDeleteOpen(true);
+  };
 
   const yearOptions = useMemo(() => {
     const y = new Date().getFullYear();
@@ -614,6 +1063,7 @@ export default function ClockRecords() {
         const dateKey = session.shift_date;
         const list = map.get(dateKey) || [];
         list.push({
+          id: session.id,
           employee_id: empStat.employee_id,
           full_name: empStat.full_name,
           photo_url: empStat.photo_url ?? null,
@@ -624,6 +1074,8 @@ export default function ClockRecords() {
           shift_type: session.shift_type,
           regular_minutes: session.regular_minutes,
           overtime_minutes: session.overtime_minutes,
+          is_manual_edit: session.is_manual_edit ?? null,
+          session,
         });
         map.set(dateKey, list);
       }
@@ -825,6 +1277,7 @@ export default function ClockRecords() {
                   <TableHead>Shift</TableHead>
                   <TableHead>Clocked In</TableHead>
                   <TableHead>Duration</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -869,6 +1322,36 @@ export default function ClockRecords() {
                         className="text-sm text-slate-700"
                       />
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          className="h-8"
+                          onClick={() =>
+                            openForceOut({
+                              employee_id: entry.employee_id,
+                              full_name: entry.full_name,
+                              clocked_in_at: entry.clocked_in_at,
+                            })
+                          }
+                        >
+                          <LogOut className="w-3.5 h-3.5 mr-1" />
+                          Clock Out Now
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-slate-600"
+                          onClick={() => openEdit(activeEntryToEditSession(entry))}
+                        >
+                          <Pencil className="w-3.5 h-3.5 mr-1" />
+                          Edit
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -892,6 +1375,8 @@ export default function ClockRecords() {
             year={year}
             month={month}
             daySessionsMap={daySessionsMap}
+            onEditSession={openEdit}
+            onDeleteSession={openDelete}
           />
 
           <Card>
@@ -1057,7 +1542,22 @@ export default function ClockRecords() {
                         {isOpen && (
                           <TableRow>
                             <TableCell colSpan={10} className="p-0">
-                              <SessionsSubTable sessions={emp.sessions} />
+                              <SessionsSubTable
+                                sessions={emp.sessions}
+                                employee={{
+                                  full_name: emp.full_name,
+                                  photo_url: emp.photo_url ?? null,
+                                }}
+                                onEdit={openEdit}
+                                onForceOut={(session, employeeName) =>
+                                  openForceOut({
+                                    employee_id: session.employee_id,
+                                    full_name: employeeName,
+                                    clocked_in_at: session.clocked_in_at,
+                                  })
+                                }
+                                onDelete={openDelete}
+                              />
                             </TableCell>
                           </TableRow>
                         )}
@@ -1070,6 +1570,42 @@ export default function ClockRecords() {
           </div>
         </>
       )}
+
+      <EditSessionDialog
+        session={editSession}
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open);
+          if (!open) setEditSession(null);
+        }}
+        onSaved={() => {
+          void refetch();
+        }}
+      />
+
+      <ForceClockOutDialog
+        open={forceOpen}
+        onOpenChange={(open) => {
+          setForceOpen(open);
+          if (!open) setForceTarget(null);
+        }}
+        target={forceTarget}
+        onSuccess={() => {
+          void refetch();
+        }}
+      />
+
+      <DeleteSessionDialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          setDeleteOpen(open);
+          if (!open) setDeleteTarget(null);
+        }}
+        target={deleteTarget}
+        onSuccess={() => {
+          void refetch();
+        }}
+      />
     </div>
   );
 }
