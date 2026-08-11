@@ -166,7 +166,21 @@ function NavigationInner() {
     if (enablingKiosk) return;
     setEnablingKiosk(true);
     try {
-      const res = await fetch('/api/kiosk-mode', { method: 'POST' });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setEnablingKiosk(false);
+        return;
+      }
+
+      const res = await fetch('/api/kiosk-mode', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setEnablingKiosk(false);
@@ -174,7 +188,8 @@ function NavigationInner() {
       }
       setKioskModeActive(true);
       setKioskConfirmOpen(false);
-      router.push('/clocking');
+      // Full navigation so the httpOnly kiosk cookie is applied before /clocking renders
+      window.location.assign('/clocking');
     } catch {
       setEnablingKiosk(false);
     }
@@ -313,16 +328,19 @@ function NavigationInner() {
                       </Link>
                     ))}
                     <div className="my-1 border-t border-slate-100" />
-                    <a
-                      href="/clocking"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setStaffOpen(false)}
-                      className={linkClass(false)}
-                    >
-                      <MonitorSmartphone className="w-4 h-4 flex-shrink-0" />
-                      Open Kiosk
-                    </a>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStaffOpen(false);
+                          setKioskConfirmOpen(true);
+                        }}
+                        className={linkClass(false)}
+                      >
+                        <MonitorSmartphone className="w-4 h-4 flex-shrink-0" />
+                        Enable Kiosk Mode
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -468,21 +486,19 @@ function NavigationInner() {
                       </Button>
                     </Link>
                   ))}
-                  <a
-                    href="/clocking"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block"
-                  >
+                  {isAdmin && (
                     <Button
                       variant="ghost"
                       className="w-full justify-start gap-3 px-3 py-3 text-sm font-medium h-11 min-h-[44px] rounded-md text-slate-600 hover:bg-slate-100"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        setKioskConfirmOpen(true);
+                      }}
                     >
                       <MonitorSmartphone className="w-4 h-4" />
-                      Open Kiosk
+                      Enable Kiosk Mode
                     </Button>
-                  </a>
+                  )}
                 </div>
               </div>
 

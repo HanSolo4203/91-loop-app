@@ -7,7 +7,7 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 function kioskCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
-    sameSite: 'strict' as const,
+    sameSite: 'lax' as const,
     path: '/',
     maxAge,
     secure: process.env.NODE_ENV === 'production',

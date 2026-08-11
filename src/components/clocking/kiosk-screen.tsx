@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { formatDurationMinutes } from '@/lib/clocking-utils';
 import { useActiveClockEntries, type ActiveClockEntry } from '@/lib/hooks/use-clocking';
 import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
+import { supabase } from '@/lib/supabase';
 
 const SAST = 'Africa/Johannesburg';
 const PIN_LENGTH = 4;
@@ -163,6 +164,7 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
   const [verifying, setVerifying] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [exitingKiosk, setExitingKiosk] = useState(false);
+  const [kioskLocked, setKioskLocked] = useState(isKioskMode);
   const [employee, setEmployee] = useState<VerifiedEmployee | null>(null);
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
   const [elapsedLabel, setElapsedLabel] = useState('');
@@ -177,6 +179,24 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
   const activeEntries = Array.isArray(activeData?.data) ? activeData.data : [];
 
   useEffect(() => {
+    setKioskLocked(isKioskMode);
+  }, [isKioskMode]);
+
+  // Confirm lock state from the server (httpOnly cookie is not readable in JS)
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/kiosk-mode', { credentials: 'same-origin' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.active) setKioskLocked(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     setMounted(true);
     setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -185,25 +205,40 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
 
   // Lock browser history when in kiosk mode so back cannot leave /clocking
   useEffect(() => {
-    if (!isKioskMode) return;
+    if (!kioskLocked) return;
     window.history.pushState(null, '', '/clocking');
     const handlePopState = () => {
       window.history.pushState(null, '', '/clocking');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [isKioskMode]);
+  }, [kioskLocked]);
 
   const handleExitKioskMode = async () => {
     if (exitingKiosk) return;
     setExitingKiosk(true);
     try {
-      const res = await fetch('/api/kiosk-mode', { method: 'DELETE' });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setExitingKiosk(false);
+        return;
+      }
+
+      const res = await fetch('/api/kiosk-mode', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setExitingKiosk(false);
         return;
       }
+      setKioskLocked(false);
       router.push('/dashboard');
     } catch {
       setExitingKiosk(false);
@@ -662,12 +697,12 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
         {mainContent}
       </div>
       <ActiveShiftPanel entries={activeEntries} />
-      {isKioskMode && screen === 'pin' && (
+      {kioskLocked && screen === 'pin' && (
         <button
           type="button"
           onClick={() => void handleExitKioskMode()}
           disabled={exitingKiosk}
-          className="absolute bottom-2 right-3 z-10 text-xs text-slate-700 underline underline-offset-2 hover:text-slate-500 disabled:opacity-50"
+          className="absolute bottom-3 right-3 z-20 rounded px-2 py-1 text-xs text-slate-400/90 underline underline-offset-2 hover:text-slate-200 hover:bg-slate-800/80 disabled:opacity-50"
         >
           {exitingKiosk ? 'Exiting…' : 'Exit Kiosk Mode'}
         </button>
