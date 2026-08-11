@@ -53,6 +53,14 @@ function EmployeesContent() {
   const employees = data?.success && Array.isArray(data.data) ? data.data : [];
 
   useEffect(() => {
+    if (!selectedEmployee) return;
+    const refreshed = employees.find((e) => e.id === selectedEmployee.id);
+    if (refreshed && refreshed !== selectedEmployee) {
+      setSelectedEmployee(refreshed);
+    }
+  }, [employees, selectedEmployee]);
+
+  useEffect(() => {
     if (
       tabParam &&
       VALID_TABS.includes(tabParam as TabValue) &&

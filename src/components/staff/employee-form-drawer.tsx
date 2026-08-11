@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle, Loader2, KeyRound } from 'lucide-react';
+import { AlertCircle, Loader2, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import type { Employee } from '@/types/database';
@@ -79,7 +79,8 @@ export default function EmployeeFormDrawer({
   const [pinSaving, setPinSaving] = useState(false);
   const [pinMessage, setPinMessage] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
-  const [localHasPin, setLocalHasPin] = useState(false);
+  const [currentPin, setCurrentPin] = useState<string | null>(null);
+  const [pinVisible, setPinVisible] = useState(false);
 
   useEffect(() => {
     if (employee) {
@@ -128,7 +129,8 @@ export default function EmployeeFormDrawer({
     setPinEditing(false);
     setPinMessage(null);
     setPinError(null);
-    setLocalHasPin(!!employee?.clock_pin);
+    setCurrentPin(employee?.clock_pin ?? null);
+    setPinVisible(false);
   }, [employee, open]);
 
   const handleSetPin = async () => {
@@ -161,10 +163,11 @@ export default function EmployeeFormDrawer({
         setPinError(data.error || 'Failed to set PIN');
         return;
       }
-      setLocalHasPin(true);
+      setCurrentPin(pin);
       setPinEditing(false);
       setPin('');
-      setPinMessage('PIN set successfully');
+      setPinVisible(true);
+      setPinMessage(currentPin ? 'PIN updated successfully' : 'PIN set successfully');
       onPinUpdated?.();
     } catch {
       setPinError('Failed to set PIN');
@@ -493,22 +496,47 @@ export default function EmployeeFormDrawer({
                 <KeyRound className="w-4 h-4" />
                 Clock-In PIN
               </Label>
-              {localHasPin && !pinEditing ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPinEditing(true);
-                    setPinMessage(null);
-                    setPinError(null);
-                  }}
-                  className="text-sm text-emerald-700 hover:text-emerald-800 font-medium"
-                >
-                  PIN set ✓ — click to change
-                </button>
+
+              {currentPin && !pinEditing ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Current
+                    </span>
+                    <span className="font-mono text-lg font-semibold tracking-[0.35em] text-slate-900 tabular-nums">
+                      {pinVisible ? currentPin : '••••'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPinVisible((v) => !v)}
+                      className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-200"
+                      aria-label={pinVisible ? 'Hide PIN' : 'Show PIN'}
+                    >
+                      {pinVisible ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setPinEditing(true);
+                      setPin('');
+                      setPinMessage(null);
+                      setPinError(null);
+                    }}
+                  >
+                    Change PIN
+                  </Button>
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Input
-                    type="password"
+                    type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={4}
@@ -518,8 +546,8 @@ export default function EmployeeFormDrawer({
                       setPin(v);
                       setPinError(null);
                     }}
-                    placeholder="••••"
-                    className={cn(inputClass, 'w-28 tracking-widest')}
+                    placeholder="4 digits"
+                    className={cn(inputClass, 'w-28 tracking-widest font-mono')}
                     disabled={pinSaving || isSubmitting}
                     autoComplete="off"
                   />
@@ -531,11 +559,13 @@ export default function EmployeeFormDrawer({
                   >
                     {pinSaving ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : currentPin ? (
+                      'Update PIN'
                     ) : (
                       'Set PIN'
                     )}
                   </Button>
-                  {localHasPin && (
+                  {currentPin && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -552,6 +582,13 @@ export default function EmployeeFormDrawer({
                   )}
                 </div>
               )}
+
+              {!currentPin && !pinEditing && (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  No PIN set — this employee cannot clock in on the kiosk until one is assigned.
+                </p>
+              )}
+
               {pinError && (
                 <p className="text-sm text-red-600 flex items-center gap-1">
                   <AlertCircle className="w-4 h-4" />

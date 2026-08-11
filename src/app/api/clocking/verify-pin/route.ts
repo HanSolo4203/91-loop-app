@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getClientIp, getSastDateString, stripPinHash } from '@/lib/clocking';
 
@@ -45,11 +44,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: employees, error } = await (supabaseAdmin as any)
+    // Indexed lookup on clock_pin — avoids slow bcrypt scan across all employees
+    const { data: matched, error } = await (supabaseAdmin as any)
       .from('employees')
-      .select('id, full_name, role, shift_type, photo_url, status, pin_hash')
+      .select('id, full_name, role, shift_type, photo_url, status, clock_pin')
       .eq('status', 'active')
-      .not('pin_hash', 'is', null);
+      .eq('clock_pin', pin)
+      .limit(1)
+      .maybeSingle();
 
     if (error) {
       console.error('verify-pin query error:', error);
@@ -57,29 +59,6 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Unable to verify PIN' },
         { status: 500 }
       );
-    }
-
-    let matched: {
-      id: string;
-      full_name: string;
-      role: string | null;
-      shift_type: string;
-      photo_url: string | null;
-    } | null = null;
-
-    for (const emp of employees || []) {
-      if (!emp.pin_hash) continue;
-      const ok = await bcrypt.compare(pin, emp.pin_hash);
-      if (ok) {
-        matched = {
-          id: emp.id,
-          full_name: emp.full_name,
-          role: emp.role,
-          shift_type: emp.shift_type,
-          photo_url: emp.photo_url ?? null,
-        };
-        break;
-      }
     }
 
     if (!matched) {
@@ -93,9 +72,11 @@ export async function POST(request: NextRequest) {
     const today = getSastDateString();
     const { data: openSession } = await (supabaseAdmin as any)
       .from('clock_sessions')
-      .select('id')
+      .select('id, clocked_in_at')
       .eq('employee_id', matched.id)
       .is('clocked_out_at', null)
+      .order('clocked_in_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     return NextResponse.json({
@@ -104,6 +85,7 @@ export async function POST(request: NextRequest) {
         ...stripPinHash({ ...matched, pin_hash: null }),
         is_clocked_in: !!openSession,
         open_session_id: openSession?.id ?? null,
+        clocked_in_at: openSession?.clocked_in_at ?? null,
         today,
       },
     });

@@ -22,6 +22,7 @@ interface VerifiedEmployee {
   shift_type: string;
   photo_url: string | null;
   is_clocked_in: boolean;
+  clocked_in_at?: string | null;
 }
 
 interface SuccessInfo {
@@ -78,7 +79,7 @@ function LiveDuration({ clockedInAt }: { clockedInAt: string }) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [clockedInAt]);
-  return <span className="text-slate-400 text-xs tabular-nums">{label}</span>;
+  return <span className="text-slate-400 text-[11px] sm:text-xs tabular-nums">{label}</span>;
 }
 
 interface ActiveShiftPanelProps {
@@ -87,28 +88,32 @@ interface ActiveShiftPanelProps {
 
 function ActiveShiftPanel({ entries }: ActiveShiftPanelProps) {
   return (
-    <div className="bg-slate-800/80 border-t border-slate-700 px-4 py-3 shrink-0">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-slate-300 text-sm font-medium">Currently On Shift</span>
+    <div className="bg-slate-800/90 border-t border-slate-700 px-3 sm:px-4 py-2 sm:py-3 shrink-0">
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <span className="text-slate-300 text-xs sm:text-sm font-medium truncate">
+            Currently On Shift
+          </span>
         </div>
-        <span className="bg-emerald-900/60 text-emerald-300 text-xs px-2 py-0.5 rounded-full">
+        <span className="bg-emerald-900/60 text-emerald-300 text-[10px] sm:text-xs px-2 py-0.5 rounded-full shrink-0">
           {entries.length} staff
         </span>
       </div>
 
       {entries.length === 0 ? (
-        <p className="text-slate-500 text-sm py-2 text-center">No staff currently on shift</p>
+        <p className="text-slate-500 text-xs sm:text-sm py-1.5 sm:py-2 text-center">
+          No staff currently on shift
+        </p>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-1 mt-2">
+        <div className="flex gap-2 sm:gap-3 overflow-x-auto overscroll-x-contain pb-0.5 sm:pb-1 mt-1.5 sm:mt-2 -mx-0.5 px-0.5 touch-pan-x">
           {entries.map((entry) => (
             <div
               key={entry.session_id}
-              className="flex-shrink-0 flex items-center gap-2 bg-slate-700/70 rounded-xl px-3 py-2"
+              className="flex-shrink-0 flex items-center gap-2 bg-slate-700/70 rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2"
             >
               {entry.photo_url ? (
-                <div className="relative h-10 w-10 overflow-hidden rounded-full shrink-0">
+                <div className="relative h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full shrink-0">
                   <Image
                     src={entry.photo_url}
                     alt={entry.full_name}
@@ -120,15 +125,15 @@ function ActiveShiftPanel({ entries }: ActiveShiftPanelProps) {
                   />
                 </div>
               ) : (
-                <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-slate-600 flex items-center justify-center text-white text-xs sm:text-sm font-semibold shrink-0">
                   {employeeInitials(entry.full_name)}
                 </div>
               )}
               <div className="min-w-0">
-                <p className="text-white text-sm font-medium max-w-[100px] truncate">
+                <p className="text-white text-xs sm:text-sm font-medium max-w-[88px] sm:max-w-[100px] truncate">
                   {entry.full_name}
                 </p>
-                <p className="text-emerald-400 text-xs">
+                <p className="text-emerald-400 text-[11px] sm:text-xs">
                   In at {formatSastHm(entry.clocked_in_at)}
                 </p>
                 <LiveDuration clockedInAt={entry.clocked_in_at} />
@@ -140,6 +145,9 @@ function ActiveShiftPanel({ entries }: ActiveShiftPanelProps) {
     </div>
   );
 }
+
+const keypadBtnClass =
+  'aspect-square w-full max-h-[4.5rem] sm:max-h-[5rem] md:max-h-[5.5rem] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 touch-manipulation select-none';
 
 export default function KioskScreen() {
   const [screen, setScreen] = useState<Screen>('pin');
@@ -161,7 +169,6 @@ export default function KioskScreen() {
   const { data: activeData } = useActiveClockEntries();
   const activeEntries = Array.isArray(activeData?.data) ? activeData.data : [];
 
-  // Live clock — only after mount to avoid SSR/client time hydration mismatch
   useEffect(() => {
     setMounted(true);
     setNow(new Date());
@@ -169,7 +176,6 @@ export default function KioskScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // Live session duration when clocked in
   useEffect(() => {
     if (screen !== 'confirm' || !sessionStartedAt) {
       setElapsedLabel('');
@@ -217,7 +223,6 @@ export default function KioskScreen() {
 
   useEffect(() => () => clearIdleTimer(), [clearIdleTimer]);
 
-  // Auto-return from success
   useEffect(() => {
     if (screen !== 'success') return;
     const id = setTimeout(resetToPin, SUCCESS_RETURN_MS);
@@ -253,16 +258,9 @@ export default function KioskScreen() {
 
       const emp = data.employee as VerifiedEmployee;
       setEmployee(emp);
-
-      if (emp.is_clocked_in) {
-        const statusRes = await fetch(`/api/clocking/status?employee_id=${emp.id}`);
-        const statusData = await statusRes.json();
-        const started =
-          statusData?.data?.current_session?.clocked_in_at ?? null;
-        setSessionStartedAt(started);
-      } else {
-        setSessionStartedAt(null);
-      }
+      setSessionStartedAt(
+        emp.is_clocked_in ? emp.clocked_in_at ?? null : null
+      );
 
       setPin('');
       setScreen('confirm');
@@ -357,91 +355,112 @@ export default function KioskScreen() {
     mainContent = (
       <div
         className={cn(
-          'flex-1 flex flex-col items-center justify-center px-6 transition-colors duration-500',
+          'min-h-full flex flex-col items-center justify-center px-4 sm:px-6 py-6 transition-colors duration-500',
           isIn ? 'bg-emerald-600' : 'bg-sky-600'
         )}
       >
-        <div className="w-28 h-28 rounded-full bg-white/20 flex items-center justify-center mb-8 animate-bounce">
-          <Check className="w-16 h-16 text-white" strokeWidth={3} />
+        <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-white/20 flex items-center justify-center mb-6 sm:mb-8 animate-bounce">
+          <Check className="w-12 h-12 sm:w-16 sm:h-16 text-white" strokeWidth={3} />
         </div>
-        <h1 className="text-3xl sm:text-4xl font-bold text-white text-center mb-3">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white text-center mb-2 sm:mb-3 px-2">
           {isIn ? `Clocked In at ${success.timeLabel}` : 'Clocked Out'}
         </h1>
         {!isIn && success.durationLabel && (
-          <p className="text-xl sm:text-2xl text-white/90 text-center">
+          <p className="text-lg sm:text-xl md:text-2xl text-white/90 text-center px-2">
             You worked {success.durationLabel}
           </p>
         )}
-        <p className="mt-8 text-white/70 text-sm">Returning to PIN entry…</p>
+        <p className="mt-6 sm:mt-8 text-white/70 text-sm">Returning to PIN entry…</p>
       </div>
     );
   } else if (screen === 'confirm' && employee) {
     mainContent = (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 max-w-lg mx-auto w-full">
+      <div className="min-h-full flex flex-col items-center justify-center px-4 sm:px-6 py-4 sm:py-8 md:py-10 w-full max-w-lg mx-auto">
         <Image
           src="/rsllogo.png"
           alt="RSL Express"
           width={280}
           height={36}
-          className="h-8 w-auto object-contain mb-10 brightness-0 invert opacity-90"
+          className="h-6 sm:h-8 w-auto object-contain mb-4 sm:mb-8 md:mb-10 brightness-0 invert opacity-90"
           priority
         />
 
-        <div className="mb-6">
+        <div className="mb-3 sm:mb-5 md:mb-6">
           {employee.photo_url ? (
-            <div className="relative h-40 w-40 overflow-hidden rounded-full mx-auto">
+            <div className="relative h-24 w-24 sm:h-32 sm:w-32 md:h-40 md:w-40 overflow-hidden rounded-full mx-auto">
               <Image
                 src={employee.photo_url}
                 alt={employee.full_name}
                 fill
                 className="object-cover"
-                sizes="160px"
+                sizes="(max-width: 640px) 96px, (max-width: 768px) 128px, 160px"
                 priority
                 placeholder="blur"
                 blurDataURL={BLUR_DATA_URL}
               />
             </div>
           ) : (
-            <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full bg-slate-700 text-4xl font-semibold text-white">
+            <div className="mx-auto flex h-24 w-24 sm:h-32 sm:w-32 md:h-40 md:w-40 items-center justify-center rounded-full bg-slate-700 text-2xl sm:text-3xl md:text-4xl font-semibold text-white">
               {employeeInitials(employee.full_name)}
             </div>
           )}
         </div>
 
-        <h1 className="text-3xl sm:text-4xl font-bold text-white text-center mb-3">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white text-center mb-2 sm:mb-3 px-2">
           {employee.full_name}
         </h1>
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-4 sm:mb-6">
           {employee.role && (
-            <span className="px-3 py-1 rounded-full bg-slate-700 text-slate-200 text-sm">
+            <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-700 text-slate-200 text-xs sm:text-sm">
               {employee.role}
             </span>
           )}
-          <span className="px-3 py-1 rounded-full bg-slate-700 text-slate-200 text-sm capitalize">
+          <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-700 text-slate-200 text-xs sm:text-sm capitalize">
             {employee.shift_type} shift
           </span>
         </div>
 
         {error && (
-          <p className="mb-4 text-red-400 text-sm text-center">{error}</p>
+          <p className="mb-3 sm:mb-4 text-red-400 text-sm text-center px-2">{error}</p>
         )}
 
         {employee.is_clocked_in ? (
-          <div className="w-full space-y-6">
-            <div className="text-center space-y-1">
-              <p className="text-slate-400 text-sm">Clocked in since</p>
-              <p className="text-2xl font-semibold text-white">
+          <div className="w-full space-y-4 sm:space-y-5 md:space-y-6">
+            <div className="text-center space-y-0.5 sm:space-y-1">
+              <p className="text-slate-400 text-xs sm:text-sm">Clocked in since</p>
+              <p className="text-xl sm:text-2xl font-semibold text-white">
                 {sessionStartedAt ? formatSastHm(sessionStartedAt) : '—'}
               </p>
-              <p className="text-emerald-400 text-lg font-medium tabular-nums">
+              <p className="text-emerald-400 text-base sm:text-lg font-medium tabular-nums">
                 {elapsedLabel || '0h 0m'}
+              </p>
+            </div>
+            <div className="text-center space-y-0.5 sm:space-y-1 pb-1 sm:pb-2">
+              <p className="text-slate-400 text-xs sm:text-sm">Clocking out at</p>
+              <p
+                className={cn(
+                  'text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-white',
+                  !mounted && 'invisible'
+                )}
+                suppressHydrationWarning
+              >
+                {time}
+              </p>
+              <p
+                className={cn(
+                  'text-slate-400 text-xs sm:text-sm px-2',
+                  !mounted && 'invisible'
+                )}
+                suppressHydrationWarning
+              >
+                {dateLabel}
               </p>
             </div>
             <button
               type="button"
               disabled={actionLoading}
               onClick={() => void handleClockAction('clock_out')}
-              className="w-full h-16 rounded-2xl bg-red-500 hover:bg-red-400 active:bg-red-600 text-white text-xl font-bold transition-colors disabled:opacity-60"
+              className="w-full h-14 sm:h-16 rounded-2xl bg-red-500 hover:bg-red-400 active:bg-red-600 text-white text-lg sm:text-xl font-bold transition-colors disabled:opacity-60 touch-manipulation"
             >
               {actionLoading ? (
                 <Loader2 className="w-6 h-6 animate-spin mx-auto" />
@@ -451,47 +470,69 @@ export default function KioskScreen() {
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            disabled={actionLoading}
-            onClick={() => void handleClockAction('clock_in')}
-            className="w-full h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-xl font-bold transition-colors disabled:opacity-60"
-          >
-            {actionLoading ? (
-              <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-            ) : (
-              'CLOCK IN'
-            )}
-          </button>
+          <div className="w-full space-y-4 sm:space-y-5 md:space-y-6">
+            <div className="text-center space-y-0.5 sm:space-y-1">
+              <p className="text-slate-400 text-xs sm:text-sm">Clocking in at</p>
+              <p
+                className={cn(
+                  'text-3xl sm:text-4xl md:text-5xl font-bold tabular-nums tracking-tight text-white',
+                  !mounted && 'invisible'
+                )}
+                suppressHydrationWarning
+              >
+                {time}
+              </p>
+              <p
+                className={cn(
+                  'text-slate-300 text-sm sm:text-base md:text-lg px-2',
+                  !mounted && 'invisible'
+                )}
+                suppressHydrationWarning
+              >
+                {dateLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={() => void handleClockAction('clock_in')}
+              className="w-full h-14 sm:h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white text-lg sm:text-xl font-bold transition-colors disabled:opacity-60 touch-manipulation"
+            >
+              {actionLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+              ) : (
+                'CLOCK IN'
+              )}
+            </button>
+          </div>
         )}
 
         <button
           type="button"
           onClick={resetToPin}
           disabled={actionLoading}
-          className="mt-8 text-slate-400 hover:text-white text-base underline-offset-4 hover:underline"
+          className="mt-5 sm:mt-8 text-slate-400 hover:text-white text-sm sm:text-base underline-offset-4 hover:underline touch-manipulation min-h-[44px] px-4"
         >
           Cancel
         </button>
       </div>
     );
   } else {
-    // STATE 1 — PIN Entry
     mainContent = (
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 max-w-md mx-auto w-full">
+      <div className="min-h-full flex flex-col items-center justify-center px-3 sm:px-4 py-3 sm:py-6 md:py-8 w-full max-w-md md:max-w-lg mx-auto">
         <Image
           src="/rsllogo.png"
           alt="RSL Express"
           width={280}
           height={36}
-          className="h-8 sm:h-9 w-auto object-contain mb-8 brightness-0 invert opacity-90"
+          className="h-6 sm:h-8 md:h-9 w-auto object-contain mb-3 sm:mb-6 md:mb-8 brightness-0 invert opacity-90"
           priority
         />
 
-        <div className="text-center mb-8">
+        <div className="text-center mb-3 sm:mb-6 md:mb-8">
           <p
             className={cn(
-              'text-5xl sm:text-6xl font-bold tabular-nums tracking-tight text-white',
+              'text-4xl sm:text-5xl md:text-6xl font-bold tabular-nums tracking-tight text-white',
               !mounted && 'invisible'
             )}
             suppressHydrationWarning
@@ -500,7 +541,7 @@ export default function KioskScreen() {
           </p>
           <p
             className={cn(
-              'mt-2 text-slate-400 text-base sm:text-lg',
+              'mt-1 sm:mt-2 text-slate-400 text-sm sm:text-base md:text-lg px-2',
               !mounted && 'invisible'
             )}
             suppressHydrationWarning
@@ -509,13 +550,13 @@ export default function KioskScreen() {
           </p>
         </div>
 
-        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-6">
+        <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-white mb-3 sm:mb-5 md:mb-6">
           Enter Your PIN
         </h2>
 
         <div
           className={cn(
-            'flex items-center justify-center gap-4 mb-3',
+            'flex items-center justify-center gap-3 sm:gap-4 mb-2 sm:mb-3',
             shake && 'animate-[shake_0.4s_ease-in-out]'
           )}
         >
@@ -523,7 +564,7 @@ export default function KioskScreen() {
             <div
               key={i}
               className={cn(
-                'w-4 h-4 rounded-full border-2 transition-colors',
+                'w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border-2 transition-colors',
                 i < pin.length
                   ? 'bg-white border-white'
                   : 'bg-transparent border-slate-500'
@@ -532,11 +573,11 @@ export default function KioskScreen() {
           ))}
         </div>
 
-        <p className="h-6 mb-6 text-sm text-red-400 text-center">
+        <p className="h-5 sm:h-6 mb-3 sm:mb-5 md:mb-6 text-xs sm:text-sm text-red-400 text-center">
           {error || (verifying ? 'Verifying…' : '')}
         </p>
 
-        <div className="grid grid-cols-3 gap-3 w-full max-w-[320px]">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-[260px] sm:max-w-[300px] md:max-w-[340px]">
           {keys.map((key, idx) => {
             if (key === '') {
               return <div key={`empty-${idx}`} />;
@@ -548,10 +589,10 @@ export default function KioskScreen() {
                   type="button"
                   onClick={handleBackspace}
                   disabled={verifying}
-                  className="min-h-[72px] min-w-[72px] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors disabled:opacity-50"
+                  className={keypadBtnClass}
                   aria-label="Backspace"
                 >
-                  <Delete className="w-7 h-7" />
+                  <Delete className="w-6 h-6 sm:w-7 sm:h-7" />
                 </button>
               );
             }
@@ -561,7 +602,7 @@ export default function KioskScreen() {
                 type="button"
                 onClick={() => handleDigit(key)}
                 disabled={verifying}
-                className="min-h-[72px] min-w-[72px] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white text-3xl font-semibold transition-colors disabled:opacity-50"
+                className={cn(keypadBtnClass, 'text-2xl sm:text-3xl font-semibold')}
               >
                 {key}
               </button>
@@ -573,7 +614,7 @@ export default function KioskScreen() {
           type="button"
           onClick={handleClear}
           disabled={verifying || pin.length === 0}
-          className="mt-6 text-slate-400 hover:text-white text-base disabled:opacity-40"
+          className="mt-3 sm:mt-5 md:mt-6 text-slate-400 hover:text-white text-sm sm:text-base disabled:opacity-40 touch-manipulation min-h-[44px] px-4"
         >
           Clear
         </button>
@@ -582,8 +623,10 @@ export default function KioskScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {mainContent}
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        {mainContent}
+      </div>
       <ActiveShiftPanel entries={activeEntries} />
     </div>
   );
