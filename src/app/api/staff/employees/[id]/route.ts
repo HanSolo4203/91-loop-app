@@ -86,6 +86,7 @@ export async function PUT(
     if (body.account_type !== undefined) payload.account_type = body.account_type;
     if (body.id_number !== undefined) payload.id_number = body.id_number;
     if (body.id_document_url !== undefined) payload.id_document_url = body.id_document_url;
+    if (body.photo_url !== undefined) payload.photo_url = body.photo_url;
     if (body.status !== undefined) payload.status = body.status;
 
     const result = await updateEmployee(id, payload);

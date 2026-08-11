@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,14 @@ import { LoadingSkeleton, LoadingTable } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Search, Plus, Edit, Trash2, Users, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import type { Employee } from '@/types/database';
+
+function employeeInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '';
+  return (first + last).toUpperCase() || '?';
+}
 
 interface EmployeesTableProps {
   employees: Employee[];
@@ -64,7 +73,7 @@ export default function EmployeesTable({
           </div>
         </CardHeader>
         <CardContent>
-          <LoadingTable rows={5} columns={7} />
+          <LoadingTable rows={5} columns={8} />
         </CardContent>
       </Card>
     );
@@ -122,6 +131,7 @@ export default function EmployeesTable({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-14">Photo</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Email</TableHead>
@@ -135,6 +145,23 @@ export default function EmployeesTable({
               <TableBody>
                 {filtered.map((emp) => (
                   <TableRow key={emp.id} className="hover:bg-slate-50">
+                    <TableCell>
+                      {emp.photo_url ? (
+                        <div className="relative h-10 w-10 overflow-hidden rounded-full">
+                          <Image
+                            src={emp.photo_url}
+                            alt={emp.full_name}
+                            fill
+                            className="object-cover"
+                            sizes="40px"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-600">
+                          {employeeInitials(emp.full_name)}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">{emp.full_name}</TableCell>
                     <TableCell className="text-sm">{emp.phone || '-'}</TableCell>
                     <TableCell className="text-sm">{emp.email || '-'}</TableCell>

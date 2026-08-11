@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import Navigation from '@/components/navigation';
 import EmployeesTable from '@/components/staff/employees-table';
 import EmployeeFormDrawer, { type EmployeeFormData } from '@/components/staff/employee-form-drawer';
 import SalarySchedule from '@/components/staff/salary-schedule';
+import ClockRecords from '@/components/staff/clock-records';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Calendar } from 'lucide-react';
+import { Users, Calendar, Clock } from 'lucide-react';
 import {
   useEmployees,
   useCreateEmployee,
@@ -25,7 +27,19 @@ import {
 } from '@/lib/hooks/use-employees';
 import type { Employee } from '@/types/database';
 
+const VALID_TABS = ['employees', 'salary', 'clock-records'] as const;
+type TabValue = (typeof VALID_TABS)[number];
+
 function EmployeesContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const tabParam = searchParams.get('tab');
+  const initialTab: TabValue =
+    tabParam && VALID_TABS.includes(tabParam as TabValue)
+      ? (tabParam as TabValue)
+      : 'employees';
+
+  const [tab, setTab] = useState<TabValue>(initialTab);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
@@ -37,6 +51,29 @@ function EmployeesContent() {
   const deleteMutation = useDeleteEmployee();
 
   const employees = data?.success && Array.isArray(data.data) ? data.data : [];
+
+  useEffect(() => {
+    if (
+      tabParam &&
+      VALID_TABS.includes(tabParam as TabValue) &&
+      tabParam !== tab
+    ) {
+      setTab(tabParam as TabValue);
+    }
+  }, [tabParam, tab]);
+
+  const handleTabChange = (value: string) => {
+    const next = value as TabValue;
+    setTab(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === 'employees') {
+      params.delete('tab');
+    } else {
+      params.set('tab', next);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/staff/employees?${qs}` : '/staff/employees', { scroll: false });
+  };
 
   const handleAdd = () => {
     setSelectedEmployee(null);
@@ -73,6 +110,10 @@ function EmployeesContent() {
     }
   };
 
+  const handlePinUpdated = () => {
+    void refetch();
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
@@ -89,11 +130,11 @@ function EmployeesContent() {
             Staff – Employees
           </h1>
           <p className="text-sm sm:text-base text-slate-600 mt-1">
-            Manage employee details and payroll information
+            Manage employee details, payroll, and clock records
           </p>
         </div>
 
-        <Tabs defaultValue="employees" className="space-y-4">
+        <Tabs value={tab} onValueChange={handleTabChange} className="space-y-4">
           <TabsList className="bg-white border border-slate-200">
             <TabsTrigger value="employees" className="data-[state=active]:bg-slate-100">
               Employees
@@ -101,6 +142,10 @@ function EmployeesContent() {
             <TabsTrigger value="salary" className="data-[state=active]:bg-slate-100">
               <Calendar className="w-4 h-4 mr-1.5" />
               Salary Schedule
+            </TabsTrigger>
+            <TabsTrigger value="clock-records" className="data-[state=active]:bg-slate-100">
+              <Clock className="w-4 h-4 mr-1.5" />
+              Clock Records
             </TabsTrigger>
           </TabsList>
           <TabsContent value="employees" className="mt-4">
@@ -118,6 +163,9 @@ function EmployeesContent() {
           <TabsContent value="salary" className="mt-4">
             <SalarySchedule />
           </TabsContent>
+          <TabsContent value="clock-records" className="mt-4">
+            <ClockRecords />
+          </TabsContent>
         </Tabs>
 
         <EmployeeFormDrawer
@@ -125,6 +173,7 @@ function EmployeesContent() {
           onOpenChange={setDrawerOpen}
           employee={selectedEmployee}
           onSave={handleSave}
+          onPinUpdated={handlePinUpdated}
         />
 
         <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
@@ -150,10 +199,20 @@ function EmployeesContent() {
   );
 }
 
+function EmployeesPageFallback() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">
+      Loading…
+    </div>
+  );
+}
+
 export default function EmployeesPage() {
   return (
     <AuthGuard>
-      <EmployeesContent />
+      <Suspense fallback={<EmployeesPageFallback />}>
+        <EmployeesContent />
+      </Suspense>
     </AuthGuard>
   );
 }

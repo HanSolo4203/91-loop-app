@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       account_type: body.account_type,
       id_number: body.id_number,
       id_document_url: body.id_document_url,
+      photo_url: body.photo_url,
       status: body.status ?? 'active',
     };
 

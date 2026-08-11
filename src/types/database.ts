@@ -315,7 +315,10 @@ export interface Database {
           account_type: 'cheque' | 'savings' | null;
           id_number: string | null;
           id_document_url: string | null;
+          photo_url: string | null;
           status: 'active' | 'inactive';
+          clock_pin: string | null;
+          pin_hash: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -337,7 +340,10 @@ export interface Database {
           account_type?: 'cheque' | 'savings' | null;
           id_number?: string | null;
           id_document_url?: string | null;
+          photo_url?: string | null;
           status?: 'active' | 'inactive';
+          clock_pin?: string | null;
+          pin_hash?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -359,11 +365,113 @@ export interface Database {
           account_type?: 'cheque' | 'savings' | null;
           id_number?: string | null;
           id_document_url?: string | null;
+          photo_url?: string | null;
           status?: 'active' | 'inactive';
+          clock_pin?: string | null;
+          pin_hash?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [];
+      };
+
+      // Staff: clock_events table
+      clock_events: {
+        Row: {
+          id: string;
+          employee_id: string;
+          event_type: 'clock_in' | 'clock_out';
+          clocked_at: string;
+          shift_date: string;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          event_type: 'clock_in' | 'clock_out';
+          clocked_at?: string;
+          shift_date?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_id?: string;
+          event_type?: 'clock_in' | 'clock_out';
+          clocked_at?: string;
+          shift_date?: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'clock_events_employee_id_fkey';
+            columns: ['employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
+      // Staff: clock_sessions table
+      clock_sessions: {
+        Row: {
+          id: string;
+          employee_id: string;
+          clock_in_id: string | null;
+          clock_out_id: string | null;
+          clocked_in_at: string;
+          clocked_out_at: string | null;
+          shift_date: string;
+          duration_minutes: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          clock_in_id?: string | null;
+          clock_out_id?: string | null;
+          clocked_in_at: string;
+          clocked_out_at?: string | null;
+          shift_date: string;
+          duration_minutes?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          employee_id?: string;
+          clock_in_id?: string | null;
+          clock_out_id?: string | null;
+          clocked_in_at?: string;
+          clocked_out_at?: string | null;
+          shift_date?: string;
+          duration_minutes?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'clock_sessions_employee_id_fkey';
+            columns: ['employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'clock_sessions_clock_in_id_fkey';
+            columns: ['clock_in_id'];
+            referencedRelation: 'clock_events';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'clock_sessions_clock_out_id_fkey';
+            columns: ['clock_out_id'];
+            referencedRelation: 'clock_events';
+            referencedColumns: ['id'];
+          }
+        ];
       };
 
       // Staff: shift_schedule table
@@ -1120,6 +1228,8 @@ export type Absence = Tables<'absences'>;
 export type PayrollRun = Tables<'payroll_runs'>;
 export type PayrollEntry = Tables<'payroll_entries'>;
 export type SalaryPayment = Tables<'salary_payments'>;
+export type ClockEvent = Tables<'clock_events'>;
+export type ClockSession = Tables<'clock_sessions'>;
 
 // View types
 export type BatchReportView = Views<'batch_report_view'>;
@@ -1227,6 +1337,31 @@ export interface EmployeeSalarySchedule {
   payment_1: { date: string; amount: number; status: string };
   payment_2: { date: string; amount: number; status: string };
   monthly_total: number;
+}
+
+// Clocking helper types
+export interface ClockSessionWithEmployee extends ClockSession {
+  employee: Pick<Employee, 'id' | 'full_name' | 'role' | 'shift_type'>;
+}
+
+export interface EmployeeClockStatus {
+  employee: Employee;
+  current_session: ClockSession | null;
+  is_clocked_in: boolean;
+  todays_minutes: number;
+}
+
+export interface ClockStats {
+  employee_id: string;
+  full_name: string;
+  role: string | null;
+  total_days: number;
+  total_hours: number;
+  total_minutes: number;
+  avg_hours_per_day: number;
+  last_clock_in: string | null;
+  avg_clock_in_minutes: number | null;
+  sessions: ClockSession[];
 }
 
 // Utility types for form handling

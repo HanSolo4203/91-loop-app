@@ -17,6 +17,12 @@ const AuthContext = createContext<AuthState | null>(null);
 let cachedAdminStatus: { userId: string; isAdmin: boolean; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+/** Public routes that must work without a logged-in session */
+function isPublicPath(path: string | null): boolean {
+  if (!path) return false;
+  return path === '/login' || path === '/clocking' || path.startsWith('/clocking/');
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -31,6 +37,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkInFlightRef.current = true;
 
     const currentPath = pathnameRef.current;
+
+    // Kiosk + login: skip auth redirect entirely
+    if (isPublicPath(currentPath)) {
+      setLoading(false);
+      checkInFlightRef.current = false;
+      return;
+    }
+
     try {
       const now = Date.now();
 
@@ -44,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cacheError && isRefreshTokenError(cacheError)) {
           cachedAdminStatus = null;
           await clearStaleAuthSession();
-          if (currentPath !== '/login') router.replace('/login');
+          if (!isPublicPath(currentPath)) router.replace('/login');
           return;
         }
         if (session?.user?.id === cachedAdminStatus.userId && cachedAdminStatus.isAdmin) {
@@ -63,14 +77,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isRefreshTokenError(sessionError)) {
           cachedAdminStatus = null;
           await clearStaleAuthSession();
-          if (currentPath !== '/login') router.replace('/login');
+          if (!isPublicPath(currentPath)) router.replace('/login');
         }
         return;
       }
 
       if (!session?.user) {
         cachedAdminStatus = null;
-        if (currentPath !== '/login') router.replace('/login');
+        if (!isPublicPath(currentPath)) router.replace('/login');
         return;
       }
 
@@ -83,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileError || profile?.role !== 'admin') {
         cachedAdminStatus = null;
         await supabase.auth.signOut();
-        if (currentPath !== '/login') router.replace('/login');
+        if (!isPublicPath(currentPath)) router.replace('/login');
         return;
       }
 
@@ -92,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error('Auth check error:', err);
       cachedAdminStatus = null;
-      if (currentPath !== '/login') router.replace('/login');
+      if (!isPublicPath(currentPath)) router.replace('/login');
     } finally {
       checkInFlightRef.current = false;
       setLoading(false);
@@ -114,7 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (event === 'SIGNED_OUT' || !session) {
         setIsAdmin(false);
-        router.push('/login');
+        if (!isPublicPath(pathnameRef.current)) {
+          router.push('/login');
+        }
         return;
       }
 
@@ -134,7 +150,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsAdmin(true);
         } else {
           await supabase.auth.signOut();
-          router.push('/login');
+          if (!isPublicPath(pathnameRef.current)) {
+            router.push('/login');
+          }
         }
       })();
     });

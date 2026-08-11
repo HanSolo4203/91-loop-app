@@ -29,6 +29,7 @@ export interface CreateEmployeeRequest {
   account_type?: 'cheque' | 'savings';
   id_number?: string;
   id_document_url?: string;
+  photo_url?: string;
   status?: 'active' | 'inactive';
 }
 
@@ -38,6 +39,13 @@ function validateUuid(id: string): void {
   if (!id || !UUID_REGEX.test(id)) {
     throw new Error('Invalid ID format');
   }
+}
+
+/** Never expose pin_hash to API consumers */
+function sanitizeEmployee(emp: Employee): Employee {
+  const { pin_hash: _hash, ...rest } = emp as Employee & { pin_hash?: string | null };
+  void _hash;
+  return { ...rest, pin_hash: null } as Employee;
 }
 
 export async function getAllEmployees(): Promise<StaffServiceResponse<Employee[]>> {
@@ -55,7 +63,11 @@ export async function getAllEmployees(): Promise<StaffServiceResponse<Employee[]
       return { data: null, error: error.message, success: false };
     }
 
-    return { data: data || [], error: null, success: true };
+    return {
+      data: (data || []).map((e) => sanitizeEmployee(e as Employee)),
+      error: null,
+      success: true,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     if (msg.includes('does not exist') || msg.includes('relation')) {
@@ -82,7 +94,7 @@ export async function getEmployeeById(id: string): Promise<StaffServiceResponse<
       return { data: null, error: error.message, success: false };
     }
 
-    return { data, error: null, success: true };
+    return { data: sanitizeEmployee(data as Employee), error: null, success: true };
   } catch (err) {
     return {
       data: null,
@@ -120,6 +132,7 @@ export async function createEmployee(
       account_type: payload.account_type || null,
       id_number: payload.id_number?.trim() || null,
       id_document_url: payload.id_document_url?.trim() || null,
+      photo_url: payload.photo_url?.trim() || null,
       status: payload.status ?? 'active',
     };
 
@@ -133,7 +146,7 @@ export async function createEmployee(
       return { data: null, error: error.message, success: false };
     }
 
-    return { data, error: null, success: true };
+    return { data: sanitizeEmployee(data as Employee), error: null, success: true };
   } catch (err) {
     return {
       data: null,
@@ -190,6 +203,7 @@ export async function updateEmployee(
     if (payload.id_number !== undefined) update.id_number = payload.id_number?.trim() || null;
     if (payload.id_document_url !== undefined)
       update.id_document_url = payload.id_document_url?.trim() || null;
+    if (payload.photo_url !== undefined) update.photo_url = payload.photo_url?.trim() || null;
     if (payload.status !== undefined) update.status = payload.status;
 
     const { data, error } = await (supabaseAdmin as any)
@@ -203,7 +217,7 @@ export async function updateEmployee(
       return { data: null, error: error.message, success: false };
     }
 
-    return { data, error: null, success: true };
+    return { data: sanitizeEmployee(data as Employee), error: null, success: true };
   } catch (err) {
     return {
       data: null,

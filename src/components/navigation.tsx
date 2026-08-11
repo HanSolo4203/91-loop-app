@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -26,8 +26,10 @@ import {
   FileText,
   BarChart3,
   UserCircle,
+  Clock,
+  MonitorSmartphone,
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { playLogoutChime } from '@/lib/utils/sounds';
 
 type NavItem = {
@@ -51,21 +53,52 @@ const reportsNav: NavItem[] = [
 
 const staffNav: NavItem[] = [
   { name: 'Employees', href: '/staff/employees', icon: Users },
+  { name: 'Clock Records', href: '/staff/employees?tab=clock-records', icon: Clock },
   { name: 'Schedule', href: '/staff/schedule', icon: CalendarDays },
   { name: 'Payroll', href: '/staff/payroll', icon: Banknote },
 ];
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+function isActive(pathname: string, href: string, searchParams?: URLSearchParams | null) {
+  const [pathOnly, query = ''] = href.split('?');
+  if (pathname !== pathOnly && !(pathOnly !== '/dashboard' && pathname.startsWith(pathOnly))) {
+    return false;
+  }
+  if (!query) {
+    // Exact path links without query: inactive when a sibling tab query is present
+    if (pathOnly === '/staff/employees' && searchParams?.get('tab') === 'clock-records') {
+      return false;
+    }
+    return pathname === pathOnly || (pathOnly !== '/dashboard' && pathname.startsWith(pathOnly));
+  }
+  const expected = new URLSearchParams(query);
+  for (const [key, value] of expected.entries()) {
+    if (searchParams?.get(key) !== value) return false;
+  }
+  return true;
 }
 
-function isGroupActive(pathname: string, items: NavItem[]) {
-  return items.some((item) => isActive(pathname, item.href));
+function isGroupActive(pathname: string, items: NavItem[], searchParams?: URLSearchParams | null) {
+  return items.some((item) => isActive(pathname, item.href, searchParams));
 }
 
 export default function Navigation() {
+  return (
+    <Suspense fallback={<NavigationShell />}>
+      <NavigationInner />
+    </Suspense>
+  );
+}
+
+function NavigationShell() {
+  return (
+    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm h-14 sm:h-16" />
+  );
+}
+
+function NavigationInner() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
@@ -172,7 +205,7 @@ export default function Navigation() {
                 aria-haspopup="true"
                 className={cn(
                   'h-9 px-3 gap-1.5 text-sm font-medium rounded-md',
-                  isGroupActive(pathname, reportsNav)
+                  isGroupActive(pathname, reportsNav, searchParams)
                     ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 )}
@@ -190,7 +223,7 @@ export default function Navigation() {
                         key={item.name}
                         href={item.href}
                         onClick={() => setReportsOpen(false)}
-                        className={linkClass(isActive(pathname, item.href))}
+                        className={linkClass(isActive(pathname, item.href, searchParams))}
                       >
                         <item.icon className="w-4 h-4 flex-shrink-0" />
                         {item.name}
@@ -211,7 +244,7 @@ export default function Navigation() {
                 aria-haspopup="true"
                 className={cn(
                   'h-9 px-3 gap-1.5 text-sm font-medium rounded-md',
-                  isGroupActive(pathname, staffNav)
+                  isGroupActive(pathname, staffNav, searchParams)
                     ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 )}
@@ -229,12 +262,23 @@ export default function Navigation() {
                         key={item.name}
                         href={item.href}
                         onClick={() => setStaffOpen(false)}
-                        className={linkClass(isActive(pathname, item.href))}
+                        className={linkClass(isActive(pathname, item.href, searchParams))}
                       >
                         <item.icon className="w-4 h-4 flex-shrink-0" />
                         {item.name}
                       </Link>
                     ))}
+                    <div className="my-1 border-t border-slate-100" />
+                    <a
+                      href="/clocking"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setStaffOpen(false)}
+                      className={linkClass(false)}
+                    >
+                      <MonitorSmartphone className="w-4 h-4 flex-shrink-0" />
+                      Kiosk Mode
+                    </a>
                   </div>
                 </>
               )}
@@ -351,10 +395,10 @@ export default function Navigation() {
                   {staffNav.map((item) => (
                     <Link key={item.name} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block">
                       <Button
-                        variant={isActive(pathname, item.href) ? 'default' : 'ghost'}
+                        variant={isActive(pathname, item.href, searchParams) ? 'default' : 'ghost'}
                         className={cn(
                           'w-full justify-start gap-3 px-3 py-3 text-sm font-medium h-11 min-h-[44px] rounded-md',
-                          isActive(pathname, item.href) ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                          isActive(pathname, item.href, searchParams) ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                         )}
                       >
                         <item.icon className="w-4 h-4" />
@@ -362,6 +406,21 @@ export default function Navigation() {
                       </Button>
                     </Link>
                   ))}
+                  <a
+                    href="/clocking"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block"
+                  >
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-3 px-3 py-3 text-sm font-medium h-11 min-h-[44px] rounded-md text-slate-600 hover:bg-slate-100"
+                    >
+                      <MonitorSmartphone className="w-4 h-4" />
+                      Kiosk Mode
+                    </Button>
+                  </a>
                 </div>
               </div>
 

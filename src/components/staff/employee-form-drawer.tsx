@@ -13,10 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 import type { Employee } from '@/types/database';
-import type { CreateEmployeeRequest } from '@/lib/services/staff/employees';
 
 export interface EmployeeFormData {
   full_name: string;
@@ -34,6 +34,7 @@ export interface EmployeeFormData {
   account_type?: 'cheque' | 'savings';
   id_number?: string;
   id_document_url?: string;
+  photo_url?: string;
   status: 'active' | 'inactive';
 }
 
@@ -42,6 +43,7 @@ interface EmployeeFormDrawerProps {
   onOpenChange: (open: boolean) => void;
   employee?: Employee | null;
   onSave: (data: EmployeeFormData) => Promise<void>;
+  onPinUpdated?: () => void;
 }
 
 export default function EmployeeFormDrawer({
@@ -49,6 +51,7 @@ export default function EmployeeFormDrawer({
   onOpenChange,
   employee,
   onSave,
+  onPinUpdated,
 }: EmployeeFormDrawerProps) {
   const [formData, setFormData] = useState<EmployeeFormData>({
     full_name: '',
@@ -66,10 +69,17 @@ export default function EmployeeFormDrawer({
     account_type: undefined,
     id_number: '',
     id_document_url: '',
+    photo_url: '',
     status: 'active',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinEditing, setPinEditing] = useState(false);
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinMessage, setPinMessage] = useState<string | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [localHasPin, setLocalHasPin] = useState(false);
 
   useEffect(() => {
     if (employee) {
@@ -89,6 +99,7 @@ export default function EmployeeFormDrawer({
         account_type: employee.account_type || undefined,
         id_number: employee.id_number || '',
         id_document_url: employee.id_document_url || '',
+        photo_url: employee.photo_url || '',
         status: employee.status ?? 'active',
       });
     } else {
@@ -108,11 +119,59 @@ export default function EmployeeFormDrawer({
         account_type: undefined,
         id_number: '',
         id_document_url: '',
+        photo_url: '',
         status: 'active',
       });
     }
     setErrors({});
+    setPin('');
+    setPinEditing(false);
+    setPinMessage(null);
+    setPinError(null);
+    setLocalHasPin(!!employee?.clock_pin);
   }, [employee, open]);
+
+  const handleSetPin = async () => {
+    if (!employee?.id) return;
+    if (!/^\d{4}$/.test(pin)) {
+      setPinError('PIN must be exactly 4 digits');
+      return;
+    }
+    setPinSaving(true);
+    setPinError(null);
+    setPinMessage(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setPinError('You must be logged in to set a PIN');
+        return;
+      }
+
+      const res = await fetch(`/api/staff/employees/${employee.id}/set-pin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ pin }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setPinError(data.error || 'Failed to set PIN');
+        return;
+      }
+      setLocalHasPin(true);
+      setPinEditing(false);
+      setPin('');
+      setPinMessage('PIN set successfully');
+      onPinUpdated?.();
+    } catch {
+      setPinError('Failed to set PIN');
+    } finally {
+      setPinSaving(false);
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -163,6 +222,20 @@ export default function EmployeeFormDrawer({
         </SheetHeader>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-white">
+          <div className="space-y-2 [&_.rounded-lg]:rounded-full">
+            <ImageUpload
+              label="Profile Photo"
+              value={formData.photo_url}
+              onChange={(url) => setFormData((prev) => ({ ...prev, photo_url: url ?? '' }))}
+              bucket="employee-photos"
+              folder="profiles"
+              previewSize="lg"
+              showPreview={true}
+              maxSizeMB={5}
+              disabled={isSubmitting}
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="full_name" className={labelClass}>Full Name *</Label>
             <Input
@@ -413,6 +486,86 @@ export default function EmployeeFormDrawer({
               </SelectContent>
             </Select>
           </div>
+
+          {isEditing && (
+            <div className="space-y-3 pt-4 border-t border-slate-200">
+              <Label className={cn(labelClass, 'flex items-center gap-2')}>
+                <KeyRound className="w-4 h-4" />
+                Clock-In PIN
+              </Label>
+              {localHasPin && !pinEditing ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinEditing(true);
+                    setPinMessage(null);
+                    setPinError(null);
+                  }}
+                  className="text-sm text-emerald-700 hover:text-emerald-800 font-medium"
+                >
+                  PIN set ✓ — click to change
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    value={pin}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      setPin(v);
+                      setPinError(null);
+                    }}
+                    placeholder="••••"
+                    className={cn(inputClass, 'w-28 tracking-widest')}
+                    disabled={pinSaving || isSubmitting}
+                    autoComplete="off"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void handleSetPin()}
+                    disabled={pinSaving || pin.length !== 4 || isSubmitting}
+                  >
+                    {pinSaving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Set PIN'
+                    )}
+                  </Button>
+                  {localHasPin && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPinEditing(false);
+                        setPin('');
+                        setPinError(null);
+                      }}
+                      disabled={pinSaving}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              )}
+              {pinError && (
+                <p className="text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {pinError}
+                </p>
+              )}
+              {pinMessage && (
+                <p className="text-sm text-emerald-600">{pinMessage}</p>
+              )}
+              <p className="text-xs text-slate-500">
+                4-digit PIN used on the laundry kiosk clock-in screen
+              </p>
+            </div>
+          )}
           </div>
 
           <div className="shrink-0 px-6 py-4 border-t border-slate-200 bg-white flex justify-end gap-2">
