@@ -13,29 +13,41 @@ export {
   SAST_TIMEZONE,
 } from '@/lib/clocking-utils';
 
+function isAdminRole(
+  profileRole: string | null | undefined,
+  userMetadataRole: unknown
+): boolean {
+  return (
+    profileRole === 'admin' ||
+    userMetadataRole === 'admin'
+  );
+}
+
 export async function getCurrentUser(
   request: NextRequest
 ): Promise<{ userId: string | null; isAdmin: boolean }> {
   try {
     const authHeader = request.headers.get('authorization');
     if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const {
-        data: { user },
-        error,
-      } = await supabaseAdmin.auth.getUser(token);
+      const token = authHeader.substring(7).trim();
+      if (token) {
+        const {
+          data: { user },
+          error,
+        } = await supabaseAdmin.auth.getUser(token);
 
-      if (!error && user) {
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
+        if (!error && user) {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
 
-        return {
-          userId: user.id,
-          isAdmin: profile?.role === 'admin' || false,
-        };
+          return {
+            userId: user.id,
+            isAdmin: isAdminRole(profile?.role, user.user_metadata?.role),
+          };
+        }
       }
     }
 
@@ -67,19 +79,15 @@ export async function getCurrentUser(
       return { userId: null, isAdmin: false };
     }
 
-    const { data: profile, error: profileError } = await supabaseAdmin
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('id', session.user.id)
       .single();
 
-    if (profileError) {
-      return { userId: null, isAdmin: false };
-    }
-
     return {
       userId: session.user.id,
-      isAdmin: profile?.role === 'admin' || false,
+      isAdmin: isAdminRole(profile?.role, session.user.user_metadata?.role),
     };
   } catch (error) {
     console.error('Error getting current user:', error);

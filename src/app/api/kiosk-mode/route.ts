@@ -20,16 +20,28 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ success: true, active });
 }
 
+function adminGateResponse(userId: string | null, isAdmin: boolean) {
+  if (!userId) {
+    return NextResponse.json(
+      { success: false, error: 'Authentication required' },
+      { status: 401 }
+    );
+  }
+  if (!isAdmin) {
+    return NextResponse.json(
+      { success: false, error: 'Admin access required' },
+      { status: 403 }
+    );
+  }
+  return null;
+}
+
 // POST /api/kiosk-mode — admin only, sets the kiosk cookie
 export async function POST(request: NextRequest) {
   try {
-    const { isAdmin } = await getCurrentUser(request);
-    if (!isAdmin) {
-      return NextResponse.json(
-        { success: false, error: 'Admin access required' },
-        { status: 403 }
-      );
-    }
+    const { userId, isAdmin } = await getCurrentUser(request);
+    const denied = adminGateResponse(userId, isAdmin);
+    if (denied) return denied;
 
     const response = NextResponse.json({ success: true });
     response.cookies.set(COOKIE_NAME, '1', kioskCookieOptions(COOKIE_MAX_AGE));
@@ -46,13 +58,9 @@ export async function POST(request: NextRequest) {
 // DELETE /api/kiosk-mode — admin only, clears the kiosk cookie
 export async function DELETE(request: NextRequest) {
   try {
-    const { isAdmin } = await getCurrentUser(request);
-    if (!isAdmin) {
-      return NextResponse.json(
-        { success: false, error: 'Admin access required' },
-        { status: 403 }
-      );
-    }
+    const { userId, isAdmin } = await getCurrentUser(request);
+    const denied = adminGateResponse(userId, isAdmin);
+    if (denied) return denied;
 
     const response = NextResponse.json({ success: true });
     response.cookies.set(COOKIE_NAME, '', kioskCookieOptions(0));

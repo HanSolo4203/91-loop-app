@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { getAccessToken } from '@/lib/auth-session';
 import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
 import { useAuth } from '@/components/auth/auth-provider';
 import {
@@ -116,6 +117,7 @@ function NavigationInner() {
   const [kioskConfirmOpen, setKioskConfirmOpen] = useState(false);
   const [kioskModeActive, setKioskModeActive] = useState(false);
   const [enablingKiosk, setEnablingKiosk] = useState(false);
+  const [kioskError, setKioskError] = useState<string | null>(null);
 
   useEffect(() => {
     setUserDropdownOpen(false);
@@ -165,11 +167,11 @@ function NavigationInner() {
   const handleEnableKioskMode = async () => {
     if (enablingKiosk) return;
     setEnablingKiosk(true);
+    setKioskError(null);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setKioskError('Your session expired. Please log in again.');
         setEnablingKiosk(false);
         return;
       }
@@ -178,11 +180,17 @@ function NavigationInner() {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
+        setKioskError(
+          data?.error ||
+            (res.status === 401
+              ? 'Your session expired. Please log in again.'
+              : 'Could not enable kiosk mode. Try again.')
+        );
         setEnablingKiosk(false);
         return;
       }
@@ -191,6 +199,7 @@ function NavigationInner() {
       // Full navigation so the httpOnly kiosk cookie is applied before /clocking renders
       window.location.assign('/clocking');
     } catch {
+      setKioskError('Could not enable kiosk mode. Try again.');
       setEnablingKiosk(false);
     }
   };
@@ -555,7 +564,13 @@ function NavigationInner() {
         )}
       </div>
 
-      <Dialog open={kioskConfirmOpen} onOpenChange={setKioskConfirmOpen}>
+      <Dialog
+        open={kioskConfirmOpen}
+        onOpenChange={(open) => {
+          setKioskConfirmOpen(open);
+          if (!open) setKioskError(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Enable Kiosk Mode?</DialogTitle>
@@ -565,6 +580,11 @@ function NavigationInner() {
               the main app. Are you sure?
             </DialogDescription>
           </DialogHeader>
+          {kioskError && (
+            <p className="text-sm text-red-600" role="alert">
+              {kioskError}
+            </p>
+          )}
           <DialogFooter>
             <Button
               variant="outline"

@@ -28,3 +28,22 @@ export async function clearStaleAuthSession(): Promise<void> {
     clearingStaleSession = false;
   }
 }
+
+/**
+ * Returns a validated access token for API Bearer auth.
+ * Uses getUser() so expired localStorage JWTs are refreshed before use.
+ */
+export async function getAccessToken(): Promise<string | null> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    if (isRefreshTokenError(userError)) {
+      await clearStaleAuthSession();
+    }
+    return null;
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}

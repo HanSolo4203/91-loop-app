@@ -8,6 +8,7 @@ import { formatDurationMinutes } from '@/lib/clocking-utils';
 import { useActiveClockEntries, type ActiveClockEntry } from '@/lib/hooks/use-clocking';
 import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
 import { supabase } from '@/lib/supabase';
+import { getAccessToken } from '@/lib/auth-session';
 
 const SAST = 'Africa/Johannesburg';
 const PIN_LENGTH = 4;
@@ -216,11 +217,12 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
     if (exitingKiosk) return;
     setExitingKiosk(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        setExitingKiosk(false);
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        // Session already gone — clear cookie best-effort isn't possible; send to login
+        setKioskLocked(false);
+        await supabase.auth.signOut();
+        window.location.assign('/login');
         return;
       }
 
@@ -228,10 +230,10 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         setExitingKiosk(false);
         return;
