@@ -560,8 +560,9 @@ function NavigationInner() {
           <DialogHeader>
             <DialogTitle>Enable Kiosk Mode?</DialogTitle>
             <DialogDescription>
-              Enabling Kiosk Mode will lock this device to the clock-in page only. To disable it, you
-              must open a different device or browser and log in as admin to turn it off. Are you sure?
+              Enabling Kiosk Mode will lock this device to the clock-in page only. To disable it, tap
+              Exit Kiosk Mode on the PIN screen — you will be signed out and must log in again to use
+              the main app. Are you sure?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

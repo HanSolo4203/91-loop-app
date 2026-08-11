@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { Check, Delete, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDurationMinutes } from '@/lib/clocking-utils';
@@ -156,7 +155,6 @@ interface KioskScreenProps {
 }
 
 export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
-  const router = useRouter();
   const [screen, setScreen] = useState<Screen>('pin');
   const [pin, setPin] = useState('');
   const [shake, setShake] = useState(false);
@@ -238,8 +236,11 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
         setExitingKiosk(false);
         return;
       }
+
       setKioskLocked(false);
-      router.push('/dashboard');
+      // Require a fresh login before returning to the main app
+      await supabase.auth.signOut();
+      window.location.assign('/login');
     } catch {
       setExitingKiosk(false);
     }
