@@ -9,6 +9,7 @@ import { useActiveClockEntries, type ActiveClockEntry } from '@/lib/hooks/use-cl
 import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
 import { supabase } from '@/lib/supabase';
 import { getAccessToken } from '@/lib/auth-session';
+import { BlueAuthBackdrop } from '@/components/auth/blue-auth-backdrop';
 
 const SAST = 'Africa/Johannesburg';
 const PIN_LENGTH = 4;
@@ -149,7 +150,7 @@ function ActiveShiftPanel({ entries }: ActiveShiftPanelProps) {
 }
 
 const keypadBtnClass =
-  'aspect-square w-full max-h-[4.5rem] sm:max-h-[5rem] md:max-h-[5.5rem] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 touch-manipulation select-none';
+  'aspect-square w-full max-h-[4.5rem] sm:max-h-[5rem] md:max-h-[5.5rem] rounded-2xl bg-white/10 hover:bg-white/20 active:bg-white/25 backdrop-blur-sm text-white flex items-center justify-center transition-colors disabled:opacity-50 touch-manipulation select-none border border-white/15';
 
 interface KioskScreenProps {
   isKioskMode?: boolean;
@@ -591,105 +592,108 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
     );
   } else {
     mainContent = (
-      <div className="min-h-full flex flex-col items-center justify-center px-3 sm:px-4 py-3 sm:py-6 md:py-8 w-full max-w-md md:max-w-lg mx-auto">
-        <Image
-          src="/rsllogo.png"
-          alt="RSL Express"
-          width={280}
-          height={36}
-          className="h-6 sm:h-8 md:h-9 w-auto object-contain mb-3 sm:mb-6 md:mb-8 brightness-0 invert opacity-90"
-          priority
-        />
+      <div className="min-h-full relative overflow-hidden">
+        <BlueAuthBackdrop />
+        <div className="relative z-10 min-h-full flex flex-col items-center justify-center px-3 sm:px-4 py-3 sm:py-6 md:py-8 w-full max-w-md md:max-w-lg mx-auto">
+          <Image
+            src="/rsllogo.png"
+            alt="RSL Express"
+            width={280}
+            height={36}
+            className="h-6 sm:h-8 md:h-9 w-auto object-contain mb-3 sm:mb-6 md:mb-8 brightness-0 invert opacity-90"
+            priority
+          />
 
-        <div className="text-center mb-3 sm:mb-6 md:mb-8">
-          <p
-            className={cn(
-              'text-4xl sm:text-5xl md:text-6xl font-bold tabular-nums tracking-tight text-white',
-              !mounted && 'invisible'
-            )}
-            suppressHydrationWarning
-          >
-            {time}
-          </p>
-          <p
-            className={cn(
-              'mt-1 sm:mt-2 text-slate-400 text-sm sm:text-base md:text-lg px-2',
-              !mounted && 'invisible'
-            )}
-            suppressHydrationWarning
-          >
-            {dateLabel}
-          </p>
-        </div>
-
-        <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-white mb-3 sm:mb-5 md:mb-6">
-          Enter Your PIN
-        </h2>
-
-        <div
-          className={cn(
-            'flex items-center justify-center gap-3 sm:gap-4 mb-2 sm:mb-3',
-            shake && 'animate-[shake_0.4s_ease-in-out]'
-          )}
-        >
-          {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-            <div
-              key={i}
+          <div className="text-center mb-3 sm:mb-6 md:mb-8">
+            <p
               className={cn(
-                'w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border-2 transition-colors',
-                i < pin.length
-                  ? 'bg-white border-white'
-                  : 'bg-transparent border-slate-500'
+                'text-4xl sm:text-5xl md:text-6xl font-bold tabular-nums tracking-tight text-white',
+                !mounted && 'invisible'
               )}
-            />
-          ))}
-        </div>
+              suppressHydrationWarning
+            >
+              {time}
+            </p>
+            <p
+              className={cn(
+                'mt-1 sm:mt-2 text-blue-100/80 text-sm sm:text-base md:text-lg px-2',
+                !mounted && 'invisible'
+              )}
+              suppressHydrationWarning
+            >
+              {dateLabel}
+            </p>
+          </div>
 
-        <p className="h-5 sm:h-6 mb-3 sm:mb-5 md:mb-6 text-xs sm:text-sm text-red-400 text-center">
-          {error || (verifying ? 'Verifying…' : '')}
-        </p>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-white mb-3 sm:mb-5 md:mb-6">
+            Enter Your PIN
+          </h2>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-[260px] sm:max-w-[300px] md:max-w-[340px]">
-          {keys.map((key, idx) => {
-            if (key === '') {
-              return <div key={`empty-${idx}`} />;
-            }
-            if (key === 'back') {
+          <div
+            className={cn(
+              'flex items-center justify-center gap-3 sm:gap-4 mb-2 sm:mb-3',
+              shake && 'animate-[shake_0.4s_ease-in-out]'
+            )}
+          >
+            {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border-2 transition-colors',
+                  i < pin.length
+                    ? 'bg-white border-white'
+                    : 'bg-transparent border-white/40'
+                )}
+              />
+            ))}
+          </div>
+
+          <p className="h-5 sm:h-6 mb-3 sm:mb-5 md:mb-6 text-xs sm:text-sm text-red-300 text-center">
+            {error || (verifying ? 'Verifying…' : '')}
+          </p>
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-[260px] sm:max-w-[300px] md:max-w-[340px]">
+            {keys.map((key, idx) => {
+              if (key === '') {
+                return <div key={`empty-${idx}`} />;
+              }
+              if (key === 'back') {
+                return (
+                  <button
+                    key="back"
+                    type="button"
+                    onClick={handleBackspace}
+                    disabled={verifying}
+                    className={keypadBtnClass}
+                    aria-label="Backspace"
+                  >
+                    <Delete className="w-6 h-6 sm:w-7 sm:h-7" />
+                  </button>
+                );
+              }
               return (
                 <button
-                  key="back"
+                  key={key}
                   type="button"
-                  onClick={handleBackspace}
+                  onClick={() => handleDigit(key)}
                   disabled={verifying}
-                  className={keypadBtnClass}
-                  aria-label="Backspace"
+                  className={cn(keypadBtnClass, 'text-2xl sm:text-3xl font-semibold')}
                 >
-                  <Delete className="w-6 h-6 sm:w-7 sm:h-7" />
+                  {key}
                 </button>
               );
-            }
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleDigit(key)}
-                disabled={verifying}
-                className={cn(keypadBtnClass, 'text-2xl sm:text-3xl font-semibold')}
-              >
-                {key}
-              </button>
-            );
-          })}
-        </div>
+            })}
+          </div>
 
-        <button
-          type="button"
-          onClick={handleClear}
-          disabled={verifying || pin.length === 0}
-          className="mt-3 sm:mt-5 md:mt-6 text-slate-400 hover:text-white text-sm sm:text-base disabled:opacity-40 touch-manipulation min-h-[44px] px-4"
-        >
-          Clear
-        </button>
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={verifying || pin.length === 0}
+            className="mt-3 sm:mt-5 md:mt-6 text-blue-100/70 hover:text-white text-sm sm:text-base disabled:opacity-40 touch-manipulation min-h-[44px] px-4"
+          >
+            Clear
+          </button>
+        </div>
       </div>
     );
   }
@@ -705,7 +709,7 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
           type="button"
           onClick={() => void handleExitKioskMode()}
           disabled={exitingKiosk}
-          className="absolute bottom-3 right-3 z-20 rounded px-2 py-1 text-xs text-slate-400/90 underline underline-offset-2 hover:text-slate-200 hover:bg-slate-800/80 disabled:opacity-50"
+          className="absolute top-3 right-3 z-20 rounded-md px-2.5 py-1.5 text-xs text-white/75 underline underline-offset-2 hover:text-white hover:bg-white/10 disabled:opacity-50 touch-manipulation"
         >
           {exitingKiosk ? 'Exiting…' : 'Exit Kiosk Mode'}
         </button>

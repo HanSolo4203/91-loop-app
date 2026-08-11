@@ -22,7 +22,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#0f172a',
+  themeColor: '#1e3a8a',
 };
 
 export default function ClockingLayout({
@@ -32,7 +32,7 @@ export default function ClockingLayout({
 }) {
   return (
     <QueryProvider>
-      <div className="h-dvh w-screen overflow-hidden bg-slate-900 select-none text-white">
+      <div className="h-dvh w-screen overflow-hidden bg-blue-900 select-none text-white">
         {children}
       </div>
     </QueryProvider>
