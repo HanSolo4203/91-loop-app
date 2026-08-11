@@ -14,6 +14,7 @@ export async function GET() {
         employee_id,
         clocked_in_at,
         shift_date,
+        shift_type,
         employees!inner (
           full_name,
           role,
@@ -37,7 +38,7 @@ export async function GET() {
       employee_id: row.employee_id,
       full_name: row.employees?.full_name ?? '',
       role: row.employees?.role ?? null,
-      shift_type: row.employees?.shift_type ?? 'day',
+      shift_type: row.shift_type ?? row.employees?.shift_type ?? 'day',
       photo_url: row.employees?.photo_url ?? null,
       clocked_in_at: row.clocked_in_at,
       shift_date: row.shift_date,

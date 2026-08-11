@@ -14,9 +14,10 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { getAccessToken } from '@/lib/auth-session';
 import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
 import { useAuth } from '@/components/auth/auth-provider';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   LayoutDashboard,
   PlusCircle,
@@ -118,6 +119,7 @@ function NavigationInner() {
   const [kioskModeActive, setKioskModeActive] = useState(false);
   const [enablingKiosk, setEnablingKiosk] = useState(false);
   const [kioskError, setKioskError] = useState<string | null>(null);
+  const [kioskPin, setKioskPin] = useState('');
 
   useEffect(() => {
     setUserDropdownOpen(false);
@@ -169,9 +171,9 @@ function NavigationInner() {
     setEnablingKiosk(true);
     setKioskError(null);
     try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        setKioskError('Your session expired. Please log in again.');
+      const pin = kioskPin.trim();
+      if (!/^\d{4}$/.test(pin)) {
+        setKioskError('Enter your 4-digit admin kiosk PIN');
         setEnablingKiosk(false);
         return;
       }
@@ -180,15 +182,16 @@ function NavigationInner() {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ pin }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         setKioskError(
           data?.error ||
             (res.status === 401
-              ? 'Your session expired. Please log in again.'
+              ? 'Invalid admin PIN'
               : 'Could not enable kiosk mode. Try again.')
         );
         setEnablingKiosk(false);
@@ -196,6 +199,7 @@ function NavigationInner() {
       }
       setKioskModeActive(true);
       setKioskConfirmOpen(false);
+      setKioskPin('');
       // Full navigation so the httpOnly kiosk cookie is applied before /clocking renders
       window.location.assign('/clocking');
     } catch {
@@ -568,18 +572,44 @@ function NavigationInner() {
         open={kioskConfirmOpen}
         onOpenChange={(open) => {
           setKioskConfirmOpen(open);
-          if (!open) setKioskError(null);
+          if (!open) {
+            setKioskError(null);
+            setKioskPin('');
+          }
         }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Enable Kiosk Mode?</DialogTitle>
+            <DialogTitle>Enable Kiosk Mode</DialogTitle>
             <DialogDescription>
-              Enabling Kiosk Mode will lock this device to the clock-in page only. To disable it, tap
-              Exit Kiosk Mode on the PIN screen — you will be signed out and must log in again to use
-              the main app. Are you sure?
+              Enter your admin kiosk PIN to lock this device to the clock-in page. Use the same PIN on
+              Exit Kiosk Mode to return to the main site.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="kiosk-enable-pin">Admin kiosk PIN</Label>
+            <Input
+              id="kiosk-enable-pin"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={4}
+              value={kioskPin}
+              onChange={(e) => {
+                setKioskPin(e.target.value.replace(/\D/g, '').slice(0, 4));
+                if (kioskError) setKioskError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleEnableKioskMode();
+                }
+              }}
+              disabled={enablingKiosk}
+              placeholder="••••"
+              className="text-center text-lg tracking-[0.4em]"
+            />
+          </div>
           {kioskError && (
             <p className="text-sm text-red-600" role="alert">
               {kioskError}
@@ -593,7 +623,10 @@ function NavigationInner() {
             >
               Cancel
             </Button>
-            <Button onClick={() => void handleEnableKioskMode()} disabled={enablingKiosk}>
+            <Button
+              onClick={() => void handleEnableKioskMode()}
+              disabled={enablingKiosk || kioskPin.length !== 4}
+            >
               {enablingKiosk ? 'Enabling…' : 'Enable Kiosk Mode'}
             </Button>
           </DialogFooter>

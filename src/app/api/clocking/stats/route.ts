@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     const { data: sessions, error: sessError } = await (supabaseAdmin as any)
       .from('clock_sessions')
-      .select('*')
+      .select('*, shift_type, regular_minutes, overtime_minutes, is_overnight')
       .gte('shift_date', startDate)
       .lt('shift_date', endDate)
       .order('clocked_in_at', { ascending: true });
@@ -75,6 +75,29 @@ export async function GET(request: NextRequest) {
         (sum: number, s: any) => sum + (s.duration_minutes || 0),
         0
       );
+      const totalRegularMinutes = completed.reduce(
+        (sum: number, s: any) => sum + (s.regular_minutes || 0),
+        0
+      );
+      const totalOvertimeMinutes = completed.reduce(
+        (sum: number, s: any) => sum + (s.overtime_minutes || 0),
+        0
+      );
+
+      let daySessions = 0;
+      let nightSessions = 0;
+      let dayMinutes = 0;
+      let nightMinutes = 0;
+      for (const s of completed) {
+        if (s.shift_type === 'night') {
+          nightSessions += 1;
+          nightMinutes += s.duration_minutes || 0;
+        } else if (s.shift_type === 'day') {
+          daySessions += 1;
+          dayMinutes += s.duration_minutes || 0;
+        }
+      }
+
       const uniqueDays = new Set(empSessions.map((s: any) => s.shift_date));
       const totalDays = uniqueDays.size;
       const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
@@ -106,9 +129,17 @@ export async function GET(request: NextRequest) {
         total_days: totalDays,
         total_hours: totalHours,
         total_minutes: totalMinutes,
+        total_regular_minutes: totalRegularMinutes,
+        total_overtime_minutes: totalOvertimeMinutes,
         avg_hours_per_day: avgHoursPerDay,
         last_clock_in: lastSession?.clocked_in_at ?? null,
         avg_clock_in_minutes: avgClockInMinutes,
+        shift_breakdown: {
+          day_sessions: daySessions,
+          night_sessions: nightSessions,
+          day_hours: Math.round((dayMinutes / 60) * 100) / 100,
+          night_hours: Math.round((nightMinutes / 60) * 100) / 100,
+        },
         sessions: empSessions,
       };
     });

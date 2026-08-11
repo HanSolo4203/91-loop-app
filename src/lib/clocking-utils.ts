@@ -60,3 +60,17 @@ export function stripPinHash<T extends { pin_hash?: string | null }>(
 }
 
 export const SAST_TIMEZONE = SAST_TZ;
+
+export function formatShiftBadge(shiftType: string | null): string {
+  if (shiftType === 'night') return '🌙 Night Shift · 17:00–05:00';
+  return '☀️ Day Shift · 09:00–17:00';
+}
+
+export function formatShiftShort(shiftType: string | null): string {
+  if (shiftType === 'night') return '🌙 Night';
+  return '☀️ Day';
+}
+
+export function isOvertime(session: { overtime_minutes?: number | null }): boolean {
+  return (session.overtime_minutes ?? 0) > 0;
+}

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     const { data: openSession } = await (supabaseAdmin as any)
       .from('clock_sessions')
-      .select('*')
+      .select('*, shift_type, scheduled_start, scheduled_end, is_overnight')
       .eq('employee_id', employeeId)
       .is('clocked_out_at', null)
       .order('clocked_in_at', { ascending: false })

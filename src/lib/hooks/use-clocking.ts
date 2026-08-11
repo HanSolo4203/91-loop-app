@@ -71,11 +71,11 @@ export function useClockStats(month: number, year: number) {
 }
 
 /** Public — works on kiosk without a logged-in session */
-export function useActiveClockEntries() {
+export function useActiveClockEntries(options?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ['clocking', 'active'],
     queryFn: fetchActiveClockEntries,
-    refetchInterval: 30000,
+    refetchInterval: options?.refetchInterval ?? 30000,
     staleTime: 20 * 1000,
     gcTime: 5 * 60 * 1000,
   });

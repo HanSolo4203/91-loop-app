@@ -11,6 +11,8 @@ export interface Database {
           email: string | null;
           full_name: string | null;
           role: 'admin' | 'user';
+          kiosk_pin: string | null;
+          kiosk_pin_hash: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -19,6 +21,8 @@ export interface Database {
           email?: string | null;
           full_name?: string | null;
           role?: 'admin' | 'user';
+          kiosk_pin?: string | null;
+          kiosk_pin_hash?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -27,6 +31,8 @@ export interface Database {
           email?: string | null;
           full_name?: string | null;
           role?: 'admin' | 'user';
+          kiosk_pin?: string | null;
+          kiosk_pin_hash?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -319,6 +325,7 @@ export interface Database {
           status: 'active' | 'inactive';
           clock_pin: string | null;
           pin_hash: string | null;
+          total_overtime_minutes: number;
           created_at: string;
           updated_at: string;
         };
@@ -344,6 +351,7 @@ export interface Database {
           status?: 'active' | 'inactive';
           clock_pin?: string | null;
           pin_hash?: string | null;
+          total_overtime_minutes?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -369,6 +377,7 @@ export interface Database {
           status?: 'active' | 'inactive';
           clock_pin?: string | null;
           pin_hash?: string | null;
+          total_overtime_minutes?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -425,6 +434,12 @@ export interface Database {
           clocked_out_at: string | null;
           shift_date: string;
           duration_minutes: number | null;
+          shift_type: 'day' | 'night' | null;
+          scheduled_start: string | null;
+          scheduled_end: string | null;
+          regular_minutes: number | null;
+          overtime_minutes: number | null;
+          is_overnight: boolean | null;
           created_at: string;
           updated_at: string;
         };
@@ -437,6 +452,12 @@ export interface Database {
           clocked_out_at?: string | null;
           shift_date: string;
           duration_minutes?: number | null;
+          shift_type?: 'day' | 'night' | null;
+          scheduled_start?: string | null;
+          scheduled_end?: string | null;
+          regular_minutes?: number | null;
+          overtime_minutes?: number | null;
+          is_overnight?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -449,6 +470,12 @@ export interface Database {
           clocked_out_at?: string | null;
           shift_date?: string;
           duration_minutes?: number | null;
+          shift_type?: 'day' | 'night' | null;
+          scheduled_start?: string | null;
+          scheduled_end?: string | null;
+          regular_minutes?: number | null;
+          overtime_minutes?: number | null;
+          is_overnight?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1360,9 +1387,17 @@ export interface ClockStats {
   total_days: number;
   total_hours: number;
   total_minutes: number;
+  total_regular_minutes: number;
+  total_overtime_minutes: number;
   avg_hours_per_day: number;
   last_clock_in: string | null;
   avg_clock_in_minutes: number | null;
+  shift_breakdown: {
+    day_sessions: number;
+    night_sessions: number;
+    day_hours: number;
+    night_hours: number;
+  };
   sessions: ClockSession[];
 }
 

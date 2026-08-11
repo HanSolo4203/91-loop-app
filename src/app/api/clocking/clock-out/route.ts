@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { formatDurationMinutes, getSastDateString } from '@/lib/clocking';
+import { calculateShiftMinutes, type ShiftType } from '@/lib/shift-constants';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -45,7 +46,14 @@ export async function POST(request: NextRequest) {
     const nowIso = now.toISOString();
     const shiftDate = openSession.shift_date || getSastDateString();
     const clockedInAt = new Date(openSession.clocked_in_at);
-    const durationMinutes = Math.round((now.getTime() - clockedInAt.getTime()) / 60000);
+    const shiftType: ShiftType =
+      openSession.shift_type === 'night' ? 'night' : 'day';
+
+    const { total_minutes, regular_minutes, overtime_minutes } = calculateShiftMinutes(
+      clockedInAt,
+      now,
+      shiftType
+    );
 
     const { data: event, error: eventError } = await (supabaseAdmin as any)
       .from('clock_events')
@@ -71,7 +79,9 @@ export async function POST(request: NextRequest) {
       .update({
         clock_out_id: event.id,
         clocked_out_at: nowIso,
-        duration_minutes: durationMinutes,
+        duration_minutes: total_minutes,
+        regular_minutes,
+        overtime_minutes,
       })
       .eq('id', openSession.id)
       .select()
@@ -85,10 +95,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (overtime_minutes > 0) {
+      const { data: employee } = await (supabaseAdmin as any)
+        .from('employees')
+        .select('total_overtime_minutes')
+        .eq('id', employeeId)
+        .single();
+
+      const currentOt = employee?.total_overtime_minutes ?? 0;
+      const { error: otError } = await (supabaseAdmin as any)
+        .from('employees')
+        .update({ total_overtime_minutes: currentOt + overtime_minutes })
+        .eq('id', employeeId);
+
+      if (otError) {
+        console.error('clock-out overtime update error:', otError);
+      }
+    }
+
+    const scheduledEnd = shiftType === 'day' ? '17:00' : '05:00';
+    const hadOvertime = overtime_minutes > 0;
+
     return NextResponse.json({
       success: true,
       session,
-      duration_formatted: formatDurationMinutes(durationMinutes),
+      duration_formatted: formatDurationMinutes(total_minutes),
+      regular_formatted: formatDurationMinutes(regular_minutes),
+      overtime_formatted: formatDurationMinutes(overtime_minutes),
+      had_overtime: hadOvertime,
+      shift_type: shiftType,
+      scheduled_end: scheduledEnd,
       clocked_at: nowIso,
     });
   } catch (error) {

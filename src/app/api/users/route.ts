@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
+import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 
 // Helper function to get user from request (via token or cookies)
@@ -88,10 +89,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch all users with their profiles
+    // Fetch all users with their profiles (never expose kiosk_pin_hash)
     const { data: profiles, error } = await supabaseAdmin
       .from('profiles')
-      .select('id, email, full_name, role, created_at, updated_at')
+      .select('id, email, full_name, role, kiosk_pin, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password, full_name, role = 'user' } = body;
+    const { email, password, full_name, role = 'user', kiosk_pin } = body;
 
     // Validate required fields
     if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -149,6 +150,23 @@ export async function POST(request: NextRequest) {
     if (role && !['admin', 'user'].includes(role)) {
       return NextResponse.json(
         { success: false, error: 'Role must be either "admin" or "user"', data: null },
+        { status: 400 }
+      );
+    }
+
+    const pin =
+      typeof kiosk_pin === 'string' && kiosk_pin.trim() !== ''
+        ? kiosk_pin.trim()
+        : null;
+    if (pin && !/^\d{4}$/.test(pin)) {
+      return NextResponse.json(
+        { success: false, error: 'Kiosk PIN must be exactly 4 digits', data: null },
+        { status: 400 }
+      );
+    }
+    if (pin && role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'Kiosk PIN can only be set for admin users', data: null },
         { status: 400 }
       );
     }
@@ -194,25 +212,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const profileInsert: {
+      id: string;
+      email: string;
+      full_name: string | null;
+      role: 'admin' | 'user';
+      kiosk_pin?: string | null;
+      kiosk_pin_hash?: string | null;
+    } = {
+      id: authData.user.id,
+      email: email.trim().toLowerCase(),
+      full_name: full_name || null,
+      role: role as 'admin' | 'user',
+    };
+
+    if (pin && role === 'admin') {
+      profileInsert.kiosk_pin = pin;
+      profileInsert.kiosk_pin_hash = await bcrypt.hash(pin, 10);
+    }
+
     // Create profile
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert({
-        id: authData.user.id,
-        email: email.trim().toLowerCase(),
-        full_name: full_name || null,
-        role: role,
-      })
-      .select()
+      .insert(profileInsert)
+      .select('id, email, full_name, role, kiosk_pin, created_at, updated_at')
       .single();
 
     if (profileError) {
       console.error('Error creating profile:', profileError);
       // Try to clean up auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      const message =
+        profileError.code === '23505'
+          ? 'That kiosk PIN is already in use by another admin'
+          : 'Failed to create user profile';
       return NextResponse.json(
-        { success: false, error: 'Failed to create user profile', data: null },
-        { status: 500 }
+        { success: false, error: message, data: null },
+        { status: profileError.code === '23505' ? 409 : 500 }
       );
     }
 
@@ -224,6 +260,7 @@ export async function POST(request: NextRequest) {
           email: profile.email,
           full_name: profile.full_name,
           role: profile.role,
+          kiosk_pin: profile.kiosk_pin ?? null,
           created_at: profile.created_at,
           updated_at: profile.updated_at,
         },

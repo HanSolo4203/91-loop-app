@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import MetricCard from '@/components/dashboard/metric-card';
 import {
   Loader2,
   Download,
@@ -31,17 +33,29 @@ import {
   Users,
   Timer,
   Award,
+  AlertTriangle,
+  CheckCircle,
 } from 'lucide-react';
 import { useActiveClockEntries, useClockStats } from '@/lib/hooks/use-clocking';
 import {
   formatDurationMinutes,
   formatSastDateTime,
   formatSastTime,
+  formatShiftShort,
   getSastDateString,
 } from '@/lib/clocking-utils';
 import type { ClockStats, ClockSession } from '@/types/database';
 import { cn } from '@/lib/utils';
 import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
+
+const ShiftHoursChart = dynamic(() => import('./shift-hours-chart'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-64 flex items-center justify-center text-slate-500">
+      Loading charts...
+    </div>
+  ),
+});
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
@@ -68,6 +82,9 @@ interface DaySessionEntry {
   clocked_out_at: string | null;
   duration_minutes: number | null;
   shift_date: string;
+  shift_type: 'day' | 'night' | null;
+  regular_minutes: number | null;
+  overtime_minutes: number | null;
 }
 
 function employeeInitials(fullName: string): string {
@@ -102,17 +119,25 @@ function EmployeeAvatar({
   fullName,
   photoUrl,
   size = 32,
+  ringClassName,
 }: {
   fullName: string;
   photoUrl: string | null;
   size?: number;
+  ringClassName?: string;
 }) {
   const sizeClass = size === 24 ? 'h-6 w-6' : 'h-8 w-8';
   const textClass = size === 24 ? 'text-[10px]' : 'text-xs';
 
   if (photoUrl) {
     return (
-      <div className={cn('relative overflow-hidden rounded-full shrink-0', sizeClass)}>
+      <div
+        className={cn(
+          'relative overflow-hidden rounded-full shrink-0',
+          sizeClass,
+          ringClassName
+        )}
+      >
         <Image
           src={photoUrl}
           alt={fullName}
@@ -131,7 +156,8 @@ function EmployeeAvatar({
       className={cn(
         'rounded-full bg-slate-200 flex items-center justify-center font-semibold text-slate-600 shrink-0',
         sizeClass,
-        textClass
+        textClass,
+        ringClassName
       )}
     >
       {employeeInitials(fullName)}
@@ -161,15 +187,41 @@ function sessionMinutes(session: {
   return 0;
 }
 
+function dominantShiftLabel(emp: ClockStats): string {
+  const day = emp.shift_breakdown?.day_sessions ?? 0;
+  const night = emp.shift_breakdown?.night_sessions ?? 0;
+  if (day > 0 && night > 0) return 'Both';
+  if (night > 0) return '🌙 Night';
+  if (day > 0) return '☀️ Day';
+  return '—';
+}
+
+function shiftRingClass(shiftType: string | null): string | undefined {
+  if (shiftType === 'night') return 'ring-1 ring-indigo-400';
+  if (shiftType === 'day') return 'ring-1 ring-amber-400';
+  return undefined;
+}
+
 function exportCsv(stats: ClockStats[], month: number, year: number) {
   const monthName = monthOptions.find((m) => m.value === month)?.label ?? String(month);
   const rows: string[][] = [
-    ['Employee', 'Role', 'Date', 'Clock In', 'Clock Out', 'Duration (minutes)', 'Duration'],
+    [
+      'Employee',
+      'Role',
+      'Date',
+      'Shift',
+      'Clock In',
+      'Clock Out',
+      'Regular (minutes)',
+      'Overtime (minutes)',
+      'Duration (minutes)',
+      'Duration',
+    ],
   ];
 
   for (const emp of stats) {
     if (emp.sessions.length === 0) {
-      rows.push([emp.full_name, emp.role ?? '', '', '', '', '0', '0h 0m']);
+      rows.push([emp.full_name, emp.role ?? '', '', '', '', '', '0', '0', '0', '0h 0m']);
       continue;
     }
     for (const s of emp.sessions) {
@@ -177,8 +229,11 @@ function exportCsv(stats: ClockStats[], month: number, year: number) {
         emp.full_name,
         emp.role ?? '',
         s.shift_date,
+        s.shift_type ?? '',
         s.clocked_in_at ? formatSastDateTime(s.clocked_in_at) : '',
         s.clocked_out_at ? formatSastDateTime(s.clocked_out_at) : 'Open',
+        String(s.regular_minutes ?? ''),
+        String(s.overtime_minutes ?? ''),
         String(s.duration_minutes ?? ''),
         s.duration_minutes != null ? formatDurationMinutes(s.duration_minutes) : '',
       ]);
@@ -236,8 +291,11 @@ function SessionsSubTable({ sessions }: { sessions: ClockSession[] }) {
         <TableHeader>
           <TableRow>
             <TableHead className="pl-8">Date</TableHead>
+            <TableHead>Shift</TableHead>
             <TableHead>Clock In</TableHead>
             <TableHead>Clock Out</TableHead>
+            <TableHead>Regular</TableHead>
+            <TableHead>Overtime</TableHead>
             <TableHead>Duration</TableHead>
           </TableRow>
         </TableHeader>
@@ -245,6 +303,9 @@ function SessionsSubTable({ sessions }: { sessions: ClockSession[] }) {
           {sessions.map((s) => (
             <TableRow key={s.id}>
               <TableCell className="pl-8 text-slate-700">{s.shift_date}</TableCell>
+              <TableCell>
+                <Badge variant="outline">{formatShiftShort(s.shift_type)}</Badge>
+              </TableCell>
               <TableCell className="tabular-nums">
                 {s.clocked_in_at ? formatSastTime(s.clocked_in_at) : '—'}
               </TableCell>
@@ -254,6 +315,21 @@ function SessionsSubTable({ sessions }: { sessions: ClockSession[] }) {
                 ) : (
                   <Badge className="bg-amber-100 text-amber-800 border-amber-200">Open</Badge>
                 )}
+              </TableCell>
+              <TableCell className="tabular-nums">
+                {s.regular_minutes != null
+                  ? formatDurationMinutes(s.regular_minutes)
+                  : '—'}
+              </TableCell>
+              <TableCell
+                className={cn(
+                  'tabular-nums',
+                  (s.overtime_minutes ?? 0) > 0 && 'text-amber-600 font-medium'
+                )}
+              >
+                {(s.overtime_minutes ?? 0) > 0
+                  ? formatDurationMinutes(s.overtime_minutes ?? 0)
+                  : '—'}
               </TableCell>
               <TableCell className="tabular-nums">
                 {s.duration_minutes != null
@@ -374,6 +450,7 @@ function AttendanceCalendar({
                             fullName={emp.full_name}
                             photoUrl={emp.photo_url}
                             size={24}
+                            ringClassName={shiftRingClass(emp.shift_type)}
                           />
                         </div>
                       ))}
@@ -395,7 +472,7 @@ function AttendanceCalendar({
       </Card>
 
       <Dialog open={!!selectedDate} onOpenChange={(open) => !open && setSelectedDate(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>{selectedTitle}</DialogTitle>
           </DialogHeader>
@@ -407,8 +484,11 @@ function AttendanceCalendar({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Employee</TableHead>
+                    <TableHead>Shift</TableHead>
                     <TableHead>Clock In</TableHead>
                     <TableHead>Clock Out</TableHead>
+                    <TableHead>Regular</TableHead>
+                    <TableHead>Overtime</TableHead>
                     <TableHead>Duration</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -425,6 +505,9 @@ function AttendanceCalendar({
                           <span className="font-medium text-slate-900">{s.full_name}</span>
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {s.shift_type === 'night' ? '🌙 Night Shift' : '☀️ Day Shift'}
+                      </TableCell>
                       <TableCell className="tabular-nums">
                         {formatSastTime(s.clocked_in_at)}
                       </TableCell>
@@ -433,6 +516,18 @@ function AttendanceCalendar({
                           formatSastTime(s.clocked_out_at)
                         ) : (
                           <span className="text-emerald-600">Still on shift</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatDurationMinutes(s.regular_minutes ?? 0)}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {(s.overtime_minutes ?? 0) > 0 ? (
+                          <span className="text-amber-600 font-medium">
+                            {formatDurationMinutes(s.overtime_minutes ?? 0)}
+                          </span>
+                        ) : (
+                          '—'
                         )}
                       </TableCell>
                       <TableCell className="tabular-nums">
@@ -478,6 +573,14 @@ export default function ClockRecords() {
   const summary = useMemo(() => {
     const totalMinutes = stats.reduce((sum, s) => sum + s.total_minutes, 0);
     const totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+    const totalRegularMinutes = stats.reduce(
+      (sum, s) => sum + (s.total_regular_minutes ?? 0),
+      0
+    );
+    const totalOvertimeMinutes = stats.reduce(
+      (sum, s) => sum + (s.total_overtime_minutes ?? 0),
+      0
+    );
     const withHours = stats.filter((s) => s.total_days > 0);
     const avgPerEmployee =
       withHours.length > 0
@@ -497,6 +600,8 @@ export default function ClockRecords() {
       totalHours,
       avgPerEmployee,
       totalSessions,
+      totalRegularHours: Math.round((totalRegularMinutes / 60) * 100) / 100,
+      totalOvertimeHours: Math.round((totalOvertimeMinutes / 60) * 100) / 100,
       punctualName: punctual?.full_name ?? '—',
       punctualAvg: punctual ? minutesToTimeLabel(punctual.avg_clock_in_minutes) : null,
     };
@@ -516,12 +621,69 @@ export default function ClockRecords() {
           clocked_out_at: session.clocked_out_at,
           duration_minutes: session.duration_minutes,
           shift_date: session.shift_date,
+          shift_type: session.shift_type,
+          regular_minutes: session.regular_minutes,
+          overtime_minutes: session.overtime_minutes,
         });
         map.set(dateKey, list);
       }
     }
     return map;
   }, [stats]);
+
+  const overtimeSessions = useMemo(() => {
+    const rows: Array<{
+      employee_id: string;
+      full_name: string;
+      shift_date: string;
+      shift_type: 'day' | 'night' | null;
+      clocked_out_at: string | null;
+      regular_minutes: number;
+      overtime_minutes: number;
+      duration_minutes: number;
+    }> = [];
+
+    for (const emp of stats) {
+      for (const s of emp.sessions) {
+        if ((s.overtime_minutes ?? 0) > 0) {
+          rows.push({
+            employee_id: emp.employee_id,
+            full_name: emp.full_name,
+            shift_date: s.shift_date,
+            shift_type: s.shift_type,
+            clocked_out_at: s.clocked_out_at,
+            regular_minutes: s.regular_minutes ?? 0,
+            overtime_minutes: s.overtime_minutes ?? 0,
+            duration_minutes: s.duration_minutes ?? 0,
+          });
+        }
+      }
+    }
+
+    return rows.sort((a, b) => b.overtime_minutes - a.overtime_minutes);
+  }, [stats]);
+
+  const overtimeTotal = useMemo(
+    () => overtimeSessions.reduce((sum, r) => sum + r.overtime_minutes, 0),
+    [overtimeSessions]
+  );
+
+  const chartData = useMemo(
+    () =>
+      stats
+        .filter((s) => (s.total_regular_minutes ?? 0) > 0 || (s.total_overtime_minutes ?? 0) > 0)
+        .map((s) => {
+          const regular = Math.round(((s.total_regular_minutes ?? 0) / 60) * 100) / 100;
+          const overtime = Math.round(((s.total_overtime_minutes ?? 0) / 60) * 100) / 100;
+          return {
+            name: s.full_name.split(' ')[0] || s.full_name,
+            regular,
+            overtime,
+            total: Math.round((regular + overtime) * 100) / 100,
+          };
+        }),
+    [stats]
+  );
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -587,7 +749,7 @@ export default function ClockRecords() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <SummaryCard
           title="Total hours"
           value={`${summary.totalHours}h`}
@@ -615,6 +777,18 @@ export default function ClockRecords() {
           value={String(summary.totalSessions)}
           subtitle="Clock-in events this month"
           icon={Clock}
+        />
+        <MetricCard
+          title="Regular Hours"
+          value={`${summary.totalRegularHours}h`}
+          icon={Clock}
+          variant="batches"
+        />
+        <MetricCard
+          title="Total Overtime Hours"
+          value={`${summary.totalOvertimeHours}h`}
+          icon={AlertTriangle}
+          variant="discrepancies"
         />
       </div>
 
@@ -675,8 +849,15 @@ export default function ClockRecords() {
                       {entry.role ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {entry.shift_type}
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          entry.shift_type === 'night'
+                            ? 'border-indigo-300 text-indigo-700 bg-indigo-50'
+                            : 'border-amber-300 text-amber-700 bg-amber-50'
+                        )}
+                      >
+                        {formatShiftShort(entry.shift_type)}
                       </Badge>
                     </TableCell>
                     <TableCell className="tabular-nums text-sm">
@@ -713,13 +894,88 @@ export default function ClockRecords() {
             daySessionsMap={daySessionsMap}
           />
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Overtime This Month</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {overtimeSessions.length === 0 ? (
+                <EmptyState
+                  icon={<CheckCircle className="w-8 h-8 text-emerald-500" />}
+                  title="No overtime recorded this month"
+                  description="All completed shifts finished within scheduled hours."
+                  size="sm"
+                  variant="minimal"
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Shift</TableHead>
+                      <TableHead>Clocked Out</TableHead>
+                      <TableHead>Regular</TableHead>
+                      <TableHead>Overtime</TableHead>
+                      <TableHead>Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {overtimeSessions.map((row, idx) => (
+                      <TableRow key={`${row.employee_id}-${row.shift_date}-${idx}`}>
+                        <TableCell className="font-medium text-slate-900">
+                          {row.full_name}
+                        </TableCell>
+                        <TableCell>{row.shift_date}</TableCell>
+                        <TableCell>{formatShiftShort(row.shift_type)}</TableCell>
+                        <TableCell className="tabular-nums">
+                          {row.clocked_out_at
+                            ? formatSastTime(row.clocked_out_at)
+                            : '—'}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatDurationMinutes(row.regular_minutes)}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-amber-600 font-medium">
+                          {formatDurationMinutes(row.overtime_minutes)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatDurationMinutes(row.duration_minutes)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-slate-50 font-semibold">
+                      <TableCell colSpan={5}>Total overtime</TableCell>
+                      <TableCell className="tabular-nums text-amber-700">
+                        {formatDurationMinutes(overtimeTotal)}
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Regular vs Overtime Hours</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ShiftHoursChart data={chartData} />
+            </CardContent>
+          </Card>
+
           <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10" />
                   <TableHead>Employee</TableHead>
+                  <TableHead>Shift Type</TableHead>
                   <TableHead>Days</TableHead>
+                  <TableHead>Regular Hours</TableHead>
+                  <TableHead>Overtime</TableHead>
                   <TableHead>Total hours</TableHead>
                   <TableHead>Avg / day</TableHead>
                   <TableHead>Last clock-in</TableHead>
@@ -729,13 +985,14 @@ export default function ClockRecords() {
               <TableBody>
                 {stats.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-slate-500 py-10">
+                    <TableCell colSpan={10} className="text-center text-slate-500 py-10">
                       No employees found
                     </TableCell>
                   </TableRow>
                 ) : (
                   stats.map((emp) => {
                     const isOpen = expanded.has(emp.employee_id);
+                    const ot = emp.total_overtime_minutes ?? 0;
                     return (
                       <Fragment key={emp.employee_id}>
                         <TableRow
@@ -761,7 +1018,21 @@ export default function ClockRecords() {
                               <div className="text-xs text-slate-500">{emp.role}</div>
                             )}
                           </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{dominantShiftLabel(emp)}</Badge>
+                          </TableCell>
                           <TableCell className="tabular-nums">{emp.total_days}</TableCell>
+                          <TableCell className="tabular-nums">
+                            {formatDurationMinutes(emp.total_regular_minutes ?? 0)}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              'tabular-nums',
+                              ot > 0 && 'text-amber-600 font-medium'
+                            )}
+                          >
+                            {ot > 0 ? formatDurationMinutes(ot) : '—'}
+                          </TableCell>
                           <TableCell className="tabular-nums">
                             {emp.total_hours}h
                           </TableCell>
@@ -785,7 +1056,7 @@ export default function ClockRecords() {
                         </TableRow>
                         {isOpen && (
                           <TableRow>
-                            <TableCell colSpan={7} className="p-0">
+                            <TableCell colSpan={10} className="p-0">
                               <SessionsSubTable sessions={emp.sessions} />
                             </TableCell>
                           </TableRow>

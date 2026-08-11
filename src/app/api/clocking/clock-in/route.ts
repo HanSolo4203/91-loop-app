@@ -1,18 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSastDateString } from '@/lib/clocking';
+import type { ShiftType } from '@/lib/shift-constants';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+const VALID_SHIFTS: ShiftType[] = ['day', 'night'];
 
 // POST /api/clocking/clock-in
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const employeeId = typeof body?.employee_id === 'string' ? body.employee_id : '';
+    const shiftType = body?.shift_type as ShiftType | undefined;
 
     if (!employeeId) {
       return NextResponse.json(
         { success: false, error: 'employee_id is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!shiftType || !VALID_SHIFTS.includes(shiftType)) {
+      return NextResponse.json(
+        { success: false, error: 'shift_type must be "day" or "night"' },
         { status: 400 }
       );
     }
@@ -53,6 +64,9 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
     const shiftDate = getSastDateString();
+    const scheduledStart = shiftType === 'day' ? '09:00:00' : '17:00:00';
+    const scheduledEnd = shiftType === 'day' ? '17:00:00' : '05:00:00';
+    const isOvernight = shiftType === 'night';
 
     const { data: event, error: eventError } = await (supabaseAdmin as any)
       .from('clock_events')
@@ -80,6 +94,10 @@ export async function POST(request: NextRequest) {
         clock_in_id: event.id,
         clocked_in_at: now,
         shift_date: shiftDate,
+        shift_type: shiftType,
+        scheduled_start: scheduledStart,
+        scheduled_end: scheduledEnd,
+        is_overnight: isOvernight,
       })
       .select()
       .single();
@@ -96,6 +114,8 @@ export async function POST(request: NextRequest) {
       success: true,
       session,
       clocked_at: now,
+      shift_type: shiftType,
+      scheduled_end: shiftType === 'day' ? '17:00' : '05:00',
     });
   } catch (error) {
     console.error('POST /api/clocking/clock-in error:', error);

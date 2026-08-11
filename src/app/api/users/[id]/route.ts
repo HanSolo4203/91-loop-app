@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { CookieOptions } from '@supabase/ssr';
+import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 
 // Helper function to get user from request (via token or cookies)
@@ -101,7 +102,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { email, full_name, role, password } = body;
+    const { email, full_name, role, password, kiosk_pin } = body;
 
     // Validate role if provided
     if (role && !['admin', 'user'].includes(role)) {
@@ -127,6 +128,18 @@ export async function PATCH(
       );
     }
 
+    const pinProvided = kiosk_pin !== undefined;
+    const pin =
+      typeof kiosk_pin === 'string' && kiosk_pin.trim() !== ''
+        ? kiosk_pin.trim()
+        : null;
+    if (pinProvided && pin && !/^\d{4}$/.test(pin)) {
+      return NextResponse.json(
+        { success: false, error: 'Kiosk PIN must be exactly 4 digits', data: null },
+        { status: 400 }
+      );
+    }
+
     // Update auth user if email or password is provided
     if (email || password) {
       const updateData: { email?: string; password?: string } = {};
@@ -148,8 +161,32 @@ export async function PATCH(
       }
     }
 
+    // Load current role when needed for PIN rules
+    let effectiveRole: 'admin' | 'user' | null = role ?? null;
+    if (!effectiveRole && pinProvided) {
+      const { data: current } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', id)
+        .single();
+      effectiveRole = (current?.role as 'admin' | 'user' | undefined) ?? null;
+    }
+
+    if (pinProvided && pin && effectiveRole !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'Kiosk PIN can only be set for admin users', data: null },
+        { status: 400 }
+      );
+    }
+
     // Update profile
-    const updateData: { email?: string; full_name?: string | null; role?: 'admin' | 'user' } = {};
+    const updateData: {
+      email?: string;
+      full_name?: string | null;
+      role?: 'admin' | 'user';
+      kiosk_pin?: string | null;
+      kiosk_pin_hash?: string | null;
+    } = {};
     if (email) {
       updateData.email = email.trim().toLowerCase();
     }
@@ -160,20 +197,42 @@ export async function PATCH(
       updateData.role = role as 'admin' | 'user';
     }
 
+    if (pinProvided) {
+      if (role === 'user' || (!pin && effectiveRole !== 'admin')) {
+        updateData.kiosk_pin = null;
+        updateData.kiosk_pin_hash = null;
+      } else if (pin) {
+        updateData.kiosk_pin = pin;
+        updateData.kiosk_pin_hash = await bcrypt.hash(pin, 10);
+      } else {
+        // Empty string = clear PIN
+        updateData.kiosk_pin = null;
+        updateData.kiosk_pin_hash = null;
+      }
+    } else if (role === 'user') {
+      // Demoting to user clears kiosk PIN
+      updateData.kiosk_pin = null;
+      updateData.kiosk_pin_hash = null;
+    }
+
     // Only update if there are fields to update
     if (Object.keys(updateData).length > 0) {
       const { data: profile, error: profileError } = await supabaseAdmin
         .from('profiles')
         .update(updateData)
         .eq('id', id)
-        .select()
+        .select('id, email, full_name, role, kiosk_pin, created_at, updated_at')
         .single();
 
       if (profileError) {
         console.error('Error updating profile:', profileError);
+        const message =
+          profileError.code === '23505'
+            ? 'That kiosk PIN is already in use by another admin'
+            : 'Failed to update user profile';
         return NextResponse.json(
-          { success: false, error: 'Failed to update user profile', data: null },
-          { status: 500 }
+          { success: false, error: message, data: null },
+          { status: profileError.code === '23505' ? 409 : 500 }
         );
       }
 
@@ -185,6 +244,7 @@ export async function PATCH(
             email: profile.email,
             full_name: profile.full_name,
             role: profile.role,
+            kiosk_pin: profile.kiosk_pin ?? null,
             created_at: profile.created_at,
             updated_at: profile.updated_at,
           },
@@ -197,7 +257,7 @@ export async function PATCH(
     // If no fields to update, return current profile
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select()
+      .select('id, email, full_name, role, kiosk_pin, created_at, updated_at')
       .eq('id', id)
       .single();
 
@@ -216,6 +276,7 @@ export async function PATCH(
           email: profile.email,
           full_name: profile.full_name,
           role: profile.role,
+          kiosk_pin: profile.kiosk_pin ?? null,
           created_at: profile.created_at,
           updated_at: profile.updated_at,
         },

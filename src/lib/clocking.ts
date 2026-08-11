@@ -10,6 +10,9 @@ export {
   formatDurationMinutes,
   getSastMinutesSinceMidnight,
   stripPinHash,
+  formatShiftBadge,
+  formatShiftShort,
+  isOvertime,
   SAST_TIMEZONE,
 } from '@/lib/clocking-utils';
 
