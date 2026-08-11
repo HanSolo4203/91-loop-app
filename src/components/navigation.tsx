@@ -4,9 +4,18 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { BLUR_DATA_URL, getImageSizes } from '@/lib/utils/image-helpers';
+import { useAuth } from '@/components/auth/auth-provider';
 import {
   LayoutDashboard,
   PlusCircle,
@@ -99,16 +108,33 @@ function NavigationInner() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isAdmin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [staffOpen, setStaffOpen] = useState(false);
+  const [kioskConfirmOpen, setKioskConfirmOpen] = useState(false);
+  const [kioskModeActive, setKioskModeActive] = useState(false);
+  const [enablingKiosk, setEnablingKiosk] = useState(false);
 
   useEffect(() => {
     setUserDropdownOpen(false);
     setReportsOpen(false);
     setStaffOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/kiosk-mode')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.active) setKioskModeActive(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const closeMenus = useCallback(() => {
     setMobileMenuOpen(false);
@@ -133,6 +159,24 @@ function NavigationInner() {
       router.push('/login');
     } catch (error) {
       console.error('Error signing out:', error);
+    }
+  };
+
+  const handleEnableKioskMode = async () => {
+    if (enablingKiosk) return;
+    setEnablingKiosk(true);
+    try {
+      const res = await fetch('/api/kiosk-mode', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setEnablingKiosk(false);
+        return;
+      }
+      setKioskModeActive(true);
+      setKioskConfirmOpen(false);
+      router.push('/clocking');
+    } catch {
+      setEnablingKiosk(false);
     }
   };
 
@@ -277,7 +321,7 @@ function NavigationInner() {
                       className={linkClass(false)}
                     >
                       <MonitorSmartphone className="w-4 h-4 flex-shrink-0" />
-                      Kiosk Mode
+                      Open Kiosk
                     </a>
                   </div>
                 </>
@@ -287,6 +331,11 @@ function NavigationInner() {
 
           {/* User menu */}
           <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+            {isAdmin && kioskModeActive && (
+              <span className="hidden sm:inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                Kiosk Mode ON
+              </span>
+            )}
             <div className="hidden sm:block relative">
               <Button
                 variant="ghost"
@@ -307,7 +356,7 @@ function NavigationInner() {
               {userDropdownOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setUserDropdownOpen(false)} aria-hidden="true" />
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
                     <Link
                       href="/settings"
                       onClick={() => setUserDropdownOpen(false)}
@@ -319,6 +368,19 @@ function NavigationInner() {
                       <Settings className="w-4 h-4 flex-shrink-0" />
                       <span>Settings</span>
                     </Link>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          setKioskConfirmOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-100 text-left transition-colors"
+                      >
+                        <MonitorSmartphone className="w-4 h-4 flex-shrink-0" />
+                        <span>Enable Kiosk Mode</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -418,7 +480,7 @@ function NavigationInner() {
                       className="w-full justify-start gap-3 px-3 py-3 text-sm font-medium h-11 min-h-[44px] rounded-md text-slate-600 hover:bg-slate-100"
                     >
                       <MonitorSmartphone className="w-4 h-4" />
-                      Kiosk Mode
+                      Open Kiosk
                     </Button>
                   </a>
                 </div>
@@ -429,7 +491,14 @@ function NavigationInner() {
                   <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
                     <User className="w-4 h-4 text-slate-600" />
                   </div>
-                  <p className="text-sm font-medium text-slate-900">Admin User</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900">Admin User</p>
+                    {isAdmin && kioskModeActive && (
+                      <span className="inline-flex mt-0.5 items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                        Kiosk Mode ON
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Link href="/settings" onClick={() => setMobileMenuOpen(false)} className="block">
                   <Button
@@ -443,6 +512,19 @@ function NavigationInner() {
                     Settings
                   </Button>
                 </Link>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-3 py-3 text-sm font-medium h-11 min-h-[44px] rounded-md text-slate-600 hover:bg-slate-100"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setKioskConfirmOpen(true);
+                    }}
+                  >
+                    <MonitorSmartphone className="w-4 h-4" />
+                    Enable Kiosk Mode
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   className="w-full justify-start gap-3 px-3 py-3 text-sm font-medium h-11 min-h-[44px] rounded-md text-slate-600 hover:bg-slate-100"
@@ -456,6 +538,30 @@ function NavigationInner() {
           </div>
         )}
       </div>
+
+      <Dialog open={kioskConfirmOpen} onOpenChange={setKioskConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enable Kiosk Mode?</DialogTitle>
+            <DialogDescription>
+              Enabling Kiosk Mode will lock this device to the clock-in page only. To disable it, you
+              must open a different device or browser and log in as admin to turn it off. Are you sure?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setKioskConfirmOpen(false)}
+              disabled={enablingKiosk}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => void handleEnableKioskMode()} disabled={enablingKiosk}>
+              {enablingKiosk ? 'Enabling…' : 'Enable Kiosk Mode'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

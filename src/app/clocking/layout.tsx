@@ -1,4 +1,4 @@
-import type { Viewport } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { QueryProvider } from '@/lib/providers/query-provider';
 
 /**
@@ -6,9 +6,21 @@ import { QueryProvider } from '@/lib/providers/query-provider';
  * Root AuthProvider still wraps the tree but treats /clocking as public.
  * QueryProvider is kept for any future client queries on this route.
  */
+export const metadata: Metadata = {
+  title: 'RSL Express — Staff Kiosk',
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'apple-mobile-web-app-title': 'RSL Kiosk',
+  },
+};
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
   themeColor: '#0f172a',
 };
@@ -20,15 +32,7 @@ export default function ClockingLayout({
 }) {
   return (
     <QueryProvider>
-      <div
-        className="fixed inset-0 z-50 bg-[#0f172a] text-white overflow-hidden flex flex-col"
-        style={{
-          paddingTop: 'env(safe-area-inset-top)',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-          paddingLeft: 'env(safe-area-inset-left)',
-          paddingRight: 'env(safe-area-inset-right)',
-        }}
-      >
+      <div className="h-dvh w-screen overflow-hidden bg-slate-900 select-none text-white">
         {children}
       </div>
     </QueryProvider>

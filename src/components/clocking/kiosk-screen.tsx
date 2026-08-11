@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { Check, Delete, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDurationMinutes } from '@/lib/clocking-utils';
@@ -149,13 +150,19 @@ function ActiveShiftPanel({ entries }: ActiveShiftPanelProps) {
 const keypadBtnClass =
   'aspect-square w-full max-h-[4.5rem] sm:max-h-[5rem] md:max-h-[5.5rem] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 touch-manipulation select-none';
 
-export default function KioskScreen() {
+interface KioskScreenProps {
+  isKioskMode?: boolean;
+}
+
+export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>('pin');
   const [pin, setPin] = useState('');
   const [shake, setShake] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [exitingKiosk, setExitingKiosk] = useState(false);
   const [employee, setEmployee] = useState<VerifiedEmployee | null>(null);
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
   const [elapsedLabel, setElapsedLabel] = useState('');
@@ -175,6 +182,33 @@ export default function KioskScreen() {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Lock browser history when in kiosk mode so back cannot leave /clocking
+  useEffect(() => {
+    if (!isKioskMode) return;
+    window.history.pushState(null, '', '/clocking');
+    const handlePopState = () => {
+      window.history.pushState(null, '', '/clocking');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isKioskMode]);
+
+  const handleExitKioskMode = async () => {
+    if (exitingKiosk) return;
+    setExitingKiosk(true);
+    try {
+      const res = await fetch('/api/kiosk-mode', { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setExitingKiosk(false);
+        return;
+      }
+      router.push('/dashboard');
+    } catch {
+      setExitingKiosk(false);
+    }
+  };
 
   useEffect(() => {
     if (screen !== 'confirm' || !sessionStartedAt) {
@@ -623,11 +657,21 @@ export default function KioskScreen() {
   }
 
   return (
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="h-full min-h-0 flex flex-col relative">
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {mainContent}
       </div>
       <ActiveShiftPanel entries={activeEntries} />
+      {isKioskMode && screen === 'pin' && (
+        <button
+          type="button"
+          onClick={() => void handleExitKioskMode()}
+          disabled={exitingKiosk}
+          className="absolute bottom-2 right-3 z-10 text-xs text-slate-700 underline underline-offset-2 hover:text-slate-500 disabled:opacity-50"
+        >
+          {exitingKiosk ? 'Exiting…' : 'Exit Kiosk Mode'}
+        </button>
+      )}
     </div>
   );
 }
