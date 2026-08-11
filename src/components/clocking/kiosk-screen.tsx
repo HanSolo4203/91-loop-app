@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { Check, Delete, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDurationMinutes } from '@/lib/clocking-utils';
+import { useActiveClockEntries, type ActiveClockEntry } from '@/lib/hooks/use-clocking';
+import { BLUR_DATA_URL } from '@/lib/utils/image-helpers';
 
 const SAST = 'Africa/Johannesburg';
 const PIN_LENGTH = 4;
@@ -65,6 +67,80 @@ function formatSastHm(iso: string) {
   }).format(new Date(iso));
 }
 
+function LiveDuration({ clockedInAt }: { clockedInAt: string }) {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      const mins = Math.round((Date.now() - new Date(clockedInAt).getTime()) / 60000);
+      setLabel(formatDurationMinutes(mins));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [clockedInAt]);
+  return <span className="text-slate-400 text-xs tabular-nums">{label}</span>;
+}
+
+interface ActiveShiftPanelProps {
+  entries: ActiveClockEntry[];
+}
+
+function ActiveShiftPanel({ entries }: ActiveShiftPanelProps) {
+  return (
+    <div className="bg-slate-800/80 border-t border-slate-700 px-4 py-3 shrink-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-slate-300 text-sm font-medium">Currently On Shift</span>
+        </div>
+        <span className="bg-emerald-900/60 text-emerald-300 text-xs px-2 py-0.5 rounded-full">
+          {entries.length} staff
+        </span>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-slate-500 text-sm py-2 text-center">No staff currently on shift</p>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-1 mt-2">
+          {entries.map((entry) => (
+            <div
+              key={entry.session_id}
+              className="flex-shrink-0 flex items-center gap-2 bg-slate-700/70 rounded-xl px-3 py-2"
+            >
+              {entry.photo_url ? (
+                <div className="relative h-10 w-10 overflow-hidden rounded-full shrink-0">
+                  <Image
+                    src={entry.photo_url}
+                    alt={entry.full_name}
+                    fill
+                    className="object-cover rounded-full"
+                    sizes="40px"
+                    placeholder="blur"
+                    blurDataURL={BLUR_DATA_URL}
+                  />
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                  {employeeInitials(entry.full_name)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-white text-sm font-medium max-w-[100px] truncate">
+                  {entry.full_name}
+                </p>
+                <p className="text-emerald-400 text-xs">
+                  In at {formatSastHm(entry.clocked_in_at)}
+                </p>
+                <LiveDuration clockedInAt={entry.clocked_in_at} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function KioskScreen() {
   const [screen, setScreen] = useState<Screen>('pin');
   const [pin, setPin] = useState('');
@@ -81,6 +157,9 @@ export default function KioskScreen() {
 
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittingRef = useRef(false);
+
+  const { data: activeData } = useActiveClockEntries();
+  const activeEntries = Array.isArray(activeData?.data) ? activeData.data : [];
 
   // Live clock — only after mount to avoid SSR/client time hydration mismatch
   useEffect(() => {
@@ -269,13 +348,16 @@ export default function KioskScreen() {
     ? formatLiveClock(now)
     : { time: '--:--:--', dateLabel: '\u00A0' };
 
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'back'];
+
+  let mainContent: React.ReactNode;
 
   if (screen === 'success' && success) {
     const isIn = success.type === 'clock_in';
-    return (
+    mainContent = (
       <div
         className={cn(
-          'min-h-screen flex flex-col items-center justify-center px-6 transition-colors duration-500',
+          'flex-1 flex flex-col items-center justify-center px-6 transition-colors duration-500',
           isIn ? 'bg-emerald-600' : 'bg-sky-600'
         )}
       >
@@ -293,11 +375,9 @@ export default function KioskScreen() {
         <p className="mt-8 text-white/70 text-sm">Returning to PIN entry…</p>
       </div>
     );
-  }
-
-  if (screen === 'confirm' && employee) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 py-10 max-w-lg mx-auto">
+  } else if (screen === 'confirm' && employee) {
+    mainContent = (
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 max-w-lg mx-auto w-full">
         <Image
           src="/rsllogo.png"
           alt="RSL Express"
@@ -317,6 +397,8 @@ export default function KioskScreen() {
                 className="object-cover"
                 sizes="160px"
                 priority
+                placeholder="blur"
+                blurDataURL={BLUR_DATA_URL}
               />
             </div>
           ) : (
@@ -393,111 +475,116 @@ export default function KioskScreen() {
         </button>
       </div>
     );
-  }
+  } else {
+    // STATE 1 — PIN Entry
+    mainContent = (
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 max-w-md mx-auto w-full">
+        <Image
+          src="/rsllogo.png"
+          alt="RSL Express"
+          width={280}
+          height={36}
+          className="h-8 sm:h-9 w-auto object-contain mb-8 brightness-0 invert opacity-90"
+          priority
+        />
 
-  // STATE 1 — PIN Entry
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'back'];
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 max-w-md mx-auto w-full">
-      <Image
-        src="/rsllogo.png"
-        alt="RSL Express"
-        width={280}
-        height={36}
-        className="h-8 sm:h-9 w-auto object-contain mb-8 brightness-0 invert opacity-90"
-        priority
-      />
-
-      <div className="text-center mb-8">
-        <p
-          className={cn(
-            'text-5xl sm:text-6xl font-bold tabular-nums tracking-tight text-white',
-            !mounted && 'invisible'
-          )}
-          suppressHydrationWarning
-        >
-          {time}
-        </p>
-        <p
-          className={cn(
-            'mt-2 text-slate-400 text-base sm:text-lg',
-            !mounted && 'invisible'
-          )}
-          suppressHydrationWarning
-        >
-          {dateLabel}
-        </p>
-      </div>
-
-      <h2 className="text-xl sm:text-2xl font-semibold text-white mb-6">
-        Enter Your PIN
-      </h2>
-
-      <div
-        className={cn(
-          'flex items-center justify-center gap-4 mb-3',
-          shake && 'animate-[shake_0.4s_ease-in-out]'
-        )}
-      >
-        {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-          <div
-            key={i}
+        <div className="text-center mb-8">
+          <p
             className={cn(
-              'w-4 h-4 rounded-full border-2 transition-colors',
-              i < pin.length
-                ? 'bg-white border-white'
-                : 'bg-transparent border-slate-500'
+              'text-5xl sm:text-6xl font-bold tabular-nums tracking-tight text-white',
+              !mounted && 'invisible'
             )}
-          />
-        ))}
-      </div>
+            suppressHydrationWarning
+          >
+            {time}
+          </p>
+          <p
+            className={cn(
+              'mt-2 text-slate-400 text-base sm:text-lg',
+              !mounted && 'invisible'
+            )}
+            suppressHydrationWarning
+          >
+            {dateLabel}
+          </p>
+        </div>
 
-      <p className="h-6 mb-6 text-sm text-red-400 text-center">
-        {error || (verifying ? 'Verifying…' : '')}
-      </p>
+        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-6">
+          Enter Your PIN
+        </h2>
 
-      <div className="grid grid-cols-3 gap-3 w-full max-w-[320px]">
-        {keys.map((key, idx) => {
-          if (key === '') {
-            return <div key={`empty-${idx}`} />;
-          }
-          if (key === 'back') {
+        <div
+          className={cn(
+            'flex items-center justify-center gap-4 mb-3',
+            shake && 'animate-[shake_0.4s_ease-in-out]'
+          )}
+        >
+          {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+            <div
+              key={i}
+              className={cn(
+                'w-4 h-4 rounded-full border-2 transition-colors',
+                i < pin.length
+                  ? 'bg-white border-white'
+                  : 'bg-transparent border-slate-500'
+              )}
+            />
+          ))}
+        </div>
+
+        <p className="h-6 mb-6 text-sm text-red-400 text-center">
+          {error || (verifying ? 'Verifying…' : '')}
+        </p>
+
+        <div className="grid grid-cols-3 gap-3 w-full max-w-[320px]">
+          {keys.map((key, idx) => {
+            if (key === '') {
+              return <div key={`empty-${idx}`} />;
+            }
+            if (key === 'back') {
+              return (
+                <button
+                  key="back"
+                  type="button"
+                  onClick={handleBackspace}
+                  disabled={verifying}
+                  className="min-h-[72px] min-w-[72px] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors disabled:opacity-50"
+                  aria-label="Backspace"
+                >
+                  <Delete className="w-7 h-7" />
+                </button>
+              );
+            }
             return (
               <button
-                key="back"
+                key={key}
                 type="button"
-                onClick={handleBackspace}
+                onClick={() => handleDigit(key)}
                 disabled={verifying}
-                className="min-h-[72px] min-w-[72px] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white flex items-center justify-center transition-colors disabled:opacity-50"
-                aria-label="Backspace"
+                className="min-h-[72px] min-w-[72px] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white text-3xl font-semibold transition-colors disabled:opacity-50"
               >
-                <Delete className="w-7 h-7" />
+                {key}
               </button>
             );
-          }
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => handleDigit(key)}
-              disabled={verifying}
-              className="min-h-[72px] min-w-[72px] rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white text-3xl font-semibold transition-colors disabled:opacity-50"
-            >
-              {key}
-            </button>
-          );
-        })}
-      </div>
+          })}
+        </div>
 
-      <button
-        type="button"
-        onClick={handleClear}
-        disabled={verifying || pin.length === 0}
-        className="mt-6 text-slate-400 hover:text-white text-base disabled:opacity-40"
-      >
-        Clear
-      </button>
+        <button
+          type="button"
+          onClick={handleClear}
+          disabled={verifying || pin.length === 0}
+          className="mt-6 text-slate-400 hover:text-white text-base disabled:opacity-40"
+        >
+          Clear
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {mainContent}
+      <ActiveShiftPanel entries={activeEntries} />
     </div>
   );
 }

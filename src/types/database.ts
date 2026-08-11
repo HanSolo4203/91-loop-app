@@ -1355,6 +1355,8 @@ export interface ClockStats {
   employee_id: string;
   full_name: string;
   role: string | null;
+  photo_url: string | null;
+  shift_type: string | null;
   total_days: number;
   total_hours: number;
   total_minutes: number;

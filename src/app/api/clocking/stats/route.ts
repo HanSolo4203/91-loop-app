@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     const { data: employees, error: empError } = await (supabaseAdmin as any)
       .from('employees')
-      .select('id, full_name, role, status')
+      .select('id, full_name, role, shift_type, photo_url, status')
       .eq('status', 'active')
       .order('full_name', { ascending: true });
 
@@ -101,6 +101,8 @@ export async function GET(request: NextRequest) {
         employee_id: emp.id,
         full_name: emp.full_name,
         role: emp.role,
+        photo_url: emp.photo_url ?? null,
+        shift_type: emp.shift_type ?? null,
         total_days: totalDays,
         total_hours: totalHours,
         total_minutes: totalMinutes,
