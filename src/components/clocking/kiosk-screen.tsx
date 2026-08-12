@@ -10,6 +10,8 @@ import {
   formatShiftShort,
 } from '@/lib/clocking-utils';
 import { useActiveClockEntries, type ActiveClockEntry } from '@/lib/hooks/use-clocking';
+import { playClockInCheer, playLogoutChime } from '@/lib/utils/sounds';
+import { fireClockInConfetti } from '@/lib/utils/confetti';
 import { BlueAuthBackdrop } from '@/components/auth/blue-auth-backdrop';
 import {
   Dialog,
@@ -524,6 +526,10 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
           timeLabel: formatSastHm(clockedAt),
           shiftType: selectedShift ?? data.shift_type ?? undefined,
         });
+        setScreen('success');
+        // Fire celebration — both run simultaneously (fire-and-forget)
+        playClockInCheer();
+        void fireClockInConfetti();
       } else {
         setSuccess({
           type: 'clock_out',
@@ -534,8 +540,9 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
           overtimeLabel: data.overtime_formatted,
           hadOvertime: !!data.had_overtime,
         });
+        setScreen('success');
+        playLogoutChime();
       }
-      setScreen('success');
     } catch {
       setError('Action failed');
     } finally {
@@ -554,6 +561,7 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
           isIn ? 'bg-emerald-600' : 'bg-sky-600'
         )}
       >
+        {isIn && <div className="text-5xl sm:text-6xl mb-4">🎉</div>}
         <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-white/20 flex items-center justify-center mb-6 sm:mb-8">
           <Check className="w-12 h-12 sm:w-16 sm:h-16 text-white" strokeWidth={3} />
         </div>
