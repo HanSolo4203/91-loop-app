@@ -155,6 +155,7 @@ function StatisticsPageContent() {
             width={200}
             height={80}
             className="h-20 w-auto object-contain mx-auto mb-4"
+            style={{ width: 'auto' }}
             quality={90}
             loading="lazy"
             placeholder="blur"

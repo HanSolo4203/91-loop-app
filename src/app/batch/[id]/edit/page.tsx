@@ -112,6 +112,8 @@ function EditBatchContent() {
   const [batchWorkflowStatus, setBatchWorkflowStatus] = useState<BatchDetails['status']>('delivered');
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [isExpressBatch, setIsExpressBatch] = useState(false);
+  const [layoutCategoryIds, setLayoutCategoryIds] = useState<string[] | null>(null);
+  const [layoutClientId, setLayoutClientId] = useState<string | null>(null);
 
   const loadPageData = useCallback(
     async (isRefresh = false) => {
@@ -186,6 +188,77 @@ function EditBatchContent() {
       loadPageData();
     }
   }, [batchId, loadPageData]);
+
+  const clientId = batchDetails?.client?.id ?? null;
+
+  useEffect(() => {
+    if (!clientId) {
+      setLayoutCategoryIds(null);
+      setLayoutClientId(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchLayout = async () => {
+      try {
+        const response = await fetch(`/api/clients/${clientId}/layout`);
+        const result = await response.json();
+        if (cancelled) return;
+
+        if (result.success) {
+          const layout = result.data?.layout;
+          setLayoutCategoryIds(Array.isArray(layout) && layout.length > 0 ? layout : null);
+        } else {
+          setLayoutCategoryIds(null);
+          setGridError(result.error || 'Failed to load client layout');
+        }
+      } catch {
+        if (!cancelled) {
+          setLayoutCategoryIds(null);
+          setGridError('Failed to load client layout');
+        }
+      } finally {
+        if (!cancelled) {
+          setLayoutClientId(clientId);
+        }
+      }
+    };
+
+    fetchLayout();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
+  const handleSaveLayout = useCallback(async (categoryIds: string[]) => {
+    if (!clientId) return false;
+
+    try {
+      const response = await fetch(`/api/clients/${clientId}/layout`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ category_ids: categoryIds }),
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        setGridError(result.error || 'Could not save layout');
+        return false;
+      }
+
+      const layout = result.data?.layout;
+      setLayoutCategoryIds(Array.isArray(layout) && layout.length > 0 ? layout : categoryIds);
+      setLayoutClientId(clientId);
+      setGridError('');
+      return true;
+    } catch {
+      setGridError('Could not save layout. Please try again.');
+      return false;
+    }
+  }, [clientId]);
 
   const handleLinenItemsChange = useCallback((items: LinenCountItem[]) => {
     setLinenItems(items);
@@ -442,9 +515,11 @@ function EditBatchContent() {
               ref={linenGridRef}
               categories={categories}
               onItemsChange={handleLinenItemsChange}
-              isLoading={refreshing && categories.length === 0}
+              isLoading={(refreshing && categories.length === 0) || Boolean(clientId && layoutClientId !== clientId)}
               error={gridError}
               initialSelections={initialSelections}
+              layoutCategoryIds={clientId && layoutClientId === clientId ? layoutCategoryIds : null}
+              onSaveLayout={clientId ? handleSaveLayout : undefined}
             />
 
             <Card>

@@ -1,15 +1,37 @@
 'use client';
 
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import TabletNumericInput from '@/components/ui/tablet-numeric-input';
-import { Package, Calculator, AlertCircle, CheckCircle, Search, Star, X, Copy, Trash2, RotateCcw, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Package, AlertCircle, Search, X, LayoutGrid, List, Pencil } from 'lucide-react';
 import { formatCurrencySSR } from '@/lib/utils/formatters';
 import { categorizeBySections } from '@/lib/utils/category-sections';
 import type { LinenCategory } from '@/types/database';
+import {
+  LinenListTable,
+  LinenRow,
+  LinenTile,
+  SortableLinenEntry,
+  type DragHandleProps,
+  type LinenEntryProps,
+} from '@/components/batch/linen-layout-item';
 
 export interface LinenCountItem {
   category: LinenCategory;
@@ -38,6 +60,9 @@ interface LinenCountGridProps {
   initialSelections?: PrefilledItem[];
   favoriteCategoryIds?: string[];
   onToggleFavorite?: (categoryId: string, nextFavorite: boolean) => void;
+  /** Saved category order. Null means this client has no layout yet. */
+  layoutCategoryIds?: string[] | null;
+  onSaveLayout?: (categoryIds: string[]) => Promise<boolean>;
 }
 
 export interface LinenCountGridRef {
@@ -53,11 +78,19 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
   initialSelections,
   favoriteCategoryIds = [],
   onToggleFavorite,
+  layoutCategoryIds = null,
+  onSaveLayout,
 }, ref) => {
   const [items, setItems] = useState<LinenCountItem[]>([]);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'tiles' | 'rows'>('tiles');
+  const [isEditingLayout, setIsEditingLayout] = useState(false);
+  const [draftLayoutIds, setDraftLayoutIds] = useState<string[] | null>(null);
+  const [layoutError, setLayoutError] = useState('');
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
+  const [addingCategoryId, setAddingCategoryId] = useState<string | null>(null);
   const onItemsChangeRef = useRef(onItemsChange);
   const normalizedInitialSelections = useMemo(() => initialSelections ?? [], [initialSelections]);
   const favoriteIdsSet = useMemo(() => new Set(favoriteCategoryIds), [favoriteCategoryIds]);
@@ -136,6 +169,113 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
     };
   }, []);
 
+  const hasSavedLayout = Array.isArray(layoutCategoryIds) && layoutCategoryIds.length > 0;
+  const layoutKey = layoutCategoryIds?.join('|') ?? '';
+  const layoutKeyRef = useRef(layoutKey);
+
+  useEffect(() => {
+    if (layoutKeyRef.current === layoutKey) return;
+    layoutKeyRef.current = layoutKey;
+    setIsEditingLayout(false);
+    setDraftLayoutIds(null);
+    setLayoutError('');
+  }, [layoutKey]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories]
+  );
+
+  const beginLayoutEdit = () => {
+    const source = hasSavedLayout && layoutCategoryIds
+      ? layoutCategoryIds
+      : categorizeBySections(categories).flatMap((section) => section.categories.map((category) => category.id));
+    const seen = new Set<string>();
+    const nextIds = source.filter((id) => {
+      if (!categoryById.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    setDraftLayoutIds(nextIds);
+    setIsEditingLayout(true);
+    setLayoutError('');
+  };
+
+  const cancelLayoutEdit = () => {
+    setIsEditingLayout(false);
+    setDraftLayoutIds(null);
+    setLayoutError('');
+    setSearchQuery('');
+  };
+
+  const handleSaveLayout = async () => {
+    if (!onSaveLayout) return;
+    if (!draftLayoutIds || draftLayoutIds.length === 0) {
+      setLayoutError('Add at least one category before saving this layout.');
+      return;
+    }
+
+    setIsSavingLayout(true);
+    setLayoutError('');
+    try {
+      const saved = await onSaveLayout(draftLayoutIds);
+      if (saved) {
+        setIsEditingLayout(false);
+        setDraftLayoutIds(null);
+        setSearchQuery('');
+      } else {
+        setLayoutError('Could not save this layout. Please try again.');
+      }
+    } catch {
+      setLayoutError('Could not save this layout. Please try again.');
+    } finally {
+      setIsSavingLayout(false);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !draftLayoutIds) return;
+    const oldIndex = draftLayoutIds.indexOf(String(active.id));
+    const newIndex = draftLayoutIds.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    setDraftLayoutIds(arrayMove(draftLayoutIds, oldIndex, newIndex));
+  };
+
+  const removeFromLayout = (categoryId: string) => {
+    setDraftLayoutIds((current) => (current ?? []).filter((id) => id !== categoryId));
+  };
+
+  const addToLayout = (categoryId: string) => {
+    setDraftLayoutIds((current) => {
+      const next = current ?? [];
+      if (next.includes(categoryId)) return next;
+      return [...next, categoryId];
+    });
+    setSearchQuery('');
+  };
+
+  const addCategoryToClientList = async (categoryId: string) => {
+    if (!onSaveLayout || !layoutCategoryIds || layoutCategoryIds.includes(categoryId)) return;
+
+    setAddingCategoryId(categoryId);
+    setLayoutError('');
+    try {
+      const saved = await onSaveLayout([...layoutCategoryIds, categoryId]);
+      if (!saved) {
+        setLayoutError("Could not add that category to this client's list.");
+      }
+    } catch {
+      setLayoutError("Could not add that category to this client's list.");
+    } finally {
+      setAddingCategoryId(null);
+    }
+  };
 
   // Validate quantity input
   const validateQuantity = (value: string): boolean => {
@@ -383,17 +523,184 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
 
   const totals = getTotals();
   const filteredSections = getFilteredSections();
+  const searchText = searchQuery.trim().toLowerCase();
+  const usingLayoutList = isEditingLayout || hasSavedLayout;
+  const activeLayoutIds = isEditingLayout
+    ? (draftLayoutIds ?? [])
+    : hasSavedLayout && layoutCategoryIds
+      ? layoutCategoryIds
+      : [];
+
+  const orderedLayoutCategories = activeLayoutIds
+    .map((id) => categoryById.get(id))
+    .filter((category): category is LinenCategory => Boolean(category));
+
+  const visibleLayoutCategories = searchText
+    ? orderedLayoutCategories.filter((category) => category.name.toLowerCase().includes(searchText))
+    : orderedLayoutCategories;
+
+  const layoutIdSet = new Set(hasSavedLayout && layoutCategoryIds ? layoutCategoryIds : []);
+  const extraCategories = !isEditingLayout && hasSavedLayout
+    ? categories.filter((category) => {
+        if (layoutIdSet.has(category.id)) return false;
+        const item = items.find((entry) => entry.category.id === category.id);
+        if (!item || (item.quantity_sent <= 0 && item.quantity_received <= 0)) return false;
+        if (searchText && !category.name.toLowerCase().includes(searchText)) return false;
+        return true;
+      })
+    : [];
+
+  const addableMatches = categories
+    .filter((category) => {
+      if (!isEditingLayout || !searchText) return false;
+      if ((draftLayoutIds ?? []).includes(category.id)) return false;
+      return category.name.toLowerCase().includes(searchText);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const addableCategories = addableMatches.slice(0, 12);
+
+  const otherCategories = !isEditingLayout && hasSavedLayout
+    ? categories.filter((category) => {
+        if (layoutIdSet.has(category.id)) return false;
+        if (searchText && !category.name.toLowerCase().includes(searchText)) return false;
+        return true;
+      })
+    : [];
+  const otherSections = categorizeBySections(otherCategories);
+  const otherCategoryCount = otherSections.reduce((sum, section) => sum + section.categories.length, 0);
+
+  const renderEntry = (category: LinenCategory, sortable: boolean) => {
+    const item = items.find((entry) => entry.category.id === category.id);
+    if (!item) return null;
+
+    const entryProps: Omit<LinenEntryProps, 'dragHandle'> = {
+      item,
+      isFavorite: favoriteIdsSet.has(item.category.id),
+      canToggleFavorite: Boolean(onToggleFavorite),
+      isFocused: focusedCardId === item.category.id,
+      isEditingLayout,
+      validationErrors,
+      onQuantityChange: handleQuantityChange,
+      onDiscrepancyChange: handleDiscrepancyDetailsChange,
+      onCopy: handleCopyQuantityToReceived,
+      onClear: handleClearAllFields,
+      onClearDiscrepancy: handleClearDiscrepancyDetails,
+      onExpressToggle: handleExpressDeliveryToggle,
+      onToggleFavorite,
+      onFocus: handleCardClick,
+      onRemoveFromLayout: isEditingLayout ? removeFromLayout : undefined,
+    };
+
+    const body = (dragHandle: DragHandleProps | null) =>
+      viewMode === 'rows' ? (
+        <LinenRow {...entryProps} dragHandle={dragHandle} />
+      ) : (
+        <LinenTile {...entryProps} dragHandle={dragHandle} />
+      );
+
+    if (!sortable) {
+      return (
+        <div key={category.id} className="h-full">
+          {body(null)}
+        </div>
+      );
+    }
+
+    return (
+      <SortableLinenEntry key={category.id} id={category.id}>
+        {body}
+      </SortableLinenEntry>
+    );
+  };
+
+  const renderEntries = (list: LinenCategory[], sortable: boolean) => {
+    const entries = list.map((category) => renderEntry(category, sortable));
+    if (viewMode === 'rows') {
+      return <LinenListTable>{entries}</LinenListTable>;
+    }
+
+    return (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {entries}
+      </div>
+    );
+  };
+
+  const layoutList = isEditingLayout ? (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext
+        items={visibleLayoutCategories.map((category) => category.id)}
+        strategy={viewMode === 'rows' ? verticalListSortingStrategy : rectSortingStrategy}
+      >
+        {renderEntries(visibleLayoutCategories, true)}
+      </SortableContext>
+    </DndContext>
+  ) : (
+    renderEntries(visibleLayoutCategories, false)
+  );
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Package className="w-5 h-5 text-blue-600" />
-          <span>Linen Count & Pricing</span>
-        </CardTitle>
-        <CardDescription>
-          Enter quantities for each linen category. Prices are fixed from category settings.
-        </CardDescription>
+      <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="flex items-center space-x-2">
+            <Package className="w-5 h-5 text-blue-600" />
+            <span>Linen Count & Pricing</span>
+          </CardTitle>
+          <CardDescription>
+            {hasSavedLayout
+              ? "Enter quantities on this client's saved linen list. Other categories are underneath and can be added when needed."
+              : 'Enter quantities for each linen category. Prices are fixed from category settings.'}
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('tiles')}
+              className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium ${
+                viewMode === 'tiles' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+              }`}
+              aria-pressed={viewMode === 'tiles'}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Tiles
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('rows')}
+              className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium ${
+                viewMode === 'rows' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+              }`}
+              aria-pressed={viewMode === 'rows'}
+            >
+              <List className="h-4 w-4" />
+              Rows
+            </button>
+          </div>
+          {isEditingLayout ? (
+            <>
+              <Button type="button" size="sm" onClick={handleSaveLayout} disabled={isSavingLayout || (draftLayoutIds?.length ?? 0) === 0}>
+                {isSavingLayout ? 'Saving...' : 'Save layout'}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={cancelLayoutEdit} disabled={isSavingLayout}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={beginLayoutEdit}
+              disabled={!onSaveLayout || categories.length === 0}
+              title={onSaveLayout ? 'Arrange and save this client’s linen list' : 'Select a client to edit their layout'}
+            >
+              <Pencil className="h-4 w-4" />
+              Edit layout
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Summary Stats */}
@@ -423,7 +730,13 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
           </div>
           <Input
             type="text"
-            placeholder="Search linen categories..."
+            placeholder={
+              isEditingLayout
+                ? 'Search to filter or add a category...'
+                : hasSavedLayout
+                  ? 'Search this list or other categories...'
+                  : 'Search linen categories...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 pr-10"
@@ -469,6 +782,106 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
               </div>
             ))}
           </div>
+        ) : usingLayoutList ? (
+          <div className="space-y-4">
+            {isEditingLayout && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                Drag the handle to match the paper list. Remove items that are not on it, search to add others, then save.
+                Quantities you have already entered stay on the items.
+              </div>
+            )}
+            {layoutError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">{layoutError}</div>
+            )}
+            {visibleLayoutCategories.length === 0 ? (
+              <div className="py-8 text-center">
+                <Search className="mx-auto mb-3 h-10 w-10 text-slate-400" />
+                <p className="text-sm text-slate-600">
+                  {searchText
+                    ? "No items on this list match your search."
+                    : isEditingLayout
+                      ? "This list is empty. Search for a category to add it."
+                      : "This client's saved list has no matching categories."}
+                </p>
+              </div>
+            ) : (
+              layoutList
+            )}
+            {extraCategories.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-lg font-semibold text-slate-900">Also on this batch</h3>
+                  <div className="h-px flex-1 bg-slate-200"></div>
+                  <span className="rounded bg-slate-100 px-2 py-1 text-sm text-slate-500">
+                    {extraCategories.length} items
+                  </span>
+                </div>
+                {renderEntries(extraCategories, false)}
+              </div>
+            )}
+            {!isEditingLayout && otherCategoryCount > 0 && (
+              <div className="space-y-4 border-t border-slate-200 pt-6">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-lg font-semibold text-slate-900">Other categories</h3>
+                    <div className="h-px flex-1 bg-slate-200"></div>
+                    <span className="rounded bg-slate-100 px-2 py-1 text-sm text-slate-500">
+                      {otherCategoryCount} items
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Not on this client&apos;s list. Add one when you need it, and it will sit under the saved list.
+                  </p>
+                </div>
+                {otherSections.map((section) => (
+                  <div key={section.name} className="space-y-2">
+                    <h4 className="text-sm font-medium text-slate-700">{section.name}</h4>
+                    <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                      {section.categories.map((category) => (
+                        <li key={category.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                          <span className="text-sm text-slate-900">{category.name}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={!onSaveLayout || addingCategoryId !== null}
+                            onClick={() => addCategoryToClientList(category.id)}
+                          >
+                            {addingCategoryId === category.id ? 'Adding...' : 'Add to list'}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+            {isEditingLayout && searchText && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-3 text-sm font-medium text-slate-800">Add to this client's list</p>
+                {addableCategories.length === 0 ? (
+                  <p className="text-sm text-slate-600">No other categories match that search.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {addableCategories.map((category) => (
+                      <li key={category.id} className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2">
+                        <span className="text-sm text-slate-900">{category.name}</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => addToLayout(category.id)}>
+                          Add
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {addableMatches.length > addableCategories.length && (
+                  <p className="mt-2 text-xs text-slate-500">Keep typing to narrow the list.</p>
+                )}
+              </div>
+            )}
+            {isEditingLayout && !searchText && (
+              <p className="text-sm text-slate-500">Search for a category to add it to this client's list.</p>
+            )}
+          </div>
         ) : (
           <div className="space-y-6 sm:space-y-8">
             {filteredSections.length === 0 && searchQuery ? (
@@ -488,7 +901,6 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
             ) : (
               filteredSections.map((section) => (
                 <div key={section.name} className="space-y-4">
-                  {/* Section Header */}
                   <div className="flex items-center space-x-2">
                     <h3 className="text-lg font-semibold text-slate-900">{section.name}</h3>
                     <div className="flex-1 h-px bg-slate-200"></div>
@@ -496,237 +908,7 @@ const LinenCountGrid = forwardRef<LinenCountGridRef, LinenCountGridProps>(({
                       {section.categories.length} items
                     </span>
                   </div>
-
-                  {/* Categories Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
-                    {section.categories.map((category) => {
-                      const item = items.find(i => i.category.id === category.id);
-                      if (!item) return null;
-                      
-                      const hasDiscrepancy = item.quantity_sent !== item.quantity_received;
-                      const hasQuantity = item.quantity_sent > 0;
-                      const isFavorite = favoriteIdsSet.has(item.category.id);
-                      const canToggleFavorite = Boolean(onToggleFavorite);
-                      
-                      const isCardFocused = focusedCardId === item.category.id;
-                      
-                      return (
-                        <div
-                          key={item.category.id}
-                          data-card-id={item.category.id}
-                          className={`p-3 sm:p-4 lg:p-5 border rounded-lg transition-all cursor-pointer touch-manipulation ${
-                            hasDiscrepancy ? 'border-orange-200 bg-orange-50' :
-                            hasQuantity ? 'border-blue-200 bg-blue-50' :
-                            'border-slate-200 hover:border-slate-300'
-                          } ${isCardFocused ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}
-                          onClick={() => handleCardClick(item.category.id)}
-                          tabIndex={0}
-                        >
-                          <div className="space-y-3">
-                            {/* Category Name */}
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-medium text-slate-900 text-sm leading-tight">
-                                {item.category.name}
-                              </h4>
-                              <div className="flex items-center space-x-2">
-                                {canToggleFavorite && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onToggleFavorite?.(item.category.id, !isFavorite);
-                                    }}
-                                    className={`p-1 rounded-full transition-colors ${
-                                      isFavorite
-                                        ? 'text-amber-500 hover:text-amber-600 bg-amber-50'
-                                        : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'
-                                    }`}
-                                    aria-label={isFavorite ? 'Remove favourite' : 'Mark as favourite'}
-                                  >
-                                    <Star
-                                      className="w-4 h-4"
-                                      fill={isFavorite ? 'currentColor' : 'none'}
-                                    />
-                                  </button>
-                                )}
-                                {item.discrepancy_details && (
-                                  <button
-                                    onClick={() => handleClearDiscrepancyDetails(item.category.id)}
-                                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                                    title="Clear discrepancy details"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                )}
-                                {hasDiscrepancy && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    Discrepancy
-                                  </Badge>
-                                )}
-                                {hasQuantity && !hasDiscrepancy && (
-                                  <Badge variant="default" className="text-xs bg-green-600">
-                                    <CheckCircle className="w-3 h-3 mr-1" />
-                                    Complete
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Price Display */}
-                            <div className="flex items-center space-x-2">
-                              <Calculator className="w-4 h-4 text-slate-500" />
-                              <span className="text-sm text-slate-600">
-                                Price: {formatCurrencySSR(item.price_per_item)}
-                              </span>
-                            </div>
-
-                            {/* Quantity Inputs */}
-                            <div className="space-y-2">
-                              <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                  Quantity Sent
-                                </label>
-                                <TabletNumericInput
-                                  value={item.quantity_sent.toString()}
-                                  onChange={(value) => handleQuantityChange(item.category.id, 'sent', value)}
-                                  placeholder="0"
-                                  maxLength={5}
-                                  className={`text-sm ${
-                                    validationErrors[`${item.category.id}-sent`] ? 'border-red-300' : ''
-                                  }`}
-                                />
-                                {validationErrors[`${item.category.id}-sent`] && (
-                                  <p className="text-xs text-red-600">
-                                    {validationErrors[`${item.category.id}-sent`]}
-                                  </p>
-                                )}
-                              </div>
-
-                              {/* Action Buttons - show when card is focused */}
-                              {isCardFocused && (
-                                <div className="flex justify-center space-x-2">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCopyQuantityToReceived(item.category.id);
-                                    }}
-                                    className={`flex items-center space-x-1 px-3 py-2 text-xs rounded-md transition-colors touch-manipulation min-h-[44px] ${
-                                      item.quantity_sent > 0
-                                        ? 'bg-blue-100 hover:bg-blue-200 text-blue-700'
-                                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                    }`}
-                                    title="Copy quantity sent to received"
-                                    disabled={item.quantity_sent === 0}
-                                  >
-                                    <Copy className="w-3 h-3" />
-                                    <span>Copy</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleClearAllFields(item.category.id);
-                                    }}
-                                    className="flex items-center space-x-1 px-3 py-2 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-md transition-colors touch-manipulation min-h-[44px]"
-                                    title="Clear all fields"
-                                  >
-                                    <RotateCcw className="w-3 h-3" />
-                                    <span>Clear</span>
-                                  </button>
-                                </div>
-                              )}
-
-                              <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                  Quantity Received
-                                </label>
-                                <TabletNumericInput
-                                  value={item.quantity_received.toString()}
-                                  onChange={(value) => handleQuantityChange(item.category.id, 'received', value)}
-                                  placeholder="0"
-                                  maxLength={5}
-                                  className={`text-sm ${
-                                    validationErrors[`${item.category.id}-received`] ? 'border-red-300' : ''
-                                  }`}
-                                />
-                                {validationErrors[`${item.category.id}-received`] && (
-                                  <p className="text-xs text-red-600">
-                                    {validationErrors[`${item.category.id}-received`]}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Express Delivery Checkbox */}
-                            <div className="pt-2 border-t border-slate-200">
-                              <label className={`flex items-center space-x-2 cursor-pointer group ${item.quantity_sent === 0 ? 'opacity-70' : ''}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={item.express_delivery || false}
-                                  onChange={(e) => handleExpressDeliveryToggle(item.category.id, e.target.checked)}
-                                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 focus:ring-2 disabled:cursor-not-allowed"
-                                  onClick={(e) => e.stopPropagation()}
-                                  disabled={item.quantity_sent === 0}
-                                />
-                                <div className="flex items-center space-x-1">
-                                  <Zap className="w-3.5 h-3.5 text-yellow-500" />
-                                  <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900">
-                                    Express Delivery (+50%)
-                                  </span>
-                                </div>
-                              </label>
-                            </div>
-
-                            {/* Subtotal */}
-                            <div className="pt-2 border-t border-slate-200">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-slate-700">Subtotal:</span>
-                                <span className="text-sm font-bold text-slate-900">
-                                  {formatCurrencySSR(item.subtotal)}
-                                </span>
-                              </div>
-                              {item.express_delivery && (
-                                <div className="flex items-center justify-between mt-1">
-                                  <span className="text-xs text-slate-600">Surcharge (50%):</span>
-                                  <span className="text-xs font-semibold text-yellow-600">
-                                    {formatCurrencySSR(item.subtotal * 0.5)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Discrepancy Warning and Details */}
-                            {hasDiscrepancy && (
-                              <div className="space-y-3">
-                                <div className="p-2 bg-orange-100 border border-orange-200 rounded text-xs">
-                                  <p className="text-orange-800">
-                                    <strong>Discrepancy:</strong> {item.quantity_sent} sent, {item.quantity_received} received
-                                    ({item.quantity_sent - item.quantity_received > 0 ? '+' : ''}{item.quantity_sent - item.quantity_received})
-                                  </p>
-                                </div>
-                                
-                                {/* Discrepancy Details Input */}
-                                <div className="space-y-1">
-                                  <label className="text-xs font-medium text-slate-700">
-                                    What caused this discrepancy?
-                                  </label>
-                                  <Textarea
-                                    placeholder="e.g., Items damaged during washing, items lost, incorrect count..."
-                                    value={item.discrepancy_details || ''}
-                                    onChange={(e) => handleDiscrepancyDetailsChange(item.category.id, e.target.value)}
-                                    className="text-xs min-h-[60px] resize-none"
-                                    maxLength={500}
-                                  />
-                                  <p className="text-xs text-slate-500">
-                                    {(item.discrepancy_details || '').length}/500 characters
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {renderEntries(section.categories, false)}
                 </div>
               ))
             )}

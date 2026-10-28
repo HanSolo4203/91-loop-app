@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   // Reduce noisy sourcemap warnings from third-party bundles
   productionBrowserSourceMaps: false,
   images: {
+    // Default in Next 16 is [75]. Explicit qualities used by <Image quality={…}>.
+    qualities: [75, 85, 90],
     remotePatterns: [
       {
         protocol: 'https',

@@ -105,6 +105,9 @@ function NewBatchContent() {
   const [linenItems, setLinenItems] = useState<LinenCountItem[]>([]);
   const [favoriteCategoryIds, setFavoriteCategoryIds] = useState<string[]>([]);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
+  const [layoutCategoryIds, setLayoutCategoryIds] = useState<string[] | null>(null);
+  const [layoutClientId, setLayoutClientId] = useState<string | null>(null);
+  const [layoutNotice, setLayoutNotice] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [createStatus, setCreateStatus] = useState<'draft' | 'ready' | 'creating' | 'success' | 'error'>('draft');
@@ -190,6 +193,49 @@ function NewBatchContent() {
     };
 
     fetchFavorites();
+  }, [selectedClient]);
+
+  // Load the client's saved linen list. No rows means the full catalog.
+  useEffect(() => {
+    if (!selectedClient) {
+      setLayoutCategoryIds(null);
+      setLayoutClientId(null);
+      return;
+    }
+
+    let cancelled = false;
+    const clientId = selectedClient.id;
+
+    const fetchLayout = async () => {
+      try {
+        const response = await fetch(`/api/clients/${clientId}/layout`);
+        const result = await response.json();
+        if (cancelled) return;
+
+        if (result.success) {
+          const layout = result.data?.layout;
+          setLayoutCategoryIds(Array.isArray(layout) && layout.length > 0 ? layout : null);
+          setLayoutNotice('');
+        } else {
+          setLayoutCategoryIds(null);
+          setLayoutNotice(result.error || 'Failed to load client layout');
+        }
+      } catch {
+        if (!cancelled) {
+          setLayoutCategoryIds(null);
+          setLayoutNotice('Failed to load client layout');
+        }
+      } finally {
+        if (!cancelled) {
+          setLayoutClientId(clientId);
+        }
+      }
+    };
+
+    fetchLayout();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedClient]);
 
   // Validate form data
@@ -281,6 +327,35 @@ function NewBatchContent() {
   const handleLinenItemsChange = useCallback((items: LinenCountItem[]) => {
     setLinenItems(items);
   }, []);
+
+  const handleSaveLayout = useCallback(async (categoryIds: string[]) => {
+    if (!selectedClient) return false;
+
+    try {
+      const response = await fetch(`/api/clients/${selectedClient.id}/layout`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ category_ids: categoryIds }),
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        setLayoutNotice(result.error || 'Could not save layout');
+        return false;
+      }
+
+      const layout = result.data?.layout;
+      setLayoutCategoryIds(Array.isArray(layout) && layout.length > 0 ? layout : categoryIds);
+      setLayoutClientId(selectedClient.id);
+      setLayoutNotice('');
+      return true;
+    } catch {
+      setLayoutNotice('Could not save layout. Please try again.');
+      return false;
+    }
+  }, [selectedClient]);
 
   // Handle favourite toggle per client
   const handleToggleFavorite = useCallback(
@@ -466,10 +541,12 @@ function NewBatchContent() {
               ref={linenGridRef}
               categories={categories}
               onItemsChange={handleLinenItemsChange}
-              isLoading={isLoading || isLoadingFavorites}
-              error={validationErrors.items}
+              isLoading={isLoading || isLoadingFavorites || Boolean(selectedClient && layoutClientId !== selectedClient.id)}
+              error={validationErrors.items || layoutNotice}
               favoriteCategoryIds={favoriteCategoryIds}
               onToggleFavorite={selectedClient ? handleToggleFavorite : undefined}
+              layoutCategoryIds={selectedClient && layoutClientId === selectedClient.id ? layoutCategoryIds : null}
+              onSaveLayout={selectedClient ? handleSaveLayout : undefined}
             />
           </div>
 

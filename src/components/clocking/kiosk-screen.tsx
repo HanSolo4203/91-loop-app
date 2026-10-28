@@ -597,6 +597,7 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
           width={280}
           height={36}
           className="h-6 sm:h-8 w-auto object-contain mb-4 sm:mb-8 md:mb-10 brightness-0 invert opacity-90"
+          style={{ width: 'auto' }}
           priority
         />
 
@@ -727,6 +728,7 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
             width={280}
             height={36}
             className="h-6 sm:h-8 md:h-9 w-auto object-contain mb-3 sm:mb-6 md:mb-8 brightness-0 invert opacity-90"
+            style={{ width: 'auto' }}
             priority
           />
 

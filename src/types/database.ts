@@ -154,6 +154,48 @@ export interface Database {
         ];
       };
 
+      // Client linen checklist order
+      client_linen_layouts: {
+        Row: {
+          id: string;
+          client_id: string;
+          linen_category_id: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          linen_category_id: string;
+          sort_order: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          client_id?: string;
+          linen_category_id?: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_linen_layouts_client_id_fkey";
+            columns: ["client_id"];
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_linen_layouts_linen_category_id_fkey";
+            columns: ["linen_category_id"];
+            referencedRelation: "linen_categories";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+
       // Business Settings table
       business_settings: {
         Row: {
@@ -1249,6 +1291,7 @@ export type Profile = Tables<'profiles'>;
 export type LinenCategory = Tables<'linen_categories'>;
 export type Client = Tables<'clients'>;
 export type ClientFavoriteCategory = Tables<'client_favorite_categories'>;
+export type ClientLinenLayout = Tables<'client_linen_layouts'>;
 export type BusinessSettings = Tables<'business_settings'>;
 export type Batch = Tables<'batches'>;
 export type BatchItem = Tables<'batch_items'>;
@@ -1273,6 +1316,7 @@ export type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
 export type LinenCategoryInsert = Database['public']['Tables']['linen_categories']['Insert'];
 export type ClientInsert = Database['public']['Tables']['clients']['Insert'];
 export type ClientFavoriteCategoryInsert = Database['public']['Tables']['client_favorite_categories']['Insert'];
+export type ClientLinenLayoutInsert = Database['public']['Tables']['client_linen_layouts']['Insert'];
 export type BatchInsert = Database['public']['Tables']['batches']['Insert'];
 export type BatchItemInsert = Database['public']['Tables']['batch_items']['Insert'];
 export type RFIDInvoiceInsert = Database['public']['Tables']['rfid_invoices']['Insert'];

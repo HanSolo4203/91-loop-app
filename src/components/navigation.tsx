@@ -230,6 +230,7 @@ function NavigationInner() {
                 width={2364}
                 height={297}
                 className="h-6 sm:h-7 w-auto max-h-8 object-contain object-left"
+                style={{ width: 'auto' }}
                 quality={90}
                 priority
                 placeholder="blur"

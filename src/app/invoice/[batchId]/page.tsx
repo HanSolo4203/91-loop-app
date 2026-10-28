@@ -245,6 +245,7 @@ export default function InvoicePage() {
               width={256}
               height={128}
               className="h-32 w-auto object-contain mb-4"
+              style={{ width: 'auto' }}
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';

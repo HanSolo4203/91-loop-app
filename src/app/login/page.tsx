@@ -205,6 +205,7 @@ export default function LoginPage() {
                   width={400}
                   height={120}
                   className="h-auto w-full max-w-[300px]"
+                  style={{ height: 'auto' }}
                   quality={90}
                   priority
                   placeholder="blur"
