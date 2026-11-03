@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import Image from 'next/image';
-import { Check, Delete, Loader2, Moon, Sun } from 'lucide-react';
+import { Check, Delete, FlaskConical, Loader2, Moon, Sun } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
   formatDurationMinutes,
@@ -293,11 +294,14 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
     };
   }, []);
 
-  // Lock browser history when in kiosk mode so back cannot leave /clocking
+  // Lock browser history when in kiosk mode so back cannot leave /clocking.
+  // Paths under /clocking (including chemical weighing) stay reachable.
   useEffect(() => {
     if (!kioskLocked) return;
     window.history.pushState(null, '', '/clocking');
     const handlePopState = () => {
+      // Clock-in and chemical weighing both live under /clocking.
+      if (window.location.pathname.startsWith('/clocking')) return;
       window.history.pushState(null, '', '/clocking');
     };
     window.addEventListener('popstate', handlePopState);
@@ -773,6 +777,14 @@ export default function KioskScreen({ isKioskMode = false }: KioskScreenProps) {
           >
             Clear
           </button>
+
+          <Link
+            href="/clocking/chemicals"
+            className="mt-3 sm:mt-4 inline-flex min-h-16 w-full max-w-[260px] sm:max-w-[300px] md:max-w-[340px] items-center justify-center gap-3 rounded-2xl border border-white/30 bg-white/10 px-5 text-lg font-semibold text-white active:bg-white/25 touch-manipulation [-webkit-tap-highlight-color:transparent]"
+          >
+            <FlaskConical className="h-7 w-7 shrink-0" aria-hidden />
+            Weigh chemicals
+          </Link>
         </div>
       </div>
     );

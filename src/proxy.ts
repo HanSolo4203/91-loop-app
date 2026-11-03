@@ -8,7 +8,8 @@ import type { NextRequest } from 'next/server';
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Kiosk page, clocking APIs, and kiosk-mode toggle must remain reachable
+  // Kiosk pages (/clocking and /clocking/chemicals), clocking APIs, and the
+  // kiosk-mode toggle must remain reachable while the device is locked.
   if (
     pathname.startsWith('/clocking') ||
     pathname.startsWith('/api/clocking') ||

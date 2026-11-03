@@ -368,6 +368,141 @@ export const DashboardStatsQuerySchema = z.object({
     .default('overview')
 }).strict();
 
+// Chemical inventory
+const DateOnlySchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+  .refine((value) => {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }, 'Invalid date');
+
+function boundedAmount(label: string) {
+  return z
+    .number()
+    .min(0, `${label} must be 0 or more`)
+    .lt(1000, `${label} must be below 1000`);
+}
+
+const LitreSchema = boundedAmount('Litres');
+const WeightSchema = boundedAmount('Weight');
+
+const OptionalTrimmedTextSchema = z.string().trim().max(2000).optional().nullable();
+
+function withDateOrder<T extends z.ZodType<{ from?: string; to?: string }>>(schema: T) {
+  return schema.refine(
+    (value) => !value.from || !value.to || value.from <= value.to,
+    { message: 'from must be on or before to' }
+  );
+}
+
+const chemicalProductFields = {
+  name: z.string().trim().min(1, 'Product name is required').max(255, 'Product name must be less than 255 characters'),
+  supplier: z.string().trim().max(255).optional().nullable(),
+  container_size_l: z
+    .number()
+    .positive('Container size must be greater than 0')
+    .max(999999.99, 'Container size is too large'),
+  reorder_level_l: LitreSchema.optional(),
+  reorder_qty_containers: z.number().int().min(0).max(100000).optional().nullable(),
+  cost_per_container: z.number().min(0).max(999999.99).optional().nullable(),
+  kg_per_litre: z.number().positive('kg per litre must be greater than 0').lt(1000).optional(),
+  notes: OptionalTrimmedTextSchema,
+  is_active: z.boolean().optional(),
+  sort_order: z.number().int().min(0).max(100000).optional(),
+};
+
+export const CreateChemicalProductSchema = z.object({
+  ...chemicalProductFields,
+  opening_stock_l: LitreSchema.optional().nullable(),
+}).strict();
+
+export const UpdateChemicalProductSchema = z.object(chemicalProductFields).partial().strict().refine(
+  (value) => Object.keys(value).length > 0,
+  { message: 'At least one field is required' }
+);
+
+export const RecordDeliverySchema = z.object({
+  product_id: BaseIdSchema,
+  containers: z.number().positive('Containers must be greater than 0').lt(100000),
+  litres: LitreSchema.optional(),
+  unit_cost: z.number().min(0, 'Unit cost must be 0 or more').max(999999.99).optional().nullable(),
+  reference: z.string().trim().max(255).optional().nullable(),
+  occurred_on: DateOnlySchema,
+  note: OptionalTrimmedTextSchema,
+}).strict();
+
+export const RecordStockTakeSchema = z.object({
+  product_id: BaseIdSchema,
+  counted_litres: LitreSchema,
+  note: OptionalTrimmedTextSchema,
+}).strict();
+
+export const AdminUpdateWeighInSchema = z.object({
+  start_kg: WeightSchema.optional(),
+  end_kg: WeightSchema.nullable().optional(),
+  added_l: LitreSchema.optional(),
+  notes: OptionalTrimmedTextSchema,
+}).strict().refine(
+  (value) => Object.keys(value).length > 0,
+  { message: 'At least one field is required' }
+);
+
+export const MovementListQuerySchema = withDateOrder(z.object({
+  product_id: BaseIdSchema.optional(),
+  from: DateOnlySchema.optional(),
+  to: DateOnlySchema.optional(),
+  type: z.enum(['delivery', 'usage', 'adjustment', 'opening_balance']).optional(),
+}).strict());
+
+export const DeliveryListQuerySchema = withDateOrder(z.object({
+  product_id: BaseIdSchema.optional(),
+  from: DateOnlySchema.optional(),
+  to: DateOnlySchema.optional(),
+}).strict());
+
+export const WeighInListQuerySchema = withDateOrder(z.object({
+  product_id: BaseIdSchema.optional(),
+  employee_id: BaseIdSchema.optional(),
+  from: DateOnlySchema.optional(),
+  to: DateOnlySchema.optional(),
+  status: z.enum(['open', 'closed']).optional(),
+}).strict());
+
+export const UsageQuerySchema = withDateOrder(z.object({
+  from: DateOnlySchema.optional(),
+  to: DateOnlySchema.optional(),
+}).strict());
+
+/** Kiosk scale: 0 ≤ kg < 100. Admin edits still use the wider WeightSchema. */
+const KioskWeightSchema = z
+  .number()
+  .min(0, 'Weight must be 0 or more')
+  .lt(100, 'Weight must be below 100');
+
+const ClockPinSchema = z.string().trim().regex(/^\d{4}$/, 'Invalid PIN');
+
+export const KioskStartWeighInSchema = z.object({
+  pin: ClockPinSchema,
+  product_id: BaseIdSchema,
+  start_kg: KioskWeightSchema,
+  notes: OptionalTrimmedTextSchema,
+}).strict();
+
+export const KioskEndWeighInSchema = z.object({
+  pin: ClockPinSchema,
+  weigh_in_id: BaseIdSchema,
+  end_kg: KioskWeightSchema,
+  added_l: LitreSchema.default(0),
+  notes: OptionalTrimmedTextSchema,
+  confirm_high_usage: z.boolean().optional(),
+}).strict();
+
 // Validation helper functions
 export function validateSchema<T>(
   schema: z.ZodSchema<T>,
@@ -458,3 +593,15 @@ export type FileUpload = z.infer<typeof FileUploadSchema>;
 export type ImageUpload = z.infer<typeof ImageUploadSchema>;
 
 export type DashboardStatsQuery = z.infer<typeof DashboardStatsQuerySchema>;
+
+export type CreateChemicalProductInput = z.infer<typeof CreateChemicalProductSchema>;
+export type UpdateChemicalProductInput = z.infer<typeof UpdateChemicalProductSchema>;
+export type RecordDeliveryInput = z.infer<typeof RecordDeliverySchema>;
+export type RecordStockTakeInput = z.infer<typeof RecordStockTakeSchema>;
+export type AdminUpdateWeighInInput = z.infer<typeof AdminUpdateWeighInSchema>;
+export type MovementListQuery = z.infer<typeof MovementListQuerySchema>;
+export type DeliveryListQuery = z.infer<typeof DeliveryListQuerySchema>;
+export type WeighInListQuery = z.infer<typeof WeighInListQuerySchema>;
+export type UsageQuery = z.infer<typeof UsageQuerySchema>;
+export type KioskStartWeighInInput = z.infer<typeof KioskStartWeighInSchema>;
+export type KioskEndWeighInInput = z.infer<typeof KioskEndWeighInSchema>;

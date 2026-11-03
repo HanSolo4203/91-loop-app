@@ -1124,6 +1124,203 @@ export interface Database {
           }
         ];
       };
+
+      // Chemical products (detergents and other laundry chemicals)
+      chemical_products: {
+        Row: {
+          id: string;
+          name: string;
+          supplier: string | null;
+          container_size_l: number;
+          reorder_level_l: number;
+          reorder_qty_containers: number | null;
+          cost_per_container: number | null;
+          kg_per_litre: number;
+          notes: string | null;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          supplier?: string | null;
+          container_size_l: number;
+          reorder_level_l?: number;
+          reorder_qty_containers?: number | null;
+          cost_per_container?: number | null;
+          kg_per_litre?: number;
+          notes?: string | null;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          supplier?: string | null;
+          container_size_l?: number;
+          reorder_level_l?: number;
+          reorder_qty_containers?: number | null;
+          cost_per_container?: number | null;
+          kg_per_litre?: number;
+          notes?: string | null;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      // One weigh-in per product per shift
+      chemical_weigh_ins: {
+        Row: {
+          id: string;
+          product_id: string;
+          shift_date: string;
+          status: 'open' | 'closed';
+          start_kg: number;
+          start_employee_id: string;
+          start_recorded_at: string;
+          added_l: number;
+          end_kg: number | null;
+          end_employee_id: string | null;
+          end_recorded_at: string | null;
+          used_kg: number | null;
+          used_l: number | null;
+          notes: string | null;
+          edited_by_admin: boolean;
+          edited_at: string | null;
+          edited_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          shift_date: string;
+          status?: 'open' | 'closed';
+          start_kg: number;
+          start_employee_id: string;
+          start_recorded_at?: string;
+          added_l?: number;
+          end_kg?: number | null;
+          end_employee_id?: string | null;
+          end_recorded_at?: string | null;
+          used_kg?: number | null;
+          used_l?: number | null;
+          notes?: string | null;
+          edited_by_admin?: boolean;
+          edited_at?: string | null;
+          edited_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          shift_date?: string;
+          status?: 'open' | 'closed';
+          start_kg?: number;
+          start_employee_id?: string;
+          start_recorded_at?: string;
+          added_l?: number;
+          end_kg?: number | null;
+          end_employee_id?: string | null;
+          end_recorded_at?: string | null;
+          used_kg?: number | null;
+          used_l?: number | null;
+          notes?: string | null;
+          edited_by_admin?: boolean;
+          edited_at?: string | null;
+          edited_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'chemical_weigh_ins_product_id_fkey';
+            columns: ['product_id'];
+            referencedRelation: 'chemical_products';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'chemical_weigh_ins_start_employee_id_fkey';
+            columns: ['start_employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'chemical_weigh_ins_end_employee_id_fkey';
+            columns: ['end_employee_id'];
+            referencedRelation: 'employees';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+
+      // Litre ledger. Stock on hand is the sum of litres.
+      chemical_stock_movements: {
+        Row: {
+          id: string;
+          product_id: string;
+          movement_type: 'delivery' | 'usage' | 'adjustment' | 'opening_balance';
+          litres: number;
+          containers: number | null;
+          unit_cost: number | null;
+          reference: string | null;
+          weigh_in_id: string | null;
+          occurred_on: string;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          movement_type: 'delivery' | 'usage' | 'adjustment' | 'opening_balance';
+          litres: number;
+          containers?: number | null;
+          unit_cost?: number | null;
+          reference?: string | null;
+          weigh_in_id?: string | null;
+          occurred_on?: string;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          movement_type?: 'delivery' | 'usage' | 'adjustment' | 'opening_balance';
+          litres?: number;
+          containers?: number | null;
+          unit_cost?: number | null;
+          reference?: string | null;
+          weigh_in_id?: string | null;
+          occurred_on?: string;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'chemical_stock_movements_product_id_fkey';
+            columns: ['product_id'];
+            referencedRelation: 'chemical_products';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'chemical_stock_movements_weigh_in_id_fkey';
+            columns: ['weigh_in_id'];
+            referencedRelation: 'chemical_weigh_ins';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
     };
 
     Views: {
@@ -1168,6 +1365,32 @@ export interface Database {
           discrepancy_details: string | null;
           created_at: string;
           updated_at: string;
+        };
+        Relationships: [];
+      };
+
+      // Chemical stock on hand, derived from products + the litre ledger
+      chemical_stock_levels: {
+        Row: {
+          id: string;
+          name: string;
+          supplier: string | null;
+          container_size_l: number;
+          reorder_level_l: number;
+          reorder_qty_containers: number | null;
+          cost_per_container: number | null;
+          kg_per_litre: number;
+          notes: string | null;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+          on_hand_l: number;
+          containers_on_hand: number;
+          is_low: boolean;
+          avg_daily_use_l_14d: number;
+          days_left: number | null;
+          last_weighed_at: string | null;
         };
         Relationships: [];
       };
@@ -1524,6 +1747,93 @@ export interface ProfitLossSummary {
   gross_profit: number;
   net_profit: number;
   margin_percentage: number;
+}
+
+// Chemical inventory types
+export type ChemicalProduct = Tables<'chemical_products'>;
+export type ChemicalWeighIn = Tables<'chemical_weigh_ins'>;
+export type ChemicalStockMovement = Tables<'chemical_stock_movements'>;
+export type ChemicalStockLevel = Views<'chemical_stock_levels'>;
+
+export type ChemicalWeighInStatus = ChemicalWeighIn['status'];
+export type ChemicalMovementType = ChemicalStockMovement['movement_type'];
+
+export interface CreateChemicalProductRequest {
+  name: string;
+  supplier?: string | null;
+  container_size_l: number;
+  reorder_level_l?: number;
+  reorder_qty_containers?: number | null;
+  cost_per_container?: number | null;
+  kg_per_litre?: number;
+  notes?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
+export interface UpdateChemicalProductRequest {
+  name?: string;
+  supplier?: string | null;
+  container_size_l?: number;
+  reorder_level_l?: number;
+  reorder_qty_containers?: number | null;
+  cost_per_container?: number | null;
+  kg_per_litre?: number;
+  notes?: string | null;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
+export interface CreateChemicalWeighInRequest {
+  product_id: string;
+  shift_date: string;
+  start_kg: number;
+  start_employee_id: string;
+  start_recorded_at?: string;
+  added_l?: number;
+  notes?: string | null;
+}
+
+export interface UpdateChemicalWeighInRequest {
+  status?: ChemicalWeighInStatus;
+  start_kg?: number;
+  start_employee_id?: string;
+  added_l?: number;
+  end_kg?: number | null;
+  end_employee_id?: string | null;
+  end_recorded_at?: string | null;
+  used_kg?: number | null;
+  used_l?: number | null;
+  notes?: string | null;
+  edited_by_admin?: boolean;
+  edited_at?: string | null;
+  edited_by?: string | null;
+}
+
+export interface CreateChemicalStockMovementRequest {
+  product_id: string;
+  movement_type: ChemicalMovementType;
+  litres: number;
+  containers?: number | null;
+  unit_cost?: number | null;
+  reference?: string | null;
+  weigh_in_id?: string | null;
+  occurred_on?: string;
+  note?: string | null;
+  created_by?: string | null;
+}
+
+export interface UpdateChemicalStockMovementRequest {
+  product_id?: string;
+  movement_type?: ChemicalMovementType;
+  litres?: number;
+  containers?: number | null;
+  unit_cost?: number | null;
+  reference?: string | null;
+  weigh_in_id?: string | null;
+  occurred_on?: string;
+  note?: string | null;
+  created_by?: string | null;
 }
 
 // Statistics and reporting types

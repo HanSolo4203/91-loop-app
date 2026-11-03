@@ -105,3 +105,132 @@ export function getClientIp(request: NextRequest): string {
     'unknown'
   );
 }
+
+const PIN_RATE_WINDOW_MS = 60_000;
+const PIN_RATE_MAX_FAILURES = 5;
+const pinFailuresByIp = new Map<string, number[]>();
+
+/** Shared by verify-pin and the chemical kiosk routes. One process, one window. */
+export function checkPinRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const recent = (pinFailuresByIp.get(ip) || []).filter((t) => now - t < PIN_RATE_WINDOW_MS);
+  pinFailuresByIp.set(ip, recent);
+  return recent.length >= PIN_RATE_MAX_FAILURES;
+}
+
+export function recordPinFailure(ip: string): void {
+  const now = Date.now();
+  const recent = (pinFailuresByIp.get(ip) || []).filter((t) => now - t < PIN_RATE_WINDOW_MS);
+  recent.push(now);
+  pinFailuresByIp.set(ip, recent);
+}
+
+export type ClockingEmployee = {
+  id: string;
+  full_name: string;
+  photo_url: string | null;
+};
+
+/**
+ * Active employees only, matched on clock_pin.
+ * Returns null when the PIN is wrong. Throws when the query itself fails.
+ */
+export async function verifyEmployeePin(pin: string): Promise<ClockingEmployee | null> {
+  const { data, error } = await supabaseAdmin
+    .from('employees')
+    .select('id, full_name, role, shift_type, photo_url, status, clock_pin')
+    .eq('status', 'active')
+    .eq('clock_pin', pin)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    full_name: data.full_name,
+    photo_url: data.photo_url,
+  };
+}
+
+/**
+ * Rate-limit, then resolve a kiosk PIN. The raw JSON body is returned for the
+ * route to validate. Wrong PINs are 401; a PIN that is not 4 digits is 400.
+ */
+export async function authenticateClockingPin(
+  request: NextRequest,
+  logLabel: string
+): Promise<
+  | { employee: ClockingEmployee; body: unknown; response?: undefined }
+  | { response: NextResponse; employee?: undefined; body?: undefined }
+> {
+  const ip = getClientIp(request);
+  if (checkPinRateLimit(ip)) {
+    return {
+      response: NextResponse.json(
+        { success: false, error: 'Too many attempts. Please wait a minute.' },
+        { status: 429 }
+      ),
+    };
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return {
+      response: NextResponse.json(
+        { success: false, error: 'Invalid JSON in request body' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return {
+      response: NextResponse.json(
+        { success: false, error: 'Request body must be a valid JSON object' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  const pin = typeof (body as { pin?: unknown }).pin === 'string'
+    ? (body as { pin: string }).pin.trim()
+    : '';
+
+  if (!/^\d{4}$/.test(pin)) {
+    recordPinFailure(ip);
+    return {
+      response: NextResponse.json(
+        { success: false, error: 'Invalid PIN' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  try {
+    const employee = await verifyEmployeePin(pin);
+    if (!employee) {
+      recordPinFailure(ip);
+      return {
+        response: NextResponse.json(
+          { success: false, error: 'Invalid PIN' },
+          { status: 401 }
+        ),
+      };
+    }
+    return { employee, body };
+  } catch (error) {
+    console.error(logLabel, error);
+    return {
+      response: NextResponse.json(
+        { success: false, error: 'Unable to verify PIN' },
+        { status: 500 }
+      ),
+    };
+  }
+}

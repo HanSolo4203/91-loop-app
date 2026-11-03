@@ -29,6 +29,7 @@ import {
   LogOut,
   Calculator,
   Radio,
+  FlaskConical,
   ChevronDown,
   Users,
   CalendarDays,
@@ -54,6 +55,7 @@ const primaryNav: NavItem[] = [
   { name: 'New Batch', href: '/batch/new', icon: PlusCircle },
   { name: 'Calculator', href: '/calculator', icon: Calculator },
   { name: 'RFID', href: '/dashboard/rfid', icon: Radio },
+  { name: 'Inventory', href: '/inventory', icon: FlaskConical },
 ];
 
 const reportsNav: NavItem[] = [
@@ -246,7 +248,7 @@ function NavigationInner() {
 
           {/* Desktop: grouped nav */}
           <nav className="hidden md:flex flex-1 items-center justify-center gap-1 min-w-0" aria-label="Main navigation">
-            {/* Primary: Dashboard, New Batch, Calculator, RFID */}
+            {/* Primary: Dashboard, New Batch, Calculator, RFID, Inventory */}
             <div className="flex items-center gap-0.5 bg-slate-100/80 rounded-lg p-0.5">
               {primaryNav.map((item) => {
                 const active = isActive(pathname, item.href);
