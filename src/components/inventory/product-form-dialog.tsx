@@ -9,17 +9,25 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { ChemicalStockLevel } from '@/types/database';
+import { stockUnit, type StockUnit } from '@/lib/chemical-unit';
 import { asNumber, asNumberOrNull } from '@/components/inventory/stock-display';
+import ImageUpload from '@/components/ui/image-upload';
 
 export interface ProductFormValues {
   name: string;
   supplier: string | null;
+  unit: StockUnit;
   container_size_l: number;
   reorder_level_l: number;
   reorder_qty_containers: number | null;
   cost_per_container: number | null;
   notes: string | null;
   opening_stock_l?: number | null;
+  tracking_mode: 'container' | 'decant';
+  issue_size_l?: number;
+  /** Sent only when the bottle amount should reset the baseline. */
+  jug_baseline_l?: number | null;
+  image_url: string | null;
 }
 
 interface ProductFormDialogProps {
@@ -59,12 +67,18 @@ export default function ProductFormDialog({
   const isEditing = !!product;
   const [name, setName] = useState('');
   const [supplier, setSupplier] = useState('');
+  const [unit, setUnit] = useState<StockUnit>('L');
   const [containerSize, setContainerSize] = useState('25');
   const [reorderLevel, setReorderLevel] = useState('0');
   const [reorderQty, setReorderQty] = useState('1');
   const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
   const [openingStock, setOpeningStock] = useState('');
+  const [decant, setDecant] = useState(false);
+  const [issueSize, setIssueSize] = useState('5');
+  const [jugLitres, setJugLitres] = useState('0');
+  const [loadedJug, setLoadedJug] = useState(0);
+  const [imageUrl, setImageUrl] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +87,7 @@ export default function ProductFormDialog({
     if (!open) return;
     setName(product?.name ?? '');
     setSupplier(product?.supplier ?? '');
+    setUnit(stockUnit(product?.unit));
     setContainerSize(product ? String(asNumber(product.container_size_l)) : '25');
     setReorderLevel(product ? String(asNumber(product.reorder_level_l)) : '0');
     setReorderQty(
@@ -87,6 +102,15 @@ export default function ProductFormDialog({
     );
     setNotes(product?.notes ?? '');
     setOpeningStock('');
+    const poured = product?.tracking_mode === 'decant';
+    setDecant(poured);
+    setIssueSize(
+      product && asNumber(product.issue_size_l) > 0 ? String(asNumber(product.issue_size_l)) : '5'
+    );
+    const jug = product ? asNumber(product.jug_l) : 0;
+    setJugLitres(poured ? String(jug) : '0');
+    setLoadedJug(jug);
+    setImageUrl(product?.image_url ?? '');
     setErrors({});
     setFormError(null);
   }, [open, product]);
@@ -109,7 +133,7 @@ export default function ProductFormDialog({
 
     const level = Number(reorderLevel);
     if (reorderLevel.trim() === '' || !Number.isFinite(level) || level < 0 || level >= 1000) {
-      nextErrors.reorder_level_l = 'Reorder level must be 0 or more and below 1000 L';
+      nextErrors.reorder_level_l = `Reorder level must be 0 or more and below 1000 ${unit}`;
     }
 
     let qty: number | null = null;
@@ -132,7 +156,27 @@ export default function ProductFormDialog({
     if (!isEditing && openingStock.trim() !== '') {
       opening = Number(openingStock);
       if (!Number.isFinite(opening) || opening < 0 || opening >= 1000) {
-        nextErrors.opening_stock_l = 'Opening stock must be 0 or more and below 1000 L';
+        nextErrors.opening_stock_l = `Opening stock must be 0 or more and below 1000 ${unit}`;
+      }
+    }
+
+    let pourSize: number | undefined;
+    let bottleLitres: number | undefined;
+    if (decant) {
+      pourSize = Number(issueSize);
+      if (!Number.isFinite(pourSize) || pourSize <= 0 || pourSize >= 1000) {
+        nextErrors.issue_size_l = `Pour size must be greater than 0 and below 1000 ${unit}`;
+      }
+      bottleLitres = jugLitres.trim() === '' ? 0 : Number(jugLitres);
+      if (!Number.isFinite(bottleLitres) || bottleLitres < 0 || bottleLitres >= 1000) {
+        nextErrors.jug_baseline_l = `Amount in the bottle must be 0 or more and below 1000 ${unit}`;
+      } else if (!isEditing) {
+        const openingTotal = opening ?? 0;
+        if (bottleLitres > openingTotal) {
+          nextErrors.jug_baseline_l = 'Amount in the bottle cannot be more than opening stock';
+        }
+      } else if (product && bottleLitres > asNumber(product.on_hand_l)) {
+        nextErrors.jug_baseline_l = 'Amount in the bottle cannot be more than stock on hand';
       }
     }
 
@@ -148,11 +192,22 @@ export default function ProductFormDialog({
       await onSave({
         name: trimmedName,
         supplier: blankToNull(supplier),
+        unit,
         container_size_l: size,
         reorder_level_l: level,
         reorder_qty_containers: qty,
         cost_per_container: costValue,
         notes: blankToNull(notes),
+        image_url: blankToNull(imageUrl),
+        tracking_mode: decant ? 'decant' : 'container',
+        ...(decant && pourSize != null ? { issue_size_l: pourSize } : {}),
+        ...(decant &&
+        bottleLitres != null &&
+        (!isEditing ||
+          product?.tracking_mode !== 'decant' ||
+          Math.round(bottleLitres * 1000) !== Math.round(loadedJug * 1000))
+          ? { jug_baseline_l: bottleLitres }
+          : {}),
         ...(!isEditing ? { opening_stock_l: opening } : {}),
       });
       onOpenChange(false);
@@ -181,6 +236,15 @@ export default function ProductFormDialog({
                 {formError}
               </p>
             )}
+
+            <ImageUpload
+              label="Photo"
+              value={imageUrl}
+              onChange={(url) => setImageUrl(url ?? '')}
+              disabled={isSubmitting}
+              bucket="chemical-product-photos"
+              folder="products"
+            />
 
             <div className="space-y-2">
               <Label htmlFor="product-name" className={labelClass}>
@@ -213,8 +277,36 @@ export default function ProductFormDialog({
             </div>
 
             <div className="space-y-2">
+              <Label className={labelClass}>Measured in *</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={unit === 'L' ? 'default' : 'outline'}
+                  onClick={() => setUnit('L')}
+                  disabled={isSubmitting}
+                >
+                  Litres (L)
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={unit === 'kg' ? 'default' : 'outline'}
+                  onClick={() => setUnit('kg')}
+                  disabled={isSubmitting}
+                >
+                  Kilograms (kg)
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500">
+                Liquids stay in litres. Powders such as laundry powder are stocked in kilograms. The
+                scale weight is still kilograms either way.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="product-container-size" className={labelClass}>
-                Container size (L) *
+                {decant ? `Drum size (${unit}) *` : `Container size (${unit}) *`}
               </Label>
               <div className="flex flex-wrap gap-2">
                 {QUICK_SIZES.map((size) => (
@@ -226,7 +318,7 @@ export default function ProductFormDialog({
                     onClick={() => setContainerSize(String(size))}
                     disabled={isSubmitting}
                   >
-                    {size} L
+                    {size} {unit}
                   </Button>
                 ))}
               </div>
@@ -241,13 +333,80 @@ export default function ProductFormDialog({
                 className={cn(inputClass, errors.container_size_l && 'border-red-400')}
                 disabled={isSubmitting}
               />
+              {decant && (
+                <p className="text-xs text-slate-500">
+                  Deliveries use this drum size. Staff pour from it into the smaller bottle.
+                </p>
+              )}
               <FieldError message={errors.container_size_l} />
             </div>
+
+            <label className="flex items-start gap-3 rounded-md border border-slate-200 px-3 py-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={decant}
+                onChange={(event) => setDecant(event.target.checked)}
+                disabled={isSubmitting}
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-800">
+                  Poured from a drum into a smaller bottle
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Staff pour {unit === 'kg' ? 'kilograms' : 'litres'} out of the drum, then weigh only
+                  the small bottle.
+                </span>
+              </span>
+            </label>
+
+            {decant && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="product-issue-size" className={labelClass}>
+                    Pour size ({unit}) *
+                  </Label>
+                  <Input
+                    id="product-issue-size"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={issueSize}
+                    onChange={(event) => setIssueSize(event.target.value)}
+                    className={cn(inputClass, errors.issue_size_l && 'border-red-400')}
+                    disabled={isSubmitting}
+                  />
+                  <p className="text-xs text-slate-500">Preset on the kiosk. Staff can change it.</p>
+                  <FieldError message={errors.issue_size_l} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="product-jug" className={labelClass}>
+                    {unit === 'kg' ? 'Kilograms' : 'Litres'} in the small bottle now
+                  </Label>
+                  <Input
+                    id="product-jug"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    value={jugLitres}
+                    onChange={(event) => setJugLitres(event.target.value)}
+                    className={cn(inputClass, errors.jug_baseline_l && 'border-red-400')}
+                    disabled={isSubmitting}
+                  />
+                  <p className="text-xs text-slate-500">
+                    What is already in the bottle. The rest of stock on hand stays in the drums.
+                  </p>
+                  <FieldError message={errors.jug_baseline_l} />
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="product-reorder-level" className={labelClass}>
-                  Reorder level (L) *
+                  Reorder level ({unit}) *
                 </Label>
                 <Input
                   id="product-reorder-level"
@@ -302,7 +461,7 @@ export default function ProductFormDialog({
             {!isEditing && (
               <div className="space-y-2">
                 <Label htmlFor="product-opening-stock" className={labelClass}>
-                  Opening stock (L)
+                  Opening stock ({unit})
                 </Label>
                 <Input
                   id="product-opening-stock"
@@ -316,7 +475,8 @@ export default function ProductFormDialog({
                   disabled={isSubmitting}
                 />
                 <p className="text-xs text-slate-500">
-                  Optional. Records the litres already on hand as an opening balance.
+                  Optional. Records the {unit === 'kg' ? 'kilograms' : 'litres'} already on hand as an
+                  opening balance.
                 </p>
                 <FieldError message={errors.opening_stock_l} />
               </div>

@@ -100,10 +100,16 @@ const KioskLiveClock = memo(function KioskLiveClock() {
 
   return (
     <div className="text-center mb-3 sm:mb-6 md:mb-8">
-      <p className="text-4xl sm:text-5xl md:text-6xl font-bold tabular-nums tracking-tight text-white">
+      <p
+        className="text-4xl sm:text-5xl md:text-6xl font-bold tabular-nums tracking-tight text-white"
+        suppressHydrationWarning
+      >
         {timeFormatter.format(now)}
       </p>
-      <p className="mt-1 sm:mt-2 text-blue-100/80 text-sm sm:text-base md:text-lg px-2">
+      <p
+        className="mt-1 sm:mt-2 text-blue-100/80 text-sm sm:text-base md:text-lg px-2"
+        suppressHydrationWarning
+      >
         {dateFormatter.format(now)}
       </p>
     </div>

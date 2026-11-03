@@ -23,7 +23,7 @@ import {
   formatContainers,
   formatRands,
   formatShiftDate,
-  formatSignedLitres,
+  formatSignedQuantity,
   isArchived,
   MOVEMENT_TYPE_CLASS,
   MOVEMENT_TYPE_LABEL,
@@ -190,7 +190,7 @@ export default function MovementsTable() {
                       <MovementTypeBadge type={row.movement_type} />
                     </div>
                     <p className={cn('text-xl font-semibold tabular-nums', litresClass(litres))}>
-                      {formatSignedLitres(litres)}
+                      {formatSignedQuantity(litres, row.unit)}
                     </p>
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
                       <dt className="text-slate-500">Containers</dt>
@@ -217,7 +217,7 @@ export default function MovementsTable() {
                     <TableHead>Date</TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Litres</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Containers</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead>Reference</TableHead>
@@ -237,7 +237,7 @@ export default function MovementsTable() {
                           <MovementTypeBadge type={row.movement_type} />
                         </TableCell>
                         <TableCell className={cn('text-right tabular-nums whitespace-nowrap font-medium', litresClass(litres))}>
-                          {formatSignedLitres(litres)}
+                          {formatSignedQuantity(litres, row.unit)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{formatContainers(row.containers)}</TableCell>
                         <TableCell className="text-right tabular-nums whitespace-nowrap" title={cost.title}>

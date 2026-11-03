@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { useEffect, useMemo, useState } from 'react';
 import Papa from 'papaparse';
 import { Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,33 +26,74 @@ import {
 import { cn } from '@/lib/utils';
 import { useEmployees } from '@/lib/hooks/use-employees';
 import {
+  defaultWeighInRange,
   useDeleteWeighIn,
-  useStockLevels,
   useUpdateWeighIn,
-  useUsage,
   useWeighIns,
   type WeighInQuery,
 } from '@/lib/hooks/use-inventory';
-import type { AdminUpdateWeighInRequest, ChemicalWeighInWithEmployees } from '@/lib/services/inventory';
+import type {
+  AdminUpdateWeighInRequest,
+  ChemicalWeighInWithEmployees,
+  UsageByDayRow,
+} from '@/lib/services/inventory';
 import WeighInCorrectDialog from '@/components/inventory/weigh-in-correct-dialog';
 import {
   asNumber,
   formatActorWhen,
   formatKg,
-  formatLitres,
+  formatQuantity,
   formatShiftDate,
-  formatSignedLitres,
+  formatSignedQuantity,
   isArchived,
   isUnclosedWeighIn,
-  johannesburgDate,
+  stockUnit,
 } from '@/components/inventory/stock-display';
 
-const UsageChart = dynamic(() => import('./usage-chart'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-72 items-center justify-center text-slate-500">Loading charts...</div>
-  ),
-});
+type UsageChartComponent = typeof import('./usage-chart').default;
+
+let usageChartComponent: UsageChartComponent | null = null;
+let usageChartLoad: Promise<void> | null = null;
+
+export function preloadWeighInChart(): Promise<void> {
+  if (!usageChartLoad) {
+    usageChartLoad = import('./usage-chart').then((mod) => {
+      usageChartComponent = mod.default;
+    });
+  }
+  return usageChartLoad;
+}
+
+function UsageChartSlot({
+  rows,
+  from,
+  to,
+  productId,
+}: {
+  rows: UsageByDayRow[];
+  from: string;
+  to: string;
+  productId?: string;
+}) {
+  const [ready, setReady] = useState(usageChartComponent != null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void preloadWeighInChart().then(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!ready || !usageChartComponent) {
+    return <div className="h-72" />;
+  }
+
+  const UsageChart = usageChartComponent;
+  return <UsageChart rows={rows} from={from} to={to} productId={productId} />;
+}
 
 const fieldClass =
   'h-10 bg-white border-slate-300 text-slate-900 focus-visible:ring-slate-400';
@@ -62,10 +102,18 @@ function wasEdited(value: unknown): boolean {
   return value === true || value === 'true' || value === 't';
 }
 
-function formatUsed(value: unknown): string {
+function formatUsed(value: unknown, unit: unknown): string {
   if (value == null || value === '') return '—';
-  const litres = asNumber(value);
-  return litres < 0 ? formatSignedLitres(litres) : formatLitres(litres);
+  const amount = asNumber(value);
+  return amount < 0 ? formatSignedQuantity(amount, unit) : formatQuantity(amount, unit);
+}
+
+function usageHeading(rows: UsageByDayRow[], productId: string): string {
+  const visible = productId ? rows.filter((row) => row.product_id === productId) : rows;
+  const units = new Set(visible.map((row) => stockUnit(row.unit)));
+  if (units.size === 1 && units.has('kg')) return 'Kilograms used';
+  if (units.size === 1) return 'Litres used';
+  return 'Amount used';
 }
 
 function queryMessage(
@@ -77,6 +125,13 @@ function queryMessage(
   if (isError) return error instanceof Error ? error.message : fallback;
   if (data && !data.success) return data.error || fallback;
   return null;
+}
+
+function pouredLabel(row: ChemicalWeighInWithEmployees): string {
+  if (row.product?.tracking_mode === 'decant' || asNumber(row.poured_l) > 0) {
+    return formatQuantity(row.poured_l, row.product?.unit);
+  }
+  return '—';
 }
 
 function StatusMarks({ row, stale }: { row: ChemicalWeighInWithEmployees; stale: boolean }) {
@@ -112,11 +167,13 @@ function downloadCsv(rows: ChemicalWeighInWithEmployees[], from: string, to: str
       'Start kg',
       'Started by',
       'Started at',
-      'Added L',
+      'Poured',
+      'Added',
       'End kg',
       'Ended by',
       'Ended at',
-      'Used L',
+      'Used',
+      'Unit',
       'Status',
       'Edited',
       'Notes',
@@ -127,11 +184,13 @@ function downloadCsv(rows: ChemicalWeighInWithEmployees[], from: string, to: str
       'Start kg': asNumber(row.start_kg),
       'Started by': row.start_employee?.full_name ?? '',
       'Started at': row.start_recorded_at,
-      'Added L': asNumber(row.added_l),
+      Poured: asNumber(row.poured_l),
+      Added: asNumber(row.added_l),
       'End kg': row.end_kg == null ? '' : asNumber(row.end_kg),
       'Ended by': row.end_employee?.full_name ?? '',
       'Ended at': row.end_recorded_at ?? '',
-      'Used L': row.used_l == null ? '' : asNumber(row.used_l),
+      Used: row.used_l == null ? '' : asNumber(row.used_l),
+      Unit: stockUnit(row.product?.unit),
       Status: row.status,
       Edited: wasEdited(row.edited_by_admin) ? 'Yes' : 'No',
       Notes: row.notes ?? '',
@@ -147,9 +206,15 @@ function downloadCsv(rows: ChemicalWeighInWithEmployees[], from: string, to: str
   URL.revokeObjectURL(url);
 }
 
-export default function WeighInsTable() {
-  const [from, setFrom] = useState(() => johannesburgDate(-13));
-  const [to, setTo] = useState(() => johannesburgDate(0));
+export interface WeighInProductOption {
+  id: string;
+  name: string;
+  is_active: unknown;
+}
+
+export default function WeighInsTable({ products: stockProducts }: { products: WeighInProductOption[] }) {
+  const [from, setFrom] = useState(() => defaultWeighInRange().from);
+  const [to, setTo] = useState(() => defaultWeighInRange().to);
   const [productId, setProductId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [status, setStatus] = useState<'' | 'open' | 'closed'>('');
@@ -159,33 +224,66 @@ export default function WeighInsTable() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const rangeError = from && to && from > to ? 'Start date must be on or before the end date.' : null;
-  const filters = useMemo<WeighInQuery>(() => {
+  const dateFilters = useMemo<WeighInQuery>(() => {
     const next: WeighInQuery = {};
     if (from) next.from = from;
     if (to) next.to = to;
-    if (productId) next.product_id = productId;
-    if (employeeId) next.employee_id = employeeId;
-    if (status) next.status = status;
     return next;
-  }, [from, to, productId, employeeId, status]);
+  }, [from, to]);
 
-  const stock = useStockLevels(true);
   const employees = useEmployees();
-  const weighIns = useWeighIns(filters, { enabled: !rangeError });
-  const usage = useUsage({ from: from || undefined, to: to || undefined }, { enabled: !rangeError && !!from && !!to });
+  const weighIns = useWeighIns(dateFilters, { enabled: !rangeError });
   const updateWeighIn = useUpdateWeighIn();
   const deleteWeighIn = useDeleteWeighIn();
 
-  const products = [...(stock.data?.success ? stock.data.data ?? [] : [])].sort((a, b) =>
-    a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
-  );
+  const allRows = weighIns.data?.success ? weighIns.data.data ?? [] : [];
+  const products = useMemo(() => {
+    const byId = new Map(stockProducts.map((product) => [product.id, product]));
+    for (const row of allRows) {
+      if (!byId.has(row.product_id)) {
+        byId.set(row.product_id, {
+          id: row.product_id,
+          name: row.product?.name ?? 'Unknown product',
+          is_active: true,
+        });
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
+  }, [stockProducts, allRows]);
   const employeeOptions = [...(employees.data?.success ? employees.data.data ?? [] : [])].sort((a, b) =>
     a.full_name.localeCompare(b.full_name, 'en', { sensitivity: 'base' })
   );
-  const rows = weighIns.data?.success ? weighIns.data.data ?? [] : [];
-  const usageRows = usage.data?.success ? usage.data.data ?? [] : [];
+  const rows = useMemo(
+    () =>
+      allRows.filter((row) => {
+        if (productId && row.product_id !== productId) return false;
+        if (status && row.status !== status) return false;
+        if (
+          employeeId &&
+          row.start_employee_id !== employeeId &&
+          row.end_employee_id !== employeeId
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [allRows, productId, employeeId, status]
+  );
+  const usageRows = useMemo<UsageByDayRow[]>(() => {
+    const points: UsageByDayRow[] = [];
+    for (const row of allRows) {
+      if (row.status !== 'closed' || row.used_l == null) continue;
+      points.push({
+        product_id: row.product_id,
+        product_name: row.product?.name ?? 'Unknown product',
+        shift_date: row.shift_date,
+        litres: asNumber(row.used_l),
+        unit: stockUnit(row.product?.unit),
+      });
+    }
+    return points;
+  }, [allRows]);
   const loadError = queryMessage(weighIns.isError, weighIns.error, weighIns.data, 'Could not load weigh-ins');
-  const usageError = queryMessage(usage.isError, usage.error, usage.data, 'Could not load the usage chart');
 
   const saveCorrection = async (id: string, payload: AdminUpdateWeighInRequest) => {
     setActionError(null);
@@ -299,17 +397,17 @@ export default function WeighInsTable() {
         )}
 
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">Litres used</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">
+            {usageHeading(usageRows, productId)}
+          </h3>
           {rangeError || !from || !to ? (
             <p className="py-10 text-center text-sm text-slate-500">
               {rangeError ?? 'Choose a start and end date to see usage.'}
             </p>
-          ) : usage.isLoading ? (
-            <div className="flex h-72 items-center justify-center text-slate-500">Loading charts...</div>
-          ) : usageError ? (
-            <p className="py-8 text-center text-sm text-red-600">{usageError}</p>
+          ) : weighIns.isLoading ? (
+            <div className="h-72" />
           ) : (
-            <UsageChart rows={usageRows} from={from} to={to} productId={productId || undefined} />
+            <UsageChartSlot rows={usageRows} from={from} to={to} productId={productId || undefined} />
           )}
         </div>
 
@@ -349,8 +447,12 @@ export default function WeighInsTable() {
                           {formatActorWhen(row.start_employee?.full_name, row.start_recorded_at)}
                         </span>
                       </dd>
+                      <dt className="text-slate-500">Poured</dt>
+                      <dd className="text-right tabular-nums">{pouredLabel(row)}</dd>
                       <dt className="text-slate-500">Added</dt>
-                      <dd className="text-right tabular-nums">{formatLitres(row.added_l)}</dd>
+                      <dd className="text-right tabular-nums">
+                        {formatQuantity(row.added_l, row.product?.unit)}
+                      </dd>
                       <dt className="text-slate-500">End</dt>
                       <dd className="text-right">
                         <span className="tabular-nums">{row.end_kg == null ? '—' : formatKg(row.end_kg)}</span>
@@ -360,7 +462,7 @@ export default function WeighInsTable() {
                       </dd>
                       <dt className="text-slate-500">Used</dt>
                       <dd className={cn('text-right tabular-nums', asNumber(row.used_l) < 0 && 'text-red-700')}>
-                        {formatUsed(row.used_l)}
+                        {formatUsed(row.used_l, row.product?.unit)}
                       </dd>
                     </dl>
                     <div className="mt-3 flex gap-2">
@@ -392,9 +494,10 @@ export default function WeighInsTable() {
                     <TableHead>Shift date</TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Start kg</TableHead>
-                    <TableHead className="text-right">Added L</TableHead>
+                    <TableHead className="text-right">Poured</TableHead>
+                    <TableHead className="text-right">Added</TableHead>
                     <TableHead>End kg</TableHead>
-                    <TableHead className="text-right">Used L</TableHead>
+                    <TableHead className="text-right">Used</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-36">
                       <span className="sr-only">Actions</span>
@@ -415,7 +518,10 @@ export default function WeighInsTable() {
                           </p>
                         </TableCell>
                         <TableCell className="text-right tabular-nums whitespace-nowrap">
-                          {formatLitres(row.added_l)}
+                          {pouredLabel(row)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums whitespace-nowrap">
+                          {formatQuantity(row.added_l, row.product?.unit)}
                         </TableCell>
                         <TableCell>
                           <p className="tabular-nums">{row.end_kg == null ? '—' : formatKg(row.end_kg)}</p>
@@ -429,7 +535,7 @@ export default function WeighInsTable() {
                             row.used_l != null && asNumber(row.used_l) < 0 && 'text-red-700'
                           )}
                         >
-                          {formatUsed(row.used_l)}
+                          {formatUsed(row.used_l, row.product?.unit)}
                         </TableCell>
                         <TableCell>
                           <StatusMarks row={row} stale={stale} />
@@ -489,7 +595,7 @@ export default function WeighInsTable() {
                 ? `${deleteTarget.product?.name ?? 'This product'} on ${formatShiftDate(deleteTarget.shift_date)} will be removed.`
                 : ''}{' '}
               {deleteTarget?.status === 'closed'
-                ? 'The litres it recorded will come back onto stock.'
+                ? `The ${stockUnit(deleteTarget.product?.unit) === 'kg' ? 'kilograms' : 'litres'} it recorded will come back onto stock.`
                 : 'This cannot be undone.'}
             </DialogDescription>
           </DialogHeader>

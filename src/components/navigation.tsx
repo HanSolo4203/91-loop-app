@@ -42,6 +42,8 @@ import {
   MonitorSmartphone,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { prefetchStockLevels } from '@/lib/hooks/use-inventory';
 import { playLogoutChime } from '@/lib/utils/sounds';
 
 type NavItem = {
@@ -113,6 +115,10 @@ function NavigationInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
+  const prefetchInventory = useCallback(() => {
+    void prefetchStockLevels(queryClient);
+  }, [queryClient]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
@@ -253,7 +259,13 @@ function NavigationInner() {
               {primaryNav.map((item) => {
                 const active = isActive(pathname, item.href);
                 return (
-                  <Link key={item.name} href={item.href} className="flex-shrink-0 rounded-md">
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="flex-shrink-0 rounded-md"
+                    onMouseEnter={item.href === '/inventory' ? prefetchInventory : undefined}
+                    onFocus={item.href === '/inventory' ? prefetchInventory : undefined}
+                  >
                     <Button
                       variant={active ? 'default' : 'ghost'}
                       size="sm"
@@ -451,7 +463,14 @@ function NavigationInner() {
                 <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Work</p>
                 <div className="space-y-0.5">
                   {primaryNav.map((item) => (
-                    <Link key={item.name} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block">
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      onMouseEnter={item.href === '/inventory' ? prefetchInventory : undefined}
+                      onFocus={item.href === '/inventory' ? prefetchInventory : undefined}
+                      className="block"
+                    >
                       <Button
                         variant={isActive(pathname, item.href) ? 'default' : 'ghost'}
                         className={cn(

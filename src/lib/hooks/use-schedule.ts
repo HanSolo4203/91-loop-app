@@ -1,35 +1,53 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { DayRoster } from '@/types/database';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { authFetch } from '@/lib/auth-fetch';
 import type { CreateAbsenceRequest } from '@/lib/services/staff/absences';
+import type { ScheduleShift, WeekSchedule } from '@/lib/services/staff/schedule';
 
 interface ScheduleResponse {
   success: boolean;
-  data: DayRoster[] | null;
+  data: WeekSchedule | null;
   error: string | null;
 }
 
-async function fetchSchedule(week: string): Promise<ScheduleResponse> {
-  const response = await fetch(`/api/staff/schedule?week=${encodeURIComponent(week)}`);
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'Failed to fetch schedule');
+async function readJson<T>(response: Response, fallback: string): Promise<T> {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success || data.data == null) {
+    throw new Error(data.error || fallback);
   }
-  return response.json();
+  return data.data as T;
 }
 
-async function seedSchedule(): Promise<{ success: boolean; data: unknown; error: string | null }> {
-  const response = await fetch('/api/staff/schedule', {
-    method: 'POST',
-  });
-  const data = await response.json();
+async function fetchSchedule(week: string): Promise<ScheduleResponse> {
+  const response = await authFetch(`/api/staff/schedule?week=${encodeURIComponent(week)}`);
+  const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Failed to seed schedule');
+    throw new Error(data.error || 'Failed to fetch schedule');
   }
   return data;
 }
 
-async function createAbsence(payload: CreateAbsenceRequest): Promise<{ success: boolean; data: unknown; error: string | null }> {
-  const response = await fetch('/api/staff/absences', {
+async function saveSchedule(payload: { week: string; shifts: ScheduleShift[] }): Promise<WeekSchedule> {
+  const response = await authFetch('/api/staff/schedule', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return readJson<WeekSchedule>(response, 'Failed to save schedule');
+}
+
+async function copySchedule(payload: { from_week: string; to_week: string }): Promise<WeekSchedule> {
+  const response = await authFetch('/api/staff/schedule/copy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return readJson<WeekSchedule>(response, 'Failed to copy schedule');
+}
+
+async function createAbsence(
+  payload: CreateAbsenceRequest
+): Promise<{ success: boolean; data: unknown; error: string | null }> {
+  const response = await authFetch('/api/staff/absences', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -46,16 +64,27 @@ export function useSchedule(week: string) {
     queryKey: ['staff', 'schedule', week],
     queryFn: () => fetchSchedule(week),
     enabled: !!week && /^\d{4}-\d{2}-\d{2}$/.test(week),
-    staleTime: 1 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
   });
 }
 
-export function useSeedSchedule() {
+export function useSaveSchedule() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: seedSchedule,
+    mutationFn: saveSchedule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff', 'schedule'] });
+    },
+  });
+}
+
+export function useCopySchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: copySchedule,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'schedule'] });
     },

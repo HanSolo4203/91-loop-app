@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatLitres } from '@/components/inventory/stock-display';
+import { formatQuantity, type StockUnit } from '@/components/inventory/stock-display';
 
 export interface OnHandPoint {
   date: string;
@@ -17,7 +17,13 @@ export interface OnHandPoint {
   on_hand: number;
 }
 
-export default function OnHandChart({ points }: { points: OnHandPoint[] }) {
+export default function OnHandChart({
+  points,
+  unit = 'L',
+}: {
+  points: OnHandPoint[];
+  unit?: StockUnit;
+}) {
   if (points.length === 0) {
     return <p className="py-8 text-center text-sm text-slate-500">No stock history in this range.</p>;
   }
@@ -33,7 +39,7 @@ export default function OnHandChart({ points }: { points: OnHandPoint[] }) {
             interval={points.length > 16 ? 'preserveStartEnd' : 0}
           />
           <YAxis tick={{ fontSize: 12, fill: '#475569' }} width={48} />
-          <Tooltip formatter={(value) => formatLitres(Number(value))} />
+          <Tooltip formatter={(value) => formatQuantity(Number(value), unit)} />
           <Line
             type="monotone"
             dataKey="on_hand"

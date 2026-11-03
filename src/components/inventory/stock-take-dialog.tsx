@@ -15,7 +15,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { ChemicalStockLevel } from '@/types/database';
-import { asNumber, formatLitres, formatSignedLitres } from '@/components/inventory/stock-display';
+import {
+  asNumber,
+  formatQuantity,
+  formatSignedQuantity,
+  stockUnit,
+} from '@/components/inventory/stock-display';
 import type { RecordStockTakePayload } from '@/lib/hooks/use-inventory';
 
 interface StockTakeDialogProps {
@@ -42,6 +47,7 @@ export default function StockTakeDialog({ product, onOpenChange, onSave }: Stock
   }, [product]);
 
   const onHand = product ? asNumber(product.on_hand_l) : 0;
+  const unit = stockUnit(product?.unit);
   const countedValue = Number(counted);
   const difference = counted.trim() !== '' && Number.isFinite(countedValue) ? countedValue - onHand : null;
 
@@ -50,7 +56,7 @@ export default function StockTakeDialog({ product, onOpenChange, onSave }: Stock
     if (!product) return;
     const litres = Number(counted);
     if (counted.trim() === '' || !Number.isFinite(litres) || litres < 0 || litres >= 1000) {
-      setError('Counted litres must be 0 or more and below 1000');
+      setError(`Counted ${unit === 'kg' ? 'kilograms' : 'litres'} must be 0 or more and below 1000`);
       return;
     }
     if (note.trim().length === 0) {
@@ -92,10 +98,12 @@ export default function StockTakeDialog({ product, onOpenChange, onSave }: Stock
           )}
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-sm text-slate-600">On hand</p>
-            <p className="text-2xl font-semibold tabular-nums text-slate-900">{formatLitres(onHand)}</p>
+            <p className="text-2xl font-semibold tabular-nums text-slate-900">
+              {formatQuantity(onHand, unit)}
+            </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="stock-take-counted">Counted litres *</Label>
+            <Label htmlFor="stock-take-counted">Counted {unit} *</Label>
             <Input
               id="stock-take-counted"
               type="number"
@@ -119,7 +127,7 @@ export default function StockTakeDialog({ product, onOpenChange, onSave }: Stock
                 difference === 0 && 'text-slate-900'
               )}
             >
-              {difference == null ? 'Enter a count' : formatSignedLitres(difference)}
+              {difference == null ? 'Enter a count' : formatSignedQuantity(difference, unit)}
             </p>
           </div>
           <div className="space-y-2">

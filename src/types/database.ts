@@ -1139,6 +1139,13 @@ export interface Database {
           notes: string | null;
           is_active: boolean;
           sort_order: number;
+          tracking_mode: 'container' | 'decant';
+          issue_size_l: number;
+          jug_baseline_l: number;
+          jug_baseline_at: string;
+          /** L for liquids. kg for powders such as laundry powder. */
+          unit: 'L' | 'kg';
+          image_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1154,6 +1161,12 @@ export interface Database {
           notes?: string | null;
           is_active?: boolean;
           sort_order?: number;
+          tracking_mode?: 'container' | 'decant';
+          issue_size_l?: number;
+          jug_baseline_l?: number;
+          jug_baseline_at?: string;
+          unit?: 'L' | 'kg';
+          image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1169,6 +1182,12 @@ export interface Database {
           notes?: string | null;
           is_active?: boolean;
           sort_order?: number;
+          tracking_mode?: 'container' | 'decant';
+          issue_size_l?: number;
+          jug_baseline_l?: number;
+          jug_baseline_at?: string;
+          unit?: 'L' | 'kg';
+          image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1186,6 +1205,7 @@ export interface Database {
           start_employee_id: string;
           start_recorded_at: string;
           added_l: number;
+          poured_l: number;
           end_kg: number | null;
           end_employee_id: string | null;
           end_recorded_at: string | null;
@@ -1207,6 +1227,7 @@ export interface Database {
           start_employee_id: string;
           start_recorded_at?: string;
           added_l?: number;
+          poured_l?: number;
           end_kg?: number | null;
           end_employee_id?: string | null;
           end_recorded_at?: string | null;
@@ -1228,6 +1249,7 @@ export interface Database {
           start_employee_id?: string;
           start_recorded_at?: string;
           added_l?: number;
+          poured_l?: number;
           end_kg?: number | null;
           end_employee_id?: string | null;
           end_recorded_at?: string | null;
@@ -1391,6 +1413,33 @@ export interface Database {
           avg_daily_use_l_14d: number;
           days_left: number | null;
           last_weighed_at: string | null;
+          tracking_mode: 'container' | 'decant';
+          issue_size_l: number;
+          jug_baseline_l: number;
+          jug_baseline_at: string;
+          unit: 'L' | 'kg';
+          image_url: string | null;
+          jug_l: number;
+          drum_l: number | null;
+        };
+        Relationships: [];
+      };
+
+      // Latest closed end weight per product. Used by the chemical kiosk.
+      chemical_last_end_kg: {
+        Row: {
+          product_id: string;
+          end_kg: number;
+        };
+        Relationships: [];
+      };
+
+      // Jug and drum litres without the 14-day usage average.
+      chemical_kiosk_stock: {
+        Row: {
+          id: string;
+          jug_l: number;
+          drum_l: number | null;
         };
         Relationships: [];
       };
@@ -1769,6 +1818,10 @@ export interface CreateChemicalProductRequest {
   notes?: string | null;
   is_active?: boolean;
   sort_order?: number;
+  tracking_mode?: 'container' | 'decant';
+  issue_size_l?: number;
+  jug_baseline_l?: number | null;
+  unit?: 'L' | 'kg';
 }
 
 export interface UpdateChemicalProductRequest {
@@ -1782,6 +1835,10 @@ export interface UpdateChemicalProductRequest {
   notes?: string | null;
   is_active?: boolean;
   sort_order?: number;
+  tracking_mode?: 'container' | 'decant';
+  issue_size_l?: number;
+  jug_baseline_l?: number | null;
+  unit?: 'L' | 'kg';
 }
 
 export interface CreateChemicalWeighInRequest {
@@ -1791,6 +1848,7 @@ export interface CreateChemicalWeighInRequest {
   start_employee_id: string;
   start_recorded_at?: string;
   added_l?: number;
+  poured_l?: number;
   notes?: string | null;
 }
 
@@ -1799,6 +1857,7 @@ export interface UpdateChemicalWeighInRequest {
   start_kg?: number;
   start_employee_id?: string;
   added_l?: number;
+  poured_l?: number;
   end_kg?: number | null;
   end_employee_id?: string | null;
   end_recorded_at?: string | null;

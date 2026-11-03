@@ -415,6 +415,24 @@ const chemicalProductFields = {
   notes: OptionalTrimmedTextSchema,
   is_active: z.boolean().optional(),
   sort_order: z.number().int().min(0).max(100000).optional(),
+  tracking_mode: z.enum(['container', 'decant']).optional(),
+  unit: z.enum(['L', 'kg']).optional(),
+  issue_size_l: z
+    .number()
+    .positive('Pour size must be greater than 0')
+    .lt(1000, 'Pour size must be below 1000 L')
+    .optional(),
+  jug_baseline_l: LitreSchema.optional().nullable(),
+  image_url: z
+    .string()
+    .trim()
+    .max(2000, 'Photo address is too long')
+    .refine(
+      (value) => value.length === 0 || value.startsWith('https://') || value.startsWith('http://'),
+      'Photo address must start with http:// or https://'
+    )
+    .optional()
+    .nullable(),
 };
 
 export const CreateChemicalProductSchema = z.object({
@@ -447,6 +465,7 @@ export const AdminUpdateWeighInSchema = z.object({
   start_kg: WeightSchema.optional(),
   end_kg: WeightSchema.nullable().optional(),
   added_l: LitreSchema.optional(),
+  poured_l: LitreSchema.optional(),
   notes: OptionalTrimmedTextSchema,
 }).strict().refine(
   (value) => Object.keys(value).length > 0,
@@ -491,6 +510,8 @@ export const KioskStartWeighInSchema = z.object({
   pin: ClockPinSchema,
   product_id: BaseIdSchema,
   start_kg: KioskWeightSchema,
+  /** Ignored. Decant pours are calculated from the bottle weight. */
+  poured_l: LitreSchema.optional(),
   notes: OptionalTrimmedTextSchema,
 }).strict();
 

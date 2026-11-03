@@ -1,7 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabaseAdmin } from '@/lib/supabase';
-import type { Employee, ShiftSchedule } from '@/types/database';
-import type { DayRoster } from '@/types/database';
 
 export interface StaffServiceResponse<T> {
   data: T | null;
@@ -9,169 +6,239 @@ export interface StaffServiceResponse<T> {
   success: boolean;
 }
 
-const MONDAY = 1; // ISO weekday: 1 = Monday, 7 = Sunday
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export interface ScheduleShift {
+  day_of_week: number;
+  shift_type: 'day' | 'night';
+  employee_id: string;
+}
 
-function parseWeekStart(week: string): Date {
-  const d = new Date(week + 'T00:00:00Z');
-  if (isNaN(d.getTime())) {
+export interface ScheduleAbsence {
+  employee_id: string;
+  absence_date: string;
+  shift_type: 'day' | 'night';
+}
+
+export interface WeekSchedule {
+  week: string;
+  isDefault: boolean;
+  shifts: ScheduleShift[];
+  absences: ScheduleAbsence[];
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function fail<T>(error: string): StaffServiceResponse<T> {
+  return { data: null, error, success: false };
+}
+
+/** Calendar Monday (YYYY-MM-DD) for the week that contains `week`. */
+export function normalizeWeekStart(week: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) {
     throw new Error('Invalid week format. Use YYYY-MM-DD.');
   }
-  // Adjust to Monday
-  const day = d.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d;
+  const [year, month, day] = week.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new Error('Invalid week format. Use YYYY-MM-DD.');
+  }
+  const weekday = date.getUTCDay();
+  const diff = weekday === 0 ? -6 : 1 - weekday;
+  date.setUTCDate(date.getUTCDate() + diff);
+  return date.toISOString().slice(0, 10);
 }
 
-function formatDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+function addDays(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
 }
 
-export async function getScheduleForWeek(week: string): Promise<StaffServiceResponse<DayRoster[]>> {
+function shiftKey(shift: ScheduleShift): string {
+  return `${shift.day_of_week}:${shift.shift_type}:${shift.employee_id}`;
+}
+
+function dedupeShifts(shifts: ScheduleShift[]): ScheduleShift[] {
+  const seen = new Set<string>();
+  const unique: ScheduleShift[] = [];
+  for (const shift of shifts) {
+    const key = shiftKey(shift);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(shift);
+  }
+  return unique;
+}
+
+function toShift(row: {
+  day_of_week: number;
+  shift_type: string;
+  employee_id: string;
+}): ScheduleShift | null {
+  if (!Number.isInteger(row.day_of_week) || row.day_of_week < 0 || row.day_of_week > 6) return null;
+  if (row.shift_type !== 'day' && row.shift_type !== 'night') return null;
+  if (!row.employee_id) return null;
+  return {
+    day_of_week: row.day_of_week,
+    shift_type: row.shift_type,
+    employee_id: row.employee_id,
+  };
+}
+
+function toAbsence(row: {
+  employee_id: string;
+  absence_date: string;
+  shift_type: string;
+}): ScheduleAbsence | null {
+  if (row.shift_type !== 'day' && row.shift_type !== 'night') return null;
+  if (!row.employee_id || !row.absence_date) return null;
+  return {
+    employee_id: row.employee_id,
+    absence_date: row.absence_date.slice(0, 10),
+    shift_type: row.shift_type,
+  };
+}
+
+export function parseScheduleShifts(
+  input: unknown
+): { ok: true; shifts: ScheduleShift[] } | { ok: false; error: string } {
+  if (!Array.isArray(input)) {
+    return { ok: false, error: 'shifts must be an array' };
+  }
+
+  const shifts: ScheduleShift[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      return { ok: false, error: 'Each shift must include day_of_week, shift_type, and employee_id' };
+    }
+    const row = item as Record<string, unknown>;
+    const day = row.day_of_week;
+    const shiftType = row.shift_type;
+    const employeeId = row.employee_id;
+
+    if (typeof day !== 'number' || !Number.isInteger(day) || day < 0 || day > 6) {
+      return { ok: false, error: 'day_of_week must be an integer from 0 (Monday) to 6 (Sunday)' };
+    }
+    if (shiftType !== 'day' && shiftType !== 'night') {
+      return { ok: false, error: 'shift_type must be day or night' };
+    }
+    if (typeof employeeId !== 'string' || !UUID_REGEX.test(employeeId)) {
+      return { ok: false, error: 'employee_id must be a valid id' };
+    }
+
+    shifts.push({ day_of_week: day, shift_type: shiftType, employee_id: employeeId });
+  }
+
+  return { ok: true, shifts: dedupeShifts(shifts) };
+}
+
+export async function getScheduleForWeek(week: string): Promise<StaffServiceResponse<WeekSchedule>> {
   try {
-    const weekStart = parseWeekStart(week);
+    const monday = normalizeWeekStart(week);
+    const sunday = addDays(monday, 6);
 
-    const [defaultSchedule, absences, employeesList] = await Promise.all([
+    const [weekRows, defaultRows, absenceRows] = await Promise.all([
       supabaseAdmin
         .from('shift_schedule')
-        .select('*')
+        .select('day_of_week, shift_type, employee_id')
+        .eq('is_default', false)
+        .eq('week_start_date', monday),
+      supabaseAdmin
+        .from('shift_schedule')
+        .select('day_of_week, shift_type, employee_id')
         .eq('is_default', true)
         .is('week_start_date', null),
       supabaseAdmin
         .from('absences')
-        .select('*')
-        .gte('absence_date', formatDate(weekStart))
-        .lte('absence_date', formatDate(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000))),
-      supabaseAdmin.from('employees').select('*').eq('status', 'active'),
+        .select('employee_id, absence_date, shift_type')
+        .gte('absence_date', monday)
+        .lte('absence_date', sunday),
     ]);
 
-    const employeesMap = new Map<string, Employee>();
-    (employeesList.data || []).forEach((e) => employeesMap.set(e.id, e));
+    if (weekRows.error) return fail(weekRows.error.message);
+    if (absenceRows.error) return fail(absenceRows.error.message);
 
-    const absenceSet = new Set<string>();
-    (absences.data || []).forEach((a: { employee_id: string; absence_date: string; shift_type: string }) => {
-      absenceSet.add(`${a.employee_id}-${a.absence_date}-${a.shift_type}`);
-    });
+    const hasWeek = (weekRows.data ?? []).length > 0;
+    if (!hasWeek && defaultRows.error) return fail(defaultRows.error.message);
 
-    const defaultByDay: Record<number, { day: string[]; night: string[] }> = {
-      0: { day: [], night: [] },
-      1: { day: [], night: [] },
-      2: { day: [], night: [] },
-      3: { day: [], night: [] },
-      4: { day: [], night: [] },
-      5: { day: [], night: [] },
-      6: { day: [], night: [] },
-    };
+    const source = hasWeek ? weekRows.data : defaultRows.data;
+    const shifts = dedupeShifts(
+      (source ?? [])
+        .map((row) => toShift(row))
+        .filter((row): row is ScheduleShift => row !== null)
+    );
+    const absences = (absenceRows.data ?? [])
+      .map((row) => toAbsence(row))
+      .filter((row): row is ScheduleAbsence => row !== null);
 
-    (defaultSchedule.data || []).forEach((s: ShiftSchedule) => {
-      const key = s.shift_type as 'day' | 'night';
-      if (!defaultByDay[s.day_of_week][key].includes(s.employee_id)) {
-        defaultByDay[s.day_of_week][key].push(s.employee_id);
-      }
-    });
-
-    const roster: DayRoster[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart);
-      d.setUTCDate(d.getUTCDate() + i);
-      const dateStr = formatDate(d);
-
-      const dayIds = defaultByDay[i].day.filter(
-        (id) => !absenceSet.has(`${id}-${dateStr}-day`)
-      );
-      const nightIds = defaultByDay[i].night.filter(
-        (id) => !absenceSet.has(`${id}-${dateStr}-night`)
-      );
-
-      roster.push({
-        dayOfWeek: i,
-        date: dateStr,
-        day: dayIds.map((id) => employeesMap.get(id)!).filter(Boolean),
-        night: nightIds.map((id) => employeesMap.get(id)!).filter(Boolean),
-      });
-    }
-
-    return { data: roster, error: null, success: true };
-  } catch (err) {
     return {
-      data: null,
-      error: err instanceof Error ? err.message : 'Unknown error',
-      success: false,
+      data: {
+        week: monday,
+        isDefault: !hasWeek,
+        shifts,
+        absences,
+      },
+      error: null,
+      success: true,
     };
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : 'Unknown error');
   }
 }
 
-export interface SeedScheduleItem {
-  employeeName: string;
-  shiftType: 'day' | 'night';
-  daysOfWeek: number[]; // 0=Mon, 6=Sun
+async function replaceWeekShifts(
+  monday: string,
+  shifts: ScheduleShift[]
+): Promise<StaffServiceResponse<WeekSchedule>> {
+  const { error: deleteError } = await supabaseAdmin
+    .from('shift_schedule')
+    .delete()
+    .eq('is_default', false)
+    .eq('week_start_date', monday);
+
+  if (deleteError) return fail(deleteError.message);
+
+  if (shifts.length > 0) {
+    const { error: insertError } = await supabaseAdmin.from('shift_schedule').insert(
+      shifts.map((shift) => ({
+        employee_id: shift.employee_id,
+        day_of_week: shift.day_of_week,
+        shift_type: shift.shift_type,
+        is_default: false,
+        week_start_date: monday,
+      }))
+    );
+    if (insertError) return fail(insertError.message);
+  }
+
+  return getScheduleForWeek(monday);
 }
 
-const DEFAULT_SCHEDULE: SeedScheduleItem[] = [
-  { employeeName: 'Jacque', shiftType: 'day', daysOfWeek: [0, 1, 2, 3, 4] },
-  { employeeName: 'Wowo', shiftType: 'day', daysOfWeek: [5, 6] },
-  { employeeName: 'Noms', shiftType: 'night', daysOfWeek: [0, 1, 4, 5, 6] },
-  { employeeName: 'Minenhle', shiftType: 'night', daysOfWeek: [0, 1, 2, 3, 4] },
-  { employeeName: 'Mandisa', shiftType: 'night', daysOfWeek: [2, 3, 4, 5, 6] },
-];
-
-export async function seedDefaultSchedule(): Promise<StaffServiceResponse<ShiftSchedule[]>> {
+export async function saveWeekSchedule(
+  week: string,
+  shifts: ScheduleShift[]
+): Promise<StaffServiceResponse<WeekSchedule>> {
   try {
-    const { data: employees } = await supabaseAdmin
-      .from('employees')
-      .select('id, full_name')
-      .eq('status', 'active');
-
-    const byName = new Map<string, string>();
-    (employees || []).forEach((e: { id: string; full_name: string }) => {
-      byName.set(e.full_name.trim().toLowerCase(), e.id);
-    });
-
-    const inserts: { employee_id: string; day_of_week: number; shift_type: 'day' | 'night'; is_default: boolean }[] = [];
-
-    for (const item of DEFAULT_SCHEDULE) {
-      const id = byName.get(item.employeeName.toLowerCase());
-      if (!id) continue;
-
-      for (const dayOfWeek of item.daysOfWeek) {
-        inserts.push({
-          employee_id: id,
-          day_of_week: dayOfWeek,
-          shift_type: item.shiftType,
-          is_default: true,
-        });
-      }
-    }
-
-    const { data: existing } = await supabaseAdmin
-      .from('shift_schedule')
-      .select('*')
-      .eq('is_default', true);
-
-    if (existing && existing.length > 0) {
-      return {
-        data: existing as ShiftSchedule[],
-        error: null,
-        success: true,
-      };
-    }
-
-    const { data, error } = await (supabaseAdmin as any)
-      .from('shift_schedule')
-      .insert(inserts)
-      .select();
-
-    if (error) {
-      return { data: null, error: error.message, success: false };
-    }
-
-    return { data: data || [], error: null, success: true };
+    const monday = normalizeWeekStart(week);
+    return await replaceWeekShifts(monday, dedupeShifts(shifts));
   } catch (err) {
-    return {
-      data: null,
-      error: err instanceof Error ? err.message : 'Unknown error',
-      success: false,
-    };
+    return fail(err instanceof Error ? err.message : 'Unknown error');
+  }
+}
+
+export async function copyWeekSchedule(
+  fromWeek: string,
+  toWeek: string
+): Promise<StaffServiceResponse<WeekSchedule>> {
+  try {
+    const source = await getScheduleForWeek(fromWeek);
+    if (!source.success || !source.data) return fail(source.error || 'Failed to read the source week');
+    const monday = normalizeWeekStart(toWeek);
+    return await replaceWeekShifts(monday, source.data.shifts);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : 'Unknown error');
   }
 }

@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       employeeId: auth.employee.id,
       productId: input.product_id,
       startKg: input.start_kg,
+      pouredL: input.poured_l,
       notes: input.notes,
     });
 

@@ -1,5 +1,8 @@
 import type { ChemicalMovementType, ChemicalStockLevel } from '@/types/database';
+import { stockUnit, type StockUnit } from '@/lib/chemical-unit';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/formatters';
+
+export { stockUnit, type StockUnit };
 
 export function asNumber(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -14,6 +17,10 @@ export function asNumberOrNull(value: unknown): number | null {
   if (value == null || value === '') return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function isDecantProduct(product: { tracking_mode?: unknown }): boolean {
+  return product.tracking_mode === 'decant';
 }
 
 export function isArchived(product: { is_active: unknown }): boolean {
@@ -38,11 +45,15 @@ export function needsReorder(product: ChemicalStockLevel): boolean {
   return !isArchived(product) && stockStatus(product) !== 'ok';
 }
 
-export function formatLitres(value: unknown): string {
+export function formatQuantity(value: unknown, unit: unknown = 'L'): string {
   return `${formatNumber(asNumber(value), {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
-  })} L`;
+  })} ${stockUnit(unit)}`;
+}
+
+export function formatLitres(value: unknown): string {
+  return formatQuantity(value, 'L');
 }
 
 export function formatKg(value: unknown): string {
@@ -155,14 +166,19 @@ export const MOVEMENT_TYPE_CLASS: Record<ChemicalMovementType, string> = {
   opening_balance: 'bg-blue-100 text-blue-800',
 };
 
-export function formatSignedLitres(value: number): string {
+export function formatSignedQuantity(value: number, unit: unknown = 'L'): string {
   const formatted = formatNumber(Math.abs(value), {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   });
-  if (value > 0) return `+${formatted} L`;
-  if (value < 0) return `−${formatted} L`;
-  return `${formatted} L`;
+  const label = stockUnit(unit);
+  if (value > 0) return `+${formatted} ${label}`;
+  if (value < 0) return `−${formatted} ${label}`;
+  return `${formatted} ${label}`;
+}
+
+export function formatSignedLitres(value: number): string {
+  return formatSignedQuantity(value, 'L');
 }
 
 export function formatContainers(value: unknown): string {
@@ -174,17 +190,17 @@ export function formatContainers(value: unknown): string {
   });
 }
 
-export function formatContainerLine(containers: unknown, sizeLitres: unknown): string {
+export function formatContainerLine(containers: unknown, size: unknown, unit: unknown = 'L'): string {
   const count = formatNumber(asNumber(containers), {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   });
-  const size = asNumber(sizeLitres);
-  const sizeLabel = formatNumber(size, {
-    minimumFractionDigits: Number.isInteger(size) ? 0 : 1,
+  const amount = asNumber(size);
+  const sizeLabel = formatNumber(amount, {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 1,
     maximumFractionDigits: 1,
   });
-  return `${count} × ${sizeLabel} L`;
+  return `${count} × ${sizeLabel} ${stockUnit(unit)}`;
 }
 
 export function formatDaysLeft(value: unknown): string {
@@ -230,6 +246,21 @@ export function johannesburgDate(dayOffset = 0): string {
   }).format(shifted);
 }
 
+export function formatMixedUsage(rows: { litres: unknown; unit?: unknown }[]): string {
+  let litres = 0;
+  let kilograms = 0;
+  for (const row of rows) {
+    const amount = asNumber(row.litres);
+    if (stockUnit(row.unit) === 'kg') kilograms += amount;
+    else litres += amount;
+  }
+  if (kilograms > 0 && litres > 0) {
+    return `${formatQuantity(litres, 'L')} · ${formatQuantity(kilograms, 'kg')}`;
+  }
+  if (kilograms > 0) return formatQuantity(kilograms, 'kg');
+  return formatQuantity(litres, 'L');
+}
+
 export function reorderBannerText(products: ChemicalStockLevel[]): string | null {
   const low = products.filter(needsReorder);
   if (low.length === 0) return null;
@@ -237,7 +268,7 @@ export function reorderBannerText(products: ChemicalStockLevel[]): string | null
   const details = low
     .map(
       (product) =>
-        `${product.name} (${formatLitres(product.on_hand_l)} left, reorder at ${formatLitres(product.reorder_level_l)})`
+        `${product.name} (${formatQuantity(product.on_hand_l, product.unit)} left, reorder at ${formatQuantity(product.reorder_level_l, product.unit)})`
     )
     .join(', ');
   return `${formatCount(low.length)} ${noun} reordering: ${details}`;

@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import Navigation from '@/components/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from '@/components/dashboard/metric-card';
-import StockTable from '@/components/inventory/stock-table';
-import WeighInsTable from '@/components/inventory/weigh-ins-table';
+import StockTable, { StockTableSkeleton } from '@/components/inventory/stock-table';
+import WeighInsTable, { preloadWeighInChart } from '@/components/inventory/weigh-ins-table';
 import MovementsTable from '@/components/inventory/movements-table';
 import ProductHistorySheet from '@/components/inventory/product-history-sheet';
 import ProductFormDialog, { type ProductFormValues } from '@/components/inventory/product-form-dialog';
@@ -22,6 +23,7 @@ import {
   FlaskConical,
   Package,
   Plus,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChemicalStockLevel } from '@/types/database';
@@ -32,16 +34,18 @@ import {
   useRecordDelivery,
   useRecordStockTake,
   useRestoreProduct,
+  defaultWeighInRange,
+  invalidateInventory,
   useStockLevels,
   useUpdateProduct,
   useUsage,
+  weighInsQueryOptions,
   type RecordDeliveryPayload,
   type RecordStockTakePayload,
 } from '@/lib/hooks/use-inventory';
 import {
-  asNumber,
   formatCount,
-  formatLitres,
+  formatMixedUsage,
   formatRands,
   isArchived,
   johannesburgDate,
@@ -56,11 +60,16 @@ function toUpdatePayload(values: ProductFormValues): UpdateProductRequest {
   return {
     name: values.name,
     supplier: values.supplier,
+    unit: values.unit,
     container_size_l: values.container_size_l,
     reorder_level_l: values.reorder_level_l,
     reorder_qty_containers: values.reorder_qty_containers,
     cost_per_container: values.cost_per_container,
     notes: values.notes,
+    image_url: values.image_url,
+    tracking_mode: values.tracking_mode,
+    issue_size_l: values.issue_size_l,
+    jug_baseline_l: values.jug_baseline_l,
   };
 }
 
@@ -82,8 +91,14 @@ function InventoryPageContent() {
     []
   );
 
+  const queryClient = useQueryClient();
   const stockQuery = useStockLevels(showArchived);
   const usageQuery = useUsage(usageRange);
+
+  useEffect(() => {
+    preloadWeighInChart();
+    void queryClient.prefetchQuery(weighInsQueryOptions(defaultWeighInRange()));
+  }, [queryClient]);
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -97,6 +112,15 @@ function InventoryPageContent() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void invalidateInventory(queryClient);
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [queryClient]);
+
+  const refreshing = stockQuery.isFetching || usageQuery.isFetching;
+
   const products = stockQuery.data?.success ? stockQuery.data.data ?? [] : [];
   const detailProduct = useMemo(() => {
     if (!detailId) return null;
@@ -105,9 +129,9 @@ function InventoryPageContent() {
   const activeProducts = products.filter((product) => !isArchived(product));
   const lowCount = activeProducts.filter(needsReorder).length;
   const banner = reorderBannerText(products);
-  const litresUsed = usageQuery.data?.success
-    ? (usageQuery.data.data ?? []).reduce((sum, row) => sum + asNumber(row.litres), 0)
-    : 0;
+  const usageSummary = usageQuery.data?.success
+    ? formatMixedUsage(usageQuery.data.data ?? [])
+    : formatMixedUsage([]);
 
   const flash = (text: string, tone: Notice['tone'] = 'success') => {
     setNotice({ tone, text });
@@ -122,12 +146,17 @@ function InventoryPageContent() {
     await createProduct.mutateAsync({
       name: values.name,
       supplier: values.supplier,
+      unit: values.unit,
       container_size_l: values.container_size_l,
       reorder_level_l: values.reorder_level_l,
       reorder_qty_containers: values.reorder_qty_containers,
       cost_per_container: values.cost_per_container,
       notes: values.notes,
+      image_url: values.image_url,
       opening_stock_l: values.opening_stock_l,
+      tracking_mode: values.tracking_mode,
+      issue_size_l: values.issue_size_l,
+      jug_baseline_l: values.jug_baseline_l,
     });
     flash(
       values.opening_stock_l != null && values.opening_stock_l > 0
@@ -189,13 +218,26 @@ function InventoryPageContent() {
       <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center space-x-3">
-            <FlaskConical className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
-            <span>Inventory</span>
-          </h1>
-          <p className="text-sm sm:text-base text-slate-600 mt-2 leading-relaxed">
-            Track detergent on hand, deliveries, and when to reorder.
-          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center space-x-3">
+                <FlaskConical className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
+                <span>Inventory</span>
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600 mt-2 leading-relaxed">
+                Track detergent on hand, deliveries, and when to reorder.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void invalidateInventory(queryClient)}
+              className="flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </Button>
+          </div>
         </div>
 
         {notice && (
@@ -235,26 +277,30 @@ function InventoryPageContent() {
                 title="Active products"
                 value={stockError ? '—' : formatCount(activeProducts.length)}
                 icon={Package}
-                loading={stockQuery.isLoading}
+                loading={stockQuery.isPending && stockQuery.data == null}
               />
               <MetricCard
                 title="Low stock"
                 value={stockError ? '—' : formatCount(lowCount)}
                 icon={AlertTriangle}
                 variant={!stockError && lowCount > 0 ? 'discrepancies' : 'default'}
-                loading={stockQuery.isLoading}
+                loading={stockQuery.isPending && stockQuery.data == null}
               />
               <MetricCard
-                title="Litres used last 7 days"
-                value={usageQuery.isLoading ? '—' : usageQuery.isError ? '—' : formatLitres(litresUsed)}
+                title="Used last 7 days"
+                value={
+                  (usageQuery.isPending && usageQuery.data == null) || usageQuery.isError
+                    ? '—'
+                    : usageSummary
+                }
                 icon={Droplets}
-                loading={usageQuery.isLoading}
+                loading={usageQuery.isPending && usageQuery.data == null}
               />
               <MetricCard
                 title="Stock value"
                 value={stockError ? '—' : formatRands(stockValue(products))}
                 icon={Banknote}
-                loading={stockQuery.isLoading}
+                loading={stockQuery.isPending && stockQuery.data == null}
               />
             </div>
 
@@ -284,8 +330,8 @@ function InventoryPageContent() {
                 </div>
               </CardHeader>
               <CardContent>
-                {stockQuery.isLoading ? (
-                  <p className="text-slate-500 text-center py-8">Loading stock…</p>
+                {stockQuery.isPending && stockQuery.data == null ? (
+                  <StockTableSkeleton />
                 ) : stockError ? (
                   <div className="text-center py-8 space-y-3">
                     <p className="text-red-600">{stockError}</p>
@@ -322,11 +368,11 @@ function InventoryPageContent() {
           </TabsContent>
 
           <TabsContent value="weigh-ins" className="mt-6">
-            <WeighInsTable />
+            {activeTab === 'weigh-ins' ? <WeighInsTable products={products} /> : null}
           </TabsContent>
 
           <TabsContent value="history" className="mt-6">
-            <MovementsTable />
+            {activeTab === 'history' ? <MovementsTable /> : null}
           </TabsContent>
         </Tabs>
 

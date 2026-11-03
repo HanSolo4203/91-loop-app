@@ -5,6 +5,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, Check, Delete, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { drumPourLimitMessage, pourToFillBottle } from '@/lib/chemical-decant';
+import { stockUnit, type StockUnit } from '@/lib/chemical-unit';
 import { formatSastTime } from '@/lib/clocking-utils';
 import { playClockInCheer } from '@/lib/utils/sounds';
 import { fireClockInConfetti } from '@/lib/utils/confetti';
@@ -16,6 +18,7 @@ const PIN_LENGTH = 4;
 const IDLE_CLEAR_MS = 3000;
 const SIGN_OUT_IDLE_MS = 90_000;
 const SUCCESS_RETURN_MS = 1800;
+const GRID_REFRESH_MS = 10_000;
 const KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'back'] as const;
 
 const timeFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -53,6 +56,7 @@ interface OpenWeighIn {
   id: string;
   start_kg: number;
   added_l: number;
+  poured_l: number;
   start_employee_name: string;
   start_recorded_at: string;
 }
@@ -66,8 +70,14 @@ interface ClosedToday {
 interface ChemicalProduct {
   id: string;
   name: string;
+  image_url: string | null;
   container_size_l: number;
   kg_per_litre: number;
+  unit: StockUnit;
+  tracking_mode: 'container' | 'decant';
+  issue_size_l: number;
+  jug_l: number;
+  drum_l: number | null;
   suggested_start_kg: number | null;
   open_weigh_in: OpenWeighIn | null;
   closed_today: ClosedToday | null;
@@ -81,6 +91,16 @@ interface HighUsagePrompt {
 interface SuccessInfo {
   title: string;
   detail: string;
+}
+
+function firstName(fullName: string | null | undefined): string {
+  const first = (fullName ?? '').trim().split(/\s+/)[0];
+  return first || 'Unknown';
+}
+
+function weighInRecord(data: Record<string, unknown>): Record<string, unknown> | null {
+  if (!data.weigh_in || typeof data.weigh_in !== 'object') return null;
+  return data.weigh_in as Record<string, unknown>;
 }
 
 function employeeInitials(fullName: string): string {
@@ -123,6 +143,18 @@ function usedLitres(startKg: number, endKg: number, addedL: number, kgPerLitre: 
   return (startKg + addedL * density - endKg) / density;
 }
 
+function isDecant(product: ChemicalProduct): boolean {
+  return product.tracking_mode === 'decant';
+}
+
+function unitOf(product: { unit?: string }): StockUnit {
+  return stockUnit(product.unit);
+}
+
+function amountText(value: number, unit: StockUnit): string {
+  return `${formatOneDecimal(value)} ${unit}`;
+}
+
 function normalizeProduct(raw: unknown): ChemicalProduct | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
@@ -137,6 +169,7 @@ function normalizeProduct(raw: unknown): ChemicalProduct | null {
         id: openRow.id,
         start_kg: asNumber(openRow.start_kg),
         added_l: asNumber(openRow.added_l),
+        poured_l: asNumber(openRow.poured_l),
         start_employee_name:
           typeof openRow.start_employee_name === 'string' ? openRow.start_employee_name : 'Unknown',
         start_recorded_at:
@@ -162,12 +195,39 @@ function normalizeProduct(raw: unknown): ChemicalProduct | null {
   return {
     id: row.id,
     name: row.name,
+    image_url: typeof row.image_url === 'string' && row.image_url.trim() ? row.image_url : null,
     container_size_l: asNumber(row.container_size_l),
     kg_per_litre: asNumber(row.kg_per_litre, 1) || 1,
+    unit: stockUnit(row.unit),
+    tracking_mode: row.tracking_mode === 'decant' ? 'decant' : 'container',
+    issue_size_l: asNumber(row.issue_size_l, 5) || 5,
+    jug_l: asNumber(row.jug_l),
+    drum_l: row.drum_l == null ? null : asNumber(row.drum_l),
     suggested_start_kg: row.suggested_start_kg == null ? null : asNumber(row.suggested_start_kg),
     open_weigh_in: open,
     closed_today: closed,
   };
+}
+
+function ChemicalGridSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-4xl mx-auto"
+      aria-busy="true"
+      aria-label="Loading chemicals"
+    >
+      {Array.from({ length: 6 }, (_, index) => (
+        <div
+          key={index}
+          className="min-h-28 rounded-3xl border-2 border-white/10 bg-white/10 p-5 animate-pulse"
+        >
+          <div className="h-7 w-2/3 rounded-lg bg-white/20" />
+          <div className="mt-3 h-5 w-1/3 rounded-lg bg-white/15" />
+          <div className="mt-4 h-5 w-1/2 rounded-lg bg-white/15" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function tileMode(product: ChemicalProduct): 'needed' | 'open' | 'done' {
@@ -188,9 +248,9 @@ function openStateLabel(open: OpenWeighIn): string {
   return `In use — started ${clock} by ${open.start_employee_name}`;
 }
 
-function doneStateLabel(closed: ClosedToday): string {
+function doneStateLabel(closed: ClosedToday, unit: StockUnit): string {
   if (closed.used_l == null) return 'Done tonight ✓';
-  return `Done tonight ✓ ${formatOneDecimal(closed.used_l)} L used`;
+  return `Done tonight ✓ ${amountText(closed.used_l, unit)} used`;
 }
 
 async function readBody(res: Response): Promise<Record<string, unknown>> {
@@ -213,10 +273,13 @@ const KioskLiveClock = memo(function KioskLiveClock() {
 
   return (
     <div className="text-center mb-3">
-      <p className="text-5xl font-bold tabular-nums tracking-tight text-white">
+      <p
+        className="text-5xl font-bold tabular-nums tracking-tight text-white"
+        suppressHydrationWarning
+      >
         {timeFormatter.format(now)}
       </p>
-      <p className="mt-1 text-blue-100/80 text-base px-2">
+      <p className="mt-1 text-blue-100/80 text-base px-2" suppressHydrationWarning>
         {dateFormatter.format(now)}
       </p>
     </div>
@@ -251,6 +314,60 @@ function EmployeePhoto({
       )}
     >
       {employeeInitials(employee.full_name)}
+    </div>
+  );
+}
+
+function productInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const second = parts.length > 1 ? parts[1]?.[0] ?? '' : parts[0]?.[1] ?? '';
+  return (first + second).toUpperCase() || '?';
+}
+
+function ProductPhoto({
+  name,
+  imageUrl,
+  className,
+}: {
+  name: string;
+  imageUrl: string | null;
+  className: string;
+}) {
+  if (imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imageUrl}
+        alt=""
+        width={160}
+        height={160}
+        decoding="async"
+        className={cn(
+          'rounded-3xl bg-white object-contain shadow-lg ring-4 ring-white shrink-0',
+          className
+        )}
+      />
+    );
+  }
+  return (
+    <div
+      className={cn(
+        'rounded-2xl bg-white/15 ring-2 ring-white/25 flex items-center justify-center text-white font-bold shrink-0',
+        className
+      )}
+    >
+      {productInitials(name)}
+    </div>
+  );
+}
+
+function ProductHeading({ product }: { product: ChemicalProduct }) {
+  return (
+    <div className="flex items-center justify-center gap-4">
+      <ProductPhoto name={product.name} imageUrl={product.image_url} className="h-28 w-28 sm:h-36 sm:w-36 text-4xl" />
+      <h2 className="text-3xl sm:text-4xl font-bold text-center">{product.name}</h2>
     </div>
   );
 }
@@ -382,6 +499,9 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittingRef = useRef(false);
   const sessionRef = useRef(0);
+  const loadSeqRef = useRef(0);
+  const productsRef = useRef<ChemicalProduct[] | null>(null);
+  const loadProductsRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     setKioskLocked(isKioskMode);
@@ -427,8 +547,8 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
     setScreen('pin');
     setError(null);
     setShake(false);
-    setProducts(null);
     setLoadError(null);
+    void loadProductsRef.current();
     setSelected(null);
     setStartInput('');
     setEndInput('');
@@ -470,26 +590,57 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
   useEffect(() => () => clearIdleTimer(), [clearIdleTimer]);
 
   const loadProducts = useCallback(async () => {
-    setLoadError(null);
+    const seq = ++loadSeqRef.current;
+    if (productsRef.current == null) setLoadError(null);
     try {
       const res = await fetch('/api/clocking/chemicals', { cache: 'no-store' });
       const data = await readBody(res);
+      if (seq !== loadSeqRef.current) return;
       if (!res.ok || data.success === false) {
-        setLoadError(
-          typeof data.error === 'string' ? data.error : 'Could not load the chemicals. Try again.'
-        );
+        if (productsRef.current == null) {
+          setLoadError(
+            typeof data.error === 'string' ? data.error : 'Could not load the chemicals. Try again.'
+          );
+        }
         return;
       }
       const rows = Array.isArray(data.products) ? data.products : [];
-      setProducts(rows.map(normalizeProduct).filter((row): row is ChemicalProduct => row != null));
+      const next = rows.map(normalizeProduct).filter((row): row is ChemicalProduct => row != null);
+      productsRef.current = next;
+      setProducts(next);
+      setLoadError(null);
     } catch {
-      setLoadError('Could not load the chemicals. Try again.');
+      if (seq !== loadSeqRef.current) return;
+      if (productsRef.current == null) {
+        setLoadError('Could not load the chemicals. Try again.');
+      }
     }
   }, []);
+
+  loadProductsRef.current = loadProducts;
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
+
+  const patchProduct = useCallback(
+    (productId: string, patch: (product: ChemicalProduct) => ChemicalProduct) => {
+      const current = productsRef.current;
+      if (!current) return;
+      const next = current.map((product) => (product.id === productId ? patch(product) : product));
+      productsRef.current = next;
+      setProducts(next);
+    },
+    []
+  );
 
   useEffect(() => {
     if (screen !== 'grid') return;
     void loadProducts();
+    const id = window.setInterval(() => {
+      void loadProducts();
+    }, GRID_REFRESH_MS);
+    return () => window.clearInterval(id);
   }, [screen, loadProducts]);
 
   useEffect(() => {
@@ -606,7 +757,9 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
   const openStart = (product: ChemicalProduct) => {
     setSelected(product);
     setStartInput(
-      product.suggested_start_kg == null ? '' : formatOneDecimal(product.suggested_start_kg)
+      isDecant(product) || product.suggested_start_kg == null
+        ? ''
+        : formatOneDecimal(product.suggested_start_kg)
     );
     setError(null);
     setScreen('start');
@@ -633,13 +786,30 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
 
   const saveStart = async () => {
     if (!selected || !verifiedPin || saving) return;
-    const startKg = parseAmount(startInput);
-    if (startKg == null) {
-      setError('Enter the start weight.');
+    const decant = isDecant(selected);
+    const weighedKg = parseAmount(startInput);
+    const fill = decant
+      ? weighedKg == null
+        ? null
+        : pourToFillBottle(weighedKg, selected.issue_size_l, selected.kg_per_litre)
+      : null;
+    if (weighedKg == null) {
+      setError(decant ? 'Weigh the bottle before you fill it.' : 'Enter the start weight.');
       return;
     }
-    if (startKg >= 100) {
+    if (weighedKg >= 100) {
       setError('Weight must be below 100');
+      return;
+    }
+    if (fill && fill.pouredL >= 1000) {
+      setError(`${unitOf(selected) === 'kg' ? 'Kilograms' : 'Litres'} must be below 1000`);
+      return;
+    }
+    const drumLimit = fill
+      ? drumPourLimitMessage(fill.pouredL, selected.drum_l ?? 0, unitOf(selected))
+      : null;
+    if (drumLimit) {
+      setError(drumLimit);
       return;
     }
 
@@ -653,7 +823,7 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
         body: JSON.stringify({
           pin: verifiedPin,
           product_id: selected.id,
-          start_kg: startKg,
+          start_kg: weighedKg,
         }),
       });
       const data = await readBody(res);
@@ -665,9 +835,33 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
         setSaving(false);
         return;
       }
+      const saved = weighInRecord(data);
+      const openId = typeof saved?.id === 'string' ? saved.id : '';
+      const savedStartKg = asNumber(saved?.start_kg, fill?.startKg ?? weighedKg);
+      const savedPouredL = asNumber(saved?.poured_l, fill?.pouredL ?? 0);
+      if (openId) {
+        patchProduct(selected.id, (product) => ({
+          ...product,
+          closed_today: null,
+          open_weigh_in: {
+            id: openId,
+            start_kg: savedStartKg,
+            added_l: asNumber(saved?.added_l, 0),
+            poured_l: savedPouredL,
+            start_employee_name: firstName(employee?.full_name),
+            start_recorded_at:
+              typeof saved?.start_recorded_at === 'string'
+                ? saved.start_recorded_at
+                : new Date().toISOString(),
+          },
+        }));
+      }
+      void loadProducts();
       showSaved({
-        title: 'Start weight saved',
-        detail: `${selected.name} · ${formatOneDecimal(startKg)} kg`,
+        title: decant ? 'Pour saved' : 'Start weight saved',
+        detail: decant
+          ? `${selected.name} · Poured ${amountText(savedPouredL, unitOf(selected))} from the drum · Shift starts at ${formatOneDecimal(savedStartKg)} kg`
+          : `${selected.name} · ${formatOneDecimal(weighedKg)} kg`,
       });
     } catch {
       if (sessionRef.current !== session) return;
@@ -680,7 +874,8 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
     if (!selected?.open_weigh_in || !verifiedPin || saving) return;
     const endKg = parseAmount(endInput);
     if (endKg == null) {
-      setError('Enter the end weight.');
+      setActiveField('end');
+      setError('Enter the end weight, then save.');
       return;
     }
     if (endKg >= 100) {
@@ -689,11 +884,15 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
     }
     const addedL = toppedUp ? parseAmount(addedInput) ?? 0 : 0;
     if (toppedUp && addedInput.trim() !== '' && parseAmount(addedInput) == null) {
-      setError('Enter how many litres you added.');
+      setError(
+        isDecant(selected)
+          ? `Enter how many more ${unitOf(selected) === 'kg' ? 'kilograms' : 'litres'} you poured from the drum.`
+          : `Enter how many ${unitOf(selected) === 'kg' ? 'kilograms' : 'litres'} you added.`
+      );
       return;
     }
     if (addedL >= 1000) {
-      setError('Litres must be below 1000');
+      setError(`${unitOf(selected) === 'kg' ? 'Kilograms' : 'Litres'} must be below 1000`);
       return;
     }
 
@@ -744,13 +943,27 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
         addedL,
         selected.kg_per_litre
       );
-      const usedLabel = formatOneDecimal(
-        savedUsed == null ? fallbackUsed : asNumber(savedUsed, fallbackUsed)
-      );
+      const usedValue = savedUsed == null ? fallbackUsed : asNumber(savedUsed, fallbackUsed);
+      const usedLabel = formatOneDecimal(usedValue);
+      const decant = isDecant(selected);
+      const leftLabel = formatOneDecimal(selected.jug_l + addedL - usedValue);
+      const saved = weighInRecord(data);
+      patchProduct(selected.id, (product) => ({
+        ...product,
+        open_weigh_in: null,
+        closed_today: {
+          id: typeof saved?.id === 'string' ? saved.id : selected.open_weigh_in?.id ?? product.id,
+          used_l: usedValue,
+          end_employee_name: firstName(employee?.full_name),
+        },
+      }));
+      void loadProducts();
       setHighUsage(null);
       showSaved({
         title: 'End weight saved',
-        detail: `${selected.name} · Used: ${usedLabel} L`,
+        detail: decant
+          ? `${selected.name} · Used ${usedLabel} ${unitOf(selected)} · Left in the bottle ${leftLabel} ${unitOf(selected)}`
+          : `${selected.name} · Used: ${usedLabel} ${unitOf(selected)}`,
       });
     } catch {
       if (sessionRef.current !== session) return;
@@ -829,6 +1042,71 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
         </div>
       </div>
     );
+  } else if (screen === 'start' && selected && isDecant(selected)) {
+    const weighedKg = parseAmount(startInput);
+    const fill =
+      weighedKg == null
+        ? null
+        : pourToFillBottle(weighedKg, selected.issue_size_l, selected.kg_per_litre);
+    const drumLimit = fill
+      ? drumPourLimitMessage(fill.pouredL, selected.drum_l ?? 0, unitOf(selected))
+      : null;
+    const drumAfter =
+      fill == null || selected.drum_l == null || drumLimit ? null : selected.drum_l - fill.pouredL;
+    main = (
+      <div className="min-h-full px-4 py-4 sm:px-6 flex flex-col items-center gap-4">
+        <button
+          type="button"
+          onClick={() => setScreen('grid')}
+          className="self-start min-h-16 px-5 rounded-2xl bg-white/10 border border-white/25 text-lg font-semibold active:bg-white/25 touch-manipulation"
+        >
+          All chemicals
+        </button>
+        <ProductHeading product={selected} />
+        <p className="max-w-md text-center text-xl text-blue-100">
+          Weigh the {formatContainer(selected.issue_size_l)} {unitOf(selected)} bottle before you fill
+          it. Do not weigh the drum.
+        </p>
+        <p className="text-center text-lg text-blue-100">
+          In the drums:{' '}
+          {selected.drum_l == null ? '—' : amountText(selected.drum_l, unitOf(selected))}
+        </p>
+        <p className="text-2xl font-semibold">Bottle weight now (kg)</p>
+        <ScaleKeypad
+          value={startInput}
+          maxLength={4}
+          onChange={(value) => {
+            setStartInput(value);
+            setError(null);
+          }}
+        />
+        {fill && (
+          <div className="max-w-md text-center text-lg text-blue-100">
+            <p className="tabular-nums">
+              In the bottle now: {amountText(fill.litresNow, unitOf(selected))}
+            </p>
+            <p className="tabular-nums">
+              {fill.pouredL > 0
+                ? `Pour ${amountText(fill.pouredL, unitOf(selected))} from the drum to fill it`
+                : 'Bottle is already full. Nothing to pour.'}
+            </p>
+            <p className="tabular-nums">
+              Drums after this pour:{' '}
+              {drumAfter == null ? '—' : amountText(drumAfter, unitOf(selected))}
+            </p>
+          </div>
+        )}
+        <PlainError message={error || drumLimit} />
+        <button
+          type="button"
+          disabled={saving || weighedKg == null || drumLimit != null}
+          onClick={() => void saveStart()}
+          className="w-full max-w-md min-h-16 rounded-2xl bg-emerald-500 active:bg-emerald-600 text-white text-2xl font-bold disabled:opacity-40 disabled:bg-slate-600 touch-manipulation"
+        >
+          {saving ? <Loader2 className="w-7 h-7 animate-spin mx-auto" /> : 'Save'}
+        </button>
+      </div>
+    );
   } else if (screen === 'start' && selected) {
     const suggested = selected.suggested_start_kg;
     main = (
@@ -840,8 +1118,10 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
         >
           All chemicals
         </button>
-        <h2 className="text-3xl sm:text-4xl font-bold text-center">{selected.name}</h2>
-        <p className="text-xl text-blue-100">{formatContainer(selected.container_size_l)} L container</p>
+        <ProductHeading product={selected} />
+        <p className="text-xl text-blue-100">
+          {formatContainer(selected.container_size_l)} {unitOf(selected)} container
+        </p>
         <p className="text-2xl font-semibold">Start weight (kg)</p>
         <ScaleKeypad
           value={startInput}
@@ -869,10 +1149,13 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
     );
   } else if (screen === 'end' && selected?.open_weigh_in) {
     const open = selected.open_weigh_in;
+    const decant = isDecant(selected);
     const endKg = parseAmount(endInput);
     const addedL = toppedUp ? parseAmount(addedInput) ?? 0 : 0;
     const preview =
       endKg == null ? null : usedLitres(open.start_kg, endKg, addedL, selected.kg_per_litre);
+    const leftInBottle =
+      preview == null || preview < 0 ? null : selected.jug_l + addedL - preview;
     const clock = startedClock(open.start_recorded_at);
     const keypadValue = activeField === 'added' ? addedInput : endInput;
 
@@ -885,10 +1168,25 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
         >
           All chemicals
         </button>
-        <h2 className="text-3xl sm:text-4xl font-bold text-center">{selected.name}</h2>
+        <ProductHeading product={selected} />
+        {decant && (
+          <p className="max-w-md text-center text-xl text-blue-100">
+            Weigh the {formatContainer(selected.issue_size_l)} {unitOf(selected)} bottle only — not the
+            drum.
+          </p>
+        )}
         <div className="w-full max-w-md rounded-2xl bg-white/10 border border-white/20 px-4 py-4 text-center">
-          <p className="text-lg text-blue-100">Start weight</p>
+          <p className="text-lg text-blue-100">
+            {decant
+              ? `${formatContainer(selected.issue_size_l)} ${unitOf(selected)} bottle at start`
+              : 'Start weight'}
+          </p>
           <p className="text-4xl font-bold tabular-nums">{formatOneDecimal(open.start_kg)} kg</p>
+          {decant && (
+            <p className="mt-1 text-xl text-blue-100">
+              Poured {amountText(open.poured_l, unitOf(selected))} from the drum
+            </p>
+          )}
           <p className="mt-1 text-xl text-blue-100">
             Recorded by {open.start_employee_name}
             {clock ? ` at ${clock}` : ''}
@@ -906,8 +1204,12 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
                 : 'border-white/25 bg-white/10 text-white'
             )}
           >
-            <span className="block text-base font-medium opacity-80">End weight</span>
-            <span className="block text-3xl font-bold tabular-nums">{endInput || '0.0'} kg</span>
+            <span className="block text-base font-medium opacity-80">
+              {decant ? 'Weigh the bottle' : 'End weight'}
+            </span>
+            <span className="block text-3xl font-bold tabular-nums">
+              {endInput ? `${endInput} kg` : '—'}
+            </span>
           </button>
           {toppedUp && (
             <button
@@ -920,8 +1222,12 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
                   : 'border-white/25 bg-white/10 text-white'
               )}
             >
-              <span className="block text-base font-medium opacity-80">Litres added</span>
-              <span className="block text-3xl font-bold tabular-nums">{addedInput || '0.0'} L</span>
+              <span className="block text-base font-medium opacity-80">
+                {decant ? 'Poured more' : unitOf(selected) === 'kg' ? 'Kilograms added' : 'Litres added'}
+              </span>
+              <span className="block text-3xl font-bold tabular-nums">
+                {addedInput ? `${addedInput} ${unitOf(selected)}` : '—'}
+              </span>
             </button>
           )}
         </div>
@@ -950,17 +1256,27 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
               : 'bg-white/10 border border-white/25 text-white active:bg-white/20'
           )}
         >
-          Topped up during shift? {toppedUp ? 'Yes' : 'No'}
+          {decant ? 'Poured more from the drum?' : 'Topped up during shift?'} {toppedUp ? 'Yes' : 'No'}
         </button>
 
-        <p
-          className={cn(
-            'text-3xl sm:text-4xl font-bold tabular-nums text-center',
-            preview != null && preview < 0 ? 'text-amber-200' : 'text-white'
+        <div className="text-center">
+          {decant && (
+            <p className="text-xl text-blue-100 tabular-nums">
+              Poured from the drum: {amountText(open.poured_l + addedL, unitOf(selected))}
+              {leftInBottle == null
+                ? ''
+                : ` · Left in the bottle: ${amountText(leftInBottle, unitOf(selected))}`}
+            </p>
           )}
-        >
-          {preview == null ? 'Used: —' : `Used: ${formatOneDecimal(preview)} L`}
-        </p>
+          <p
+            className={cn(
+              'text-3xl sm:text-4xl font-bold tabular-nums',
+              preview != null && preview < 0 ? 'text-amber-200' : 'text-white'
+            )}
+          >
+            {preview == null ? 'Used: —' : `Used: ${amountText(preview, unitOf(selected))}`}
+          </p>
+        </div>
 
         <ScaleKeypad
           value={keypadValue}
@@ -972,49 +1288,6 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
             setError(null);
           }}
         />
-
-        <PlainError message={error} />
-
-        {highUsage ? (
-          <div className="w-full max-w-md rounded-3xl bg-amber-400 text-amber-950 p-5">
-            <p className="text-2xl font-bold text-center leading-snug">
-              That&apos;s much more than usual (avg {formatOneDecimal(highUsage.avg)} L/day). Is{' '}
-              {formatOneDecimal(highUsage.usedL)} L correct?
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void saveEnd(true)}
-                className="min-h-16 rounded-2xl bg-emerald-700 text-white text-xl font-bold active:bg-emerald-800 disabled:opacity-60 touch-manipulation"
-              >
-                {saving ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Yes, save'}
-              </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => {
-                  setHighUsage(null);
-                  setEndInput('');
-                  setActiveField('end');
-                  setError(null);
-                }}
-                className="min-h-16 rounded-2xl bg-white text-amber-950 text-xl font-bold active:bg-amber-50 disabled:opacity-60 touch-manipulation"
-              >
-                Re-weigh
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            disabled={saving || endKg == null}
-            onClick={() => void saveEnd(false)}
-            className="w-full max-w-md min-h-16 rounded-2xl bg-emerald-500 active:bg-emerald-600 text-white text-2xl font-bold disabled:opacity-40 disabled:bg-slate-600 touch-manipulation"
-          >
-            {saving ? <Loader2 className="w-7 h-7 animate-spin mx-auto" /> : 'Save'}
-          </button>
-        )}
       </div>
     );
   } else {
@@ -1040,7 +1313,7 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
           </div>
         )}
         {products == null && !loadError ? (
-          <Loader2 className="w-10 h-10 animate-spin mx-auto text-white" />
+          <ChemicalGridSkeleton />
         ) : products && products.length === 0 && !loadError ? (
           <p className="text-center text-xl text-blue-100">No chemicals to weigh tonight.</p>
         ) : (
@@ -1049,10 +1322,12 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
               const mode = tileMode(product);
               const stateText =
                 mode === 'done' && product.closed_today
-                  ? doneStateLabel(product.closed_today)
+                  ? doneStateLabel(product.closed_today, unitOf(product))
                   : mode === 'open' && product.open_weigh_in
                     ? openStateLabel(product.open_weigh_in)
-                    : 'Start weight needed';
+                    : isDecant(product)
+                  ? 'Weigh the bottle'
+                  : 'Start weight needed';
               return (
                 <button
                   key={product.id}
@@ -1070,17 +1345,28 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
                       'bg-emerald-600 border-emerald-300 text-white cursor-not-allowed disabled:opacity-100'
                   )}
                 >
-                  <span className="block text-2xl font-bold leading-tight">{product.name}</span>
-                  <span className="mt-1 block text-lg opacity-90">
-                    {formatContainer(product.container_size_l)} L
-                  </span>
-                  <span
-                    className={cn(
-                      'mt-3 block text-lg font-semibold',
-                      mode === 'needed' && 'text-slate-300'
-                    )}
-                  >
-                    {stateText}
+                  <span className="flex items-start gap-4">
+                    <ProductPhoto
+                      name={product.name}
+                      imageUrl={product.image_url}
+                      className="h-28 w-28 sm:h-32 sm:w-32 text-3xl"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-2xl font-bold leading-tight">{product.name}</span>
+                      <span className="mt-1 block text-lg opacity-90">
+                        {isDecant(product)
+                          ? `${formatContainer(product.issue_size_l)} ${unitOf(product)} bottle`
+                          : `${formatContainer(product.container_size_l)} ${unitOf(product)}`}
+                      </span>
+                      <span
+                        className={cn(
+                          'mt-3 block text-lg font-semibold',
+                          mode === 'needed' && 'text-slate-300'
+                        )}
+                      >
+                        {stateText}
+                      </span>
+                    </span>
                   </span>
                 </button>
               );
@@ -1113,6 +1399,54 @@ export default function ChemicalWeighScreen({ isKioskMode = false }: ChemicalWei
         </header>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">{main}</div>
+      {screen === 'end' && selected?.open_weigh_in && (
+        <div className="shrink-0 border-t border-white/15 bg-blue-950 px-4 py-3">
+          <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+            <PlainError message={error} />
+            {highUsage ? (
+              <div className="rounded-3xl bg-amber-400 p-4 text-amber-950">
+                <p className="text-center text-xl font-bold leading-snug">
+                  That&apos;s much more than usual (avg{' '}
+                  {amountText(highUsage.avg, selected ? unitOf(selected) : 'L')}/day). Is{' '}
+                  {amountText(highUsage.usedL, selected ? unitOf(selected) : 'L')} correct?
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void saveEnd(true)}
+                    className="min-h-16 rounded-2xl bg-emerald-700 text-xl font-bold text-white active:bg-emerald-800 disabled:opacity-60 touch-manipulation"
+                  >
+                    {saving ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Yes, save'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setHighUsage(null);
+                      setEndInput('');
+                      setActiveField('end');
+                      setError(null);
+                    }}
+                    className="min-h-16 rounded-2xl bg-white text-xl font-bold text-amber-950 active:bg-amber-50 disabled:opacity-60 touch-manipulation"
+                  >
+                    Re-weigh
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void saveEnd(false)}
+                className="w-full min-h-16 rounded-2xl bg-emerald-500 text-2xl font-bold text-white active:bg-emerald-600 disabled:opacity-60 touch-manipulation"
+              >
+                {saving ? <Loader2 className="w-7 h-7 animate-spin mx-auto" /> : 'Save'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

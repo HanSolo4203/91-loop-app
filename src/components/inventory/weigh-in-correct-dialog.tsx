@@ -19,10 +19,11 @@ import type { ChemicalWeighInWithEmployees } from '@/lib/services/inventory';
 import type { AdminUpdateWeighInRequest } from '@/lib/services/inventory';
 import {
   asNumber,
-  formatLitres,
+  formatQuantity,
   formatShiftDate,
-  formatSignedLitres,
+  formatSignedQuantity,
   previewUsedLitres,
+  stockUnit,
 } from '@/components/inventory/stock-display';
 
 interface WeighInCorrectDialogProps {
@@ -46,9 +47,9 @@ function parseAmount(value: string): number | null {
   return round3(parsed);
 }
 
-function formatPreview(litres: number | null): string {
-  if (litres == null) return '—';
-  return litres < 0 ? formatSignedLitres(litres) : formatLitres(litres);
+function formatPreview(amount: number | null, unit: unknown): string {
+  if (amount == null) return '—';
+  return amount < 0 ? formatSignedQuantity(amount, unit) : formatQuantity(amount, unit);
 }
 
 export default function WeighInCorrectDialog({
@@ -61,6 +62,7 @@ export default function WeighInCorrectDialog({
   const [startKg, setStartKg] = useState('');
   const [endKg, setEndKg] = useState('');
   const [addedL, setAddedL] = useState('');
+  const [pouredL, setPouredL] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -68,13 +70,17 @@ export default function WeighInCorrectDialog({
     if (!weighIn) return;
     setStartKg(String(asNumber(weighIn.start_kg)));
     setAddedL(String(asNumber(weighIn.added_l)));
+    setPouredL(String(asNumber(weighIn.poured_l)));
     setEndKg(weighIn.end_kg == null ? '' : String(asNumber(weighIn.end_kg)));
     setNotes(weighIn.notes ?? '');
     setError(null);
   }, [weighIn]);
 
+  const decant = weighIn?.product?.tracking_mode === 'decant';
+  const unit = stockUnit(weighIn?.product?.unit);
   const start = parseAmount(startKg);
   const added = parseAmount(addedL);
+  const poured = decant ? parseAmount(pouredL) : null;
   const end = endKg.trim() === '' ? null : parseAmount(endKg);
   const endInvalid = endKg.trim() !== '' && end == null;
   const density = weighIn?.product?.kg_per_litre ?? 1;
@@ -94,7 +100,13 @@ export default function WeighInCorrectDialog({
       return;
     }
     if (added == null) {
-      setError('Added litres must be 0 or more and below 1000');
+      setError(`Added ${unit === 'kg' ? 'kilograms' : 'litres'} must be 0 or more and below 1000`);
+      return;
+    }
+    if (decant && poured == null) {
+      setError(
+        `${unit === 'kg' ? 'Kilograms' : 'Litres'} poured from the drum must be 0 or more and below 1000`
+      );
       return;
     }
     if (endInvalid || (endKg.trim() !== '' && end == null)) {
@@ -111,6 +123,7 @@ export default function WeighInCorrectDialog({
       await onSave(weighIn.id, {
         start_kg: start,
         added_l: added,
+        ...(decant && poured != null ? { poured_l: poured } : {}),
         end_kg: end,
         notes: notes.trim() ? notes.trim() : null,
       });
@@ -153,8 +166,31 @@ export default function WeighInCorrectDialog({
                 required
               />
             </div>
+            {decant && (
+              <div className="space-y-2">
+                <Label htmlFor="weigh-in-poured">Poured from the drum ({unit})</Label>
+                <Input
+                  id="weigh-in-poured"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max="999.999"
+                  step="0.001"
+                  value={pouredL}
+                  onChange={(event) => setPouredL(event.target.value)}
+                  className={inputClass}
+                  disabled={pending}
+                  required
+                />
+                <p className="text-xs text-slate-500">
+                  Taken from the drum before the start weight. Usage still comes from the bottle weights.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="weigh-in-added">Added litres</Label>
+              <Label htmlFor="weigh-in-added">
+                {decant ? `Poured more during the shift (${unit})` : `Added ${unit === 'kg' ? 'kilograms' : 'litres'}`}
+              </Label>
               <Input
                 id="weigh-in-added"
                 type="number"
@@ -201,7 +237,7 @@ export default function WeighInCorrectDialog({
                 preview != null && preview >= 0 && 'text-slate-900'
               )}
             >
-              {formatPreview(preview)}
+              {formatPreview(preview, unit)}
             </p>
           </div>
           <div className="space-y-2">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -18,9 +19,10 @@ import {
   asNumber,
   formatContainerLine,
   formatDaysLeft,
-  formatLitres,
+  formatQuantity,
   formatWeighedAt,
   isArchived,
+  isDecantProduct,
   stockFillPercent,
   stockStatus,
   type StockStatus,
@@ -71,17 +73,19 @@ function FillBar({
   onHand,
   reorderLevel,
   status,
+  unit,
 }: {
   onHand: number;
   reorderLevel: number;
   status: StockStatus;
+  unit: unknown;
 }) {
   const percent = stockFillPercent(onHand, reorderLevel);
   const target = reorderLevel > 0 ? reorderLevel * 3 : onHand;
   return (
     <div
       className="h-2 w-full min-w-[4.5rem] max-w-[7rem] rounded-full bg-slate-200 overflow-hidden"
-      title={`${formatLitres(onHand)} of ${formatLitres(target)}`}
+      title={`${formatQuantity(onHand, unit)} of ${formatQuantity(target, unit)}`}
       role="meter"
       aria-valuemin={0}
       aria-valuemax={100}
@@ -241,26 +245,51 @@ function rowClass(product: ChemicalStockLevel, status: StockStatus): string {
   return '';
 }
 
+function productInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const second = parts.length > 1 ? parts[1]?.[0] ?? '' : parts[0]?.[1] ?? '';
+  return (first + second).toUpperCase() || '?';
+}
+
 function ProductName({ product, onOpen }: { product: ChemicalStockLevel; onOpen: () => void }) {
   return (
-    <div className="min-w-0">
-      <p className={cn('font-medium text-slate-900', isArchived(product) && 'text-slate-500')}>
-        <button
-          type="button"
-          onClick={onOpen}
-          className={cn(
-            'rounded-sm text-left hover:text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-            isArchived(product) && 'text-slate-500'
+    <div className="flex min-w-0 items-center gap-3">
+      {product.image_url ? (
+        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md">
+          <Image
+            src={product.image_url}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="40px"
+          />
+        </div>
+      ) : (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-100 text-sm font-medium text-slate-600">
+          {productInitials(product.name)}
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className={cn('font-medium text-slate-900', isArchived(product) && 'text-slate-500')}>
+          <button
+            type="button"
+            onClick={onOpen}
+            className={cn(
+              'rounded-sm text-left hover:text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+              isArchived(product) && 'text-slate-500'
+            )}
+          >
+            {product.name}
+          </button>
+          {isArchived(product) && (
+            <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Archived
+            </span>
           )}
-        >
-          {product.name}
-        </button>
-        {isArchived(product) && (
-          <span className="ml-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            Archived
-          </span>
-        )}
-      </p>
+        </p>
+      </div>
     </div>
   );
 }
@@ -277,23 +306,50 @@ function StockFacts({ product, status }: { product: ChemicalStockLevel; status: 
             isArchived(product) ? 'text-slate-500' : 'text-slate-900'
           )}
         >
-          {formatLitres(onHand)}
+          {formatQuantity(onHand, product.unit)}
         </p>
         <p className="mt-1 text-sm text-slate-600">
-          {formatContainerLine(product.containers_on_hand, product.container_size_l)}
+          {formatContainerLine(
+            isDecantProduct(product) && product.drum_l != null && asNumber(product.container_size_l) > 0
+              ? asNumber(product.drum_l) / asNumber(product.container_size_l)
+              : product.containers_on_hand,
+            product.container_size_l,
+            product.unit
+          )}
         </p>
+        {isDecantProduct(product) && (
+          <p className="mt-1 text-sm text-slate-600">
+            In drums {formatQuantity(product.drum_l, product.unit)} · In the bottle{' '}
+            {formatQuantity(product.jug_l, product.unit)}
+          </p>
+        )}
       </div>
-      <FillBar onHand={onHand} reorderLevel={reorder} status={status} />
+      <FillBar onHand={onHand} reorderLevel={reorder} status={status} unit={product.unit} />
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
         <dt className="text-slate-500">Reorder at</dt>
-        <dd className="text-right tabular-nums">{formatLitres(reorder)}</dd>
+        <dd className="text-right tabular-nums">{formatQuantity(reorder, product.unit)}</dd>
         <dt className="text-slate-500">Avg use / day</dt>
-        <dd className="text-right tabular-nums">{formatLitres(product.avg_daily_use_l_14d)}</dd>
+        <dd className="text-right tabular-nums">{formatQuantity(product.avg_daily_use_l_14d, product.unit)}</dd>
         <dt className="text-slate-500">Days left</dt>
         <dd className="text-right tabular-nums">{formatDaysLeft(product.days_left)}</dd>
         <dt className="text-slate-500">Last weighed</dt>
         <dd className="text-right">{formatWeighedAt(product.last_weighed_at)}</dd>
       </dl>
+    </div>
+  );
+}
+
+export function StockTableSkeleton() {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-label="Loading stock">
+      <div className="hidden sm:grid grid-cols-6 gap-3 px-2 py-2">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div key={index} className="h-3 rounded bg-slate-200 animate-pulse" />
+        ))}
+      </div>
+      {Array.from({ length: 6 }, (_, index) => (
+        <div key={index} className="h-14 rounded-md bg-slate-100 animate-pulse" />
+      ))}
     </div>
   );
 }
@@ -376,24 +432,40 @@ export default function StockTable({
                         isArchived(product) ? 'text-slate-500' : 'text-slate-900'
                       )}
                     >
-                      {formatLitres(onHand)}
+                      {formatQuantity(onHand, product.unit)}
                     </span>
+                    {isDecantProduct(product) && (
+                      <p className="text-xs text-slate-500 tabular-nums">
+                        In drums {formatQuantity(product.drum_l, product.unit)}
+                        <br />
+                        In the bottle {formatQuantity(product.jug_l, product.unit)}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell className="tabular-nums whitespace-nowrap">
-                    {formatContainerLine(product.containers_on_hand, product.container_size_l)}
+                    {formatContainerLine(
+                      isDecantProduct(product) &&
+                        product.drum_l != null &&
+                        asNumber(product.container_size_l) > 0
+                        ? asNumber(product.drum_l) / asNumber(product.container_size_l)
+                        : product.containers_on_hand,
+                      product.container_size_l,
+                      product.unit
+                    )}
                   </TableCell>
                   <TableCell>
                     <FillBar
                       onHand={onHand}
                       reorderLevel={asNumber(product.reorder_level_l)}
                       status={status}
+                      unit={product.unit}
                     />
                   </TableCell>
                   <TableCell className="text-right tabular-nums whitespace-nowrap">
-                    {formatLitres(product.reorder_level_l)}
+                    {formatQuantity(product.reorder_level_l, product.unit)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums whitespace-nowrap">
-                    {formatLitres(product.avg_daily_use_l_14d)}
+                    {formatQuantity(product.avg_daily_use_l_14d, product.unit)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatDaysLeft(product.days_left)}

@@ -12,7 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { UsageByDayRow } from '@/lib/services/inventory';
-import { eachIsoDate, formatDayTick, formatLitres } from '@/components/inventory/stock-display';
+import { eachIsoDate, formatDayTick, formatQuantity, stockUnit } from '@/components/inventory/stock-display';
 
 const COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#ea580c'];
 
@@ -33,8 +33,10 @@ export default function UsageChart({ rows, from, to, productId }: UsageChartProp
   const model = useMemo(() => {
     const filtered = productId ? rows.filter((row) => row.product_id === productId) : rows;
     const names = new Map<string, string>();
+    const units = new Map<string, ReturnType<typeof stockUnit>>();
     for (const row of filtered) {
       names.set(row.product_id, row.product_name);
+      units.set(row.product_id, stockUnit(row.unit));
     }
     const products = [...names.entries()].sort((a, b) =>
       a[1].localeCompare(b[1], 'en', { sensitivity: 'base' })
@@ -58,7 +60,7 @@ export default function UsageChart({ rows, from, to, productId }: UsageChartProp
       }
       return point;
     });
-    return { products, data };
+    return { products, data, units };
   }, [rows, from, to, productId]);
 
   if (model.products.length === 0) {
@@ -78,7 +80,13 @@ export default function UsageChart({ rows, from, to, productId }: UsageChartProp
             interval={model.data.length > 20 ? 'preserveStartEnd' : 0}
           />
           <YAxis tick={{ fontSize: 12, fill: '#475569' }} width={48} />
-          <Tooltip formatter={(value) => formatLitres(Number(value))} />
+          <Tooltip
+            formatter={(value, _name, item) => {
+              const key =
+                item && typeof item === 'object' && 'dataKey' in item ? String(item.dataKey) : '';
+              return formatQuantity(Number(value), model.units.get(key));
+            }}
+          />
           <Legend />
           {model.products.map(([id, name], index) => (
             <Bar

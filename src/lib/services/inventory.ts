@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { densityForUnit, stockUnit, type StockUnit } from '@/lib/chemical-unit';
 import { supabaseAdmin } from '@/lib/supabase';
 import type {
   ChemicalMovementType,
@@ -61,8 +62,16 @@ export interface CreateProductRequest {
   notes?: string | null;
   is_active?: boolean;
   sort_order?: number;
+  tracking_mode?: 'container' | 'decant';
+  issue_size_l?: number;
+  /** L for liquids. kg for powders. */
+  unit?: StockUnit;
+  /** Litres in the working bottle right now. Sets the bottle baseline. */
+  jug_baseline_l?: number | null;
   /** Litres already on hand. Writes an opening_balance movement when greater than 0. */
   opening_stock_l?: number | null;
+  /** Public photo URL. Blank clears the photo. */
+  image_url?: string | null;
 }
 
 export interface UpdateProductRequest {
@@ -76,6 +85,13 @@ export interface UpdateProductRequest {
   notes?: string | null;
   is_active?: boolean;
   sort_order?: number;
+  tracking_mode?: 'container' | 'decant';
+  issue_size_l?: number;
+  unit?: StockUnit;
+  /** Litres in the working bottle right now. Resets the bottle baseline. */
+  jug_baseline_l?: number | null;
+  /** Public photo URL. Blank clears the photo. */
+  image_url?: string | null;
 }
 
 export interface RecordDeliveryRequest {
@@ -105,6 +121,8 @@ export interface AdminUpdateWeighInRequest {
   start_kg?: number;
   end_kg?: number | null;
   added_l?: number;
+  /** Litres poured from the drum before the start weight. Not part of the usage formula. */
+  poured_l?: number;
   notes?: string | null;
 }
 
@@ -119,6 +137,8 @@ export interface ChemicalWeighInProduct {
   id: string;
   name: string;
   kg_per_litre: number;
+  tracking_mode: 'container' | 'decant';
+  unit: StockUnit;
 }
 
 export interface ChemicalWeighInWithEmployees extends ChemicalWeighIn {
@@ -129,6 +149,7 @@ export interface ChemicalWeighInWithEmployees extends ChemicalWeighIn {
 
 export interface ChemicalMovementListItem extends ChemicalStockMovement {
   product_name: string;
+  unit: StockUnit;
   /** Admin email. Usage rows prefer the employee who recorded the weigh-in. */
   recorded_by: string | null;
 }
@@ -138,6 +159,7 @@ export interface UsageByDayRow {
   product_name: string;
   shift_date: string;
   litres: number;
+  unit: StockUnit;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -215,6 +237,23 @@ function assertLitreAmount(litres: number) {
   }
 }
 
+function assertIssueSize(litres: number) {
+  if (!Number.isFinite(litres) || litres <= 0 || litres >= 1000) {
+    throw new InventoryServiceError(
+      'Pour size must be greater than 0 and below 1000 L',
+      'VALIDATION_ERROR',
+      400
+    );
+  }
+}
+
+function assertTrackingMode(mode: string): 'container' | 'decant' {
+  if (mode !== 'container' && mode !== 'decant') {
+    throw new InventoryServiceError('Tracking mode is not valid', 'VALIDATION_ERROR', 400);
+  }
+  return mode;
+}
+
 function todayInJohannesburg(): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Africa/Johannesburg',
@@ -239,13 +278,21 @@ function oneEmployee(value: unknown): EmployeeName | null {
 function oneProduct(value: unknown): ChemicalWeighInProduct | null {
   const row = Array.isArray(value) ? value[0] : value;
   if (!row || typeof row !== 'object') return null;
-  const product = row as { id?: string; name?: string | null; kg_per_litre?: number | string | null };
+  const product = row as {
+    id?: string;
+    name?: string | null;
+    kg_per_litre?: number | string | null;
+    tracking_mode?: string | null;
+    unit?: string | null;
+  };
   if (!product.id) return null;
-  const density = Number(product.kg_per_litre);
+  const unit = stockUnit(product.unit);
   return {
     id: product.id,
     name: product.name?.trim() || 'Unknown product',
-    kg_per_litre: Number.isFinite(density) && density > 0 ? density : 1,
+    kg_per_litre: densityForUnit(unit, Number(product.kg_per_litre)),
+    tracking_mode: product.tracking_mode === 'decant' ? 'decant' : 'container',
+    unit,
   };
 }
 
@@ -334,6 +381,51 @@ async function countForProduct(
   return count ?? 0;
 }
 
+async function assertNoOpenWeighIn(productId: string) {
+  const open = await countOpenWeighIns(productId);
+  if (open > 0) {
+    throw new InventoryServiceError(
+      'Close the open weigh-in before changing litres in the bottle.',
+      'WEIGH_IN_OPEN',
+      409
+    );
+  }
+}
+
+async function countOpenWeighIns(productId: string): Promise<number> {
+  const { count, error } = await supabaseAdmin
+    .from('chemical_weigh_ins')
+    .select('id', { count: 'exact', head: true })
+    .eq('product_id', productId)
+    .eq('status', 'open');
+
+  if (error) {
+    throw new InventoryServiceError(
+      `Failed to check open weigh-ins: ${error.message}`,
+      'FETCH_ERROR',
+      500
+    );
+  }
+  return count ?? 0;
+}
+
+async function readOnHandLitres(productId: string): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('chemical_stock_levels')
+    .select('on_hand_l')
+    .eq('id', productId)
+    .maybeSingle();
+
+  if (error) {
+    throw new InventoryServiceError(
+      `Failed to fetch stock on hand: ${error.message}`,
+      'FETCH_ERROR',
+      500
+    );
+  }
+  return round3(Number(data?.on_hand_l ?? 0));
+}
+
 async function archiveProduct(id: string): Promise<void> {
   const { data, error } = await supabaseAdmin
     .from('chemical_products')
@@ -410,6 +502,28 @@ export async function createProduct(
       assertLitreAmount(openingLitres);
     }
 
+    const unit = stockUnit(input.unit);
+    const trackingMode =
+      input.tracking_mode === undefined ? 'container' : assertTrackingMode(input.tracking_mode);
+    let issueSize: number | undefined;
+    if (input.issue_size_l !== undefined) {
+      issueSize = round2(input.issue_size_l);
+      assertIssueSize(issueSize);
+    }
+    let jugBaseline: number | undefined;
+    if (trackingMode === 'decant') {
+      jugBaseline = round3(input.jug_baseline_l ?? 0);
+      assertLitreAmount(jugBaseline);
+      const opening = openingLitres ?? 0;
+      if (jugBaseline > opening) {
+        throw new InventoryServiceError(
+          'Litres in the bottle cannot be more than opening stock',
+          'VALIDATION_ERROR',
+          400
+        );
+      }
+    }
+
     await assertUniqueName(name);
 
     const { data, error } = await supabaseAdmin
@@ -423,10 +537,16 @@ export async function createProduct(
         reorder_qty_containers: input.reorder_qty_containers,
         cost_per_container:
           input.cost_per_container == null ? input.cost_per_container : round2(input.cost_per_container),
-        kg_per_litre: input.kg_per_litre,
+        kg_per_litre: unit === 'kg' ? 1 : input.kg_per_litre,
         notes: blankToNull(input.notes),
         is_active: input.is_active,
         sort_order: input.sort_order,
+        tracking_mode: trackingMode,
+        unit,
+        issue_size_l: issueSize,
+        jug_baseline_l: jugBaseline,
+        jug_baseline_at: trackingMode === 'decant' ? new Date().toISOString() : undefined,
+        image_url: blankToNull(input.image_url),
       })
       .select()
       .single();
@@ -514,9 +634,40 @@ export async function updateProduct(
         input.cost_per_container == null ? null : round2(input.cost_per_container);
     }
     if (input.kg_per_litre !== undefined) update.kg_per_litre = input.kg_per_litre;
+    if (input.unit !== undefined) update.unit = stockUnit(input.unit);
     if (input.notes !== undefined) update.notes = blankToNull(input.notes);
     if (input.is_active !== undefined) update.is_active = input.is_active;
     if (input.sort_order !== undefined) update.sort_order = input.sort_order;
+    if (input.tracking_mode !== undefined) {
+      update.tracking_mode = assertTrackingMode(input.tracking_mode);
+    }
+    if (input.issue_size_l !== undefined) {
+      const issueSize = round2(input.issue_size_l);
+      assertIssueSize(issueSize);
+      update.issue_size_l = issueSize;
+    }
+    if (input.image_url !== undefined) update.image_url = blankToNull(input.image_url);
+
+    const nextUnit = stockUnit((update.unit as string | undefined) ?? existing.unit);
+    if (nextUnit === 'kg') update.kg_per_litre = 1;
+
+    const nextMode = (update.tracking_mode as string | undefined) ?? existing.tracking_mode;
+    const enablingDecant = nextMode === 'decant' && existing.tracking_mode !== 'decant';
+    if (input.jug_baseline_l !== undefined || enablingDecant) {
+      await assertNoOpenWeighIn(id);
+      const jugBaseline = round3(input.jug_baseline_l ?? 0);
+      assertLitreAmount(jugBaseline);
+      const onHand = await readOnHandLitres(id);
+      if (jugBaseline > onHand) {
+        throw new InventoryServiceError(
+          'Litres in the bottle cannot be more than stock on hand',
+          'VALIDATION_ERROR',
+          400
+        );
+      }
+      update.jug_baseline_l = jugBaseline;
+      update.jug_baseline_at = new Date().toISOString();
+    }
 
     if (Object.keys(update).length === 0) {
       throw new InventoryServiceError('At least one field is required', 'VALIDATION_ERROR', 400);
@@ -753,7 +904,7 @@ export async function listMovements(
       .from('chemical_stock_movements')
       .select(`
         *,
-        product:chemical_products!chemical_stock_movements_product_id_fkey(name),
+        product:chemical_products!chemical_stock_movements_product_id_fkey(name, unit),
         weigh_in:chemical_weigh_ins!chemical_stock_movements_weigh_in_id_fkey(
           start_employee:employees!chemical_weigh_ins_start_employee_id_fkey(full_name),
           end_employee:employees!chemical_weigh_ins_end_employee_id_fkey(full_name)
@@ -808,9 +959,13 @@ export async function listMovements(
       const email = typeof row.created_by === 'string' ? emails.get(row.created_by) ?? null : null;
       const recordedBy =
         row.movement_type === 'usage' ? usageEmployeeName(weigh_in) ?? email : email;
+      const productRow = Array.isArray(product) ? product[0] : product;
+      const productUnit =
+        productRow && typeof productRow === 'object' ? (productRow as { unit?: unknown }).unit : null;
       return {
         ...(movement as ChemicalStockMovement),
         product_name: embedLabel(product) ?? 'Unknown product',
+        unit: stockUnit(productUnit),
         recorded_by: recordedBy,
       };
     });
@@ -836,7 +991,7 @@ export async function listWeighIns(
       .from('chemical_weigh_ins')
       .select(`
         *,
-        product:chemical_products!chemical_weigh_ins_product_id_fkey(id, name, kg_per_litre),
+        product:chemical_products!chemical_weigh_ins_product_id_fkey(id, name, kg_per_litre, tracking_mode, unit),
         start_employee:employees!chemical_weigh_ins_start_employee_id_fkey(id, full_name),
         end_employee:employees!chemical_weigh_ins_end_employee_id_fkey(id, full_name)
       `)
@@ -984,6 +1139,10 @@ export async function adminUpdateWeighIn(
     const addedL = round3(
       input.added_l !== undefined ? input.added_l : Number(weighIn.added_l)
     );
+    const pouredL = round3(
+      input.poured_l !== undefined ? input.poured_l : Number(weighIn.poured_l ?? 0)
+    );
+    if (input.poured_l !== undefined) assertLitreAmount(pouredL);
     const endKg =
       input.end_kg !== undefined
         ? input.end_kg == null
@@ -997,14 +1156,7 @@ export async function adminUpdateWeighIn(
     let usedKg: number | null = null;
     let usedL: number | null = null;
     if (isClosed) {
-      const kgPerLitre = Number(product.kg_per_litre);
-      if (!Number.isFinite(kgPerLitre) || kgPerLitre <= 0) {
-        throw new InventoryServiceError(
-          'Product is missing a valid kg per litre',
-          'VALIDATION_ERROR',
-          400
-        );
-      }
+      const kgPerLitre = densityForUnit(product.unit, Number(product.kg_per_litre));
       usedKg = round3(startKg + addedL * kgPerLitre - Number(endKg));
       usedL = round3(usedKg / kgPerLitre);
       if (!Number.isFinite(usedKg) || Math.abs(usedKg) > 99999.999 || Math.abs(usedL) > 99999.999) {
@@ -1027,6 +1179,7 @@ export async function adminUpdateWeighIn(
     };
     if (input.start_kg !== undefined) update.start_kg = startKg;
     if (input.added_l !== undefined) update.added_l = addedL;
+    if (input.poured_l !== undefined) update.poured_l = pouredL;
     if (input.notes !== undefined) update.notes = blankToNull(input.notes);
     if (input.end_kg !== undefined) update.end_kg = endKg;
 
@@ -1108,7 +1261,7 @@ export async function getUsageByDay(
         product_id,
         shift_date,
         used_l,
-        product:chemical_products!chemical_weigh_ins_product_id_fkey(name)
+        product:chemical_products!chemical_weigh_ins_product_id_fkey(name, unit)
       `)
       .eq('status', 'closed')
       .not('used_l', 'is', null)
@@ -1133,6 +1286,7 @@ export async function getUsageByDay(
         product_name: product?.name ?? 'Unknown product',
         shift_date: row.shift_date,
         litres: round3(Number(row.used_l ?? 0)),
+        unit: stockUnit(product?.unit),
       };
     });
 

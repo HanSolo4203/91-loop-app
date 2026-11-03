@@ -21,9 +21,11 @@ import {
   formatActorWhen,
   formatDayTick,
   formatKg,
-  formatLitres,
+  formatQuantity,
   formatShiftDate,
-  formatSignedLitres,
+  isDecantProduct,
+  formatSignedQuantity,
+  stockUnit,
   isUnclosedWeighIn,
   johannesburgDate,
 } from '@/components/inventory/stock-display';
@@ -111,7 +113,10 @@ export default function ProductHistorySheet({ product, onOpenChange }: ProductHi
         <SheetHeader className="pr-8 text-left">
           <SheetTitle>{product?.name ?? 'Product'}</SheetTitle>
           <SheetDescription>
-            Last 30 days. On hand now {product ? formatLitres(product.on_hand_l) : '—'}.
+            Last 30 days. On hand now {product ? formatQuantity(product.on_hand_l, product.unit) : '—'}
+            {product && isDecantProduct(product)
+              ? `. In drums ${formatQuantity(product.drum_l, product.unit)}. In the bottle ${formatQuantity(product.jug_l, product.unit)}.`
+              : '.'}
           </SheetDescription>
         </SheetHeader>
 
@@ -128,7 +133,7 @@ export default function ProductHistorySheet({ product, onOpenChange }: ProductHi
                 </Button>
               </div>
             ) : (
-              <OnHandChart points={points} />
+              <OnHandChart points={points} unit={stockUnit(product?.unit)} />
             )}
           </section>
 
@@ -159,7 +164,7 @@ export default function ProductHistorySheet({ product, onOpenChange }: ProductHi
                           litres < 0 && 'text-red-700'
                         )}
                       >
-                        {formatSignedLitres(litres)}
+                        {formatSignedQuantity(litres, product?.unit)}
                       </p>
                     </li>
                   );
@@ -190,12 +195,17 @@ export default function ProductHistorySheet({ product, onOpenChange }: ProductHi
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-sm font-medium text-slate-900">{formatShiftDate(row.shift_date)}</p>
                         <p className="text-sm tabular-nums text-slate-700">
-                          {row.used_l == null ? '—' : formatLitres(row.used_l)}
+                          {row.used_l == null ? '—' : formatQuantity(row.used_l, row.product?.unit ?? product?.unit)}
                         </p>
                       </div>
                       <p className="mt-1 text-xs text-slate-500">
                         Start {formatKg(row.start_kg)} · {formatActorWhen(row.start_employee?.full_name, row.start_recorded_at)}
                       </p>
+                      {asNumber(row.poured_l) > 0 && (
+                        <p className="text-xs text-slate-500">
+                          Poured {formatQuantity(row.poured_l, row.product?.unit ?? product?.unit)} from the drum
+                        </p>
+                      )}
                       <p className="text-xs text-slate-500">
                         End {row.end_kg == null ? '—' : formatKg(row.end_kg)} ·{' '}
                         {formatActorWhen(row.end_employee?.full_name, row.end_recorded_at)}

@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
+import { drumPourLimitMessage, pourToFillBottle } from '@/lib/chemical-decant';
+import { densityForUnit, stockUnit, type StockUnit } from '@/lib/chemical-unit';
 import { supabaseAdmin } from '@/lib/supabase';
 import { formatSastTime, getSastDateString } from '@/lib/clocking-utils';
 import { validateSchemaSafe } from '@/lib/validation/schemas';
 import type { ChemicalWeighIn } from '@/types/database';
 
 const ALREADY_WEIGHED = 'Already weighed today — ask an admin to correct it';
-const END_ABOVE_START =
-  'End weight is higher than start weight. If you topped up the container, enter how many litres you added.';
+function endAboveStartMessage(unit: StockUnit): string {
+  const noun = unit === 'kg' ? 'kilograms' : 'litres';
+  return `End weight is higher than start weight. If you topped up the container, enter how many ${noun} you added.`;
+}
 
 export class KioskChemicalError extends Error {
   readonly statusCode: number;
@@ -44,6 +48,8 @@ export type KioskOpenWeighIn = {
   id: string;
   start_kg: number;
   added_l: number;
+  /** Litres taken from the drum to fill the bottle. Already included in start_kg. */
+  poured_l: number;
   start_employee_name: string;
   start_recorded_at: string;
 };
@@ -57,11 +63,20 @@ export type KioskClosedToday = {
 export type KioskChemicalProduct = {
   id: string;
   name: string;
+  image_url: string | null;
   container_size_l: number;
   sort_order: number;
-  avg_daily_use_l_14d: number;
-  /** Used only to preview litres. Not shown on the kiosk. */
+  /** Used only to preview the stock quantity. Not shown on the kiosk. */
   kg_per_litre: number;
+  /** Stock unit. Scale weights stay in kilograms. */
+  unit: StockUnit;
+  tracking_mode: 'container' | 'decant';
+  /** Bottle size the morning pour fills, in litres. */
+  issue_size_l: number;
+  /** Litres in the working bottle, including an open pour. */
+  jug_l: number;
+  /** Litres still in the drums. Null for container products. */
+  drum_l: number | null;
   suggested_start_kg: number | null;
   open_weigh_in: KioskOpenWeighIn | null;
   closed_today: KioskClosedToday | null;
@@ -74,6 +89,7 @@ type OpenRow = {
   product_id: string;
   start_kg: number | string;
   added_l: number | string;
+  poured_l: number | string;
   start_recorded_at: string;
   start_employee: NameEmbed;
 };
@@ -85,14 +101,28 @@ type ClosedTodayRow = {
   end_employee: NameEmbed;
 };
 
-type StockLevelRow = {
+type ProductRow = {
   id: string;
   name: string;
+  image_url: string | null;
   container_size_l: number | string;
   sort_order: number | string;
-  avg_daily_use_l_14d: number | string | null;
   kg_per_litre: number | string | null;
+  unit: string | null;
+  tracking_mode: string | null;
+  issue_size_l: number | string | null;
   is_active: boolean | string;
+};
+
+type BalanceRow = {
+  id: string;
+  jug_l: number | string | null;
+  drum_l: number | string | null;
+};
+
+type LastEndRow = {
+  product_id: string;
+  end_kg: number | string | null;
 };
 
 function round3(value: number): number {
@@ -156,55 +186,39 @@ function isActiveFlag(value: unknown): boolean {
   return value === true || value === 'true' || value === 't';
 }
 
+function isDecantMode(value: unknown): boolean {
+  return value === 'decant';
+}
+
+function assertPourFitsDrum(pouredL: number, drumL: number, unit: StockUnit) {
+  const message = drumPourLimitMessage(pouredL, drumL, unit);
+  if (message) throw new KioskChemicalError(message, 400);
+}
+
 function serializeWeighIn(row: ChemicalWeighIn): ChemicalWeighIn {
   return {
     ...row,
     start_kg: numberOrZero(row.start_kg),
     added_l: numberOrZero(row.added_l),
+    poured_l: numberOrZero(row.poured_l),
     end_kg: row.end_kg == null ? null : numberOrZero(row.end_kg),
     used_kg: row.used_kg == null ? null : numberOrZero(row.used_kg),
     used_l: row.used_l == null ? null : numberOrZero(row.used_l),
   };
 }
 
-async function suggestedStartKg(productId: string): Promise<number | null> {
-  const { data, error } = await supabaseAdmin
-    .from('chemical_weigh_ins')
-    .select('end_kg')
-    .eq('product_id', productId)
-    .eq('status', 'closed')
-    .order('shift_date', { ascending: false })
-    .order('end_recorded_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to fetch last closed weigh-in: ${error.message}`);
-  }
-  if (!data || data.end_kg == null) return null;
-  return round3(requiredNumber(data.end_kg, 'end weight'));
-}
-
 export async function listKioskChemicals(): Promise<KioskChemicalProduct[]> {
   const today = getSastDateString();
 
-  const { data, error } = await supabaseAdmin
-    .from('chemical_stock_levels')
-    .select('id, name, container_size_l, sort_order, avg_daily_use_l_14d, kg_per_litre, is_active')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
-
-  if (error) {
-    throw new Error(`Failed to fetch chemicals: ${error.message}`);
-  }
-
-  const products = ((data ?? []) as StockLevelRow[]).filter((row) => isActiveFlag(row.is_active));
-  if (products.length === 0) return [];
-
-  const productIds = products.map((product) => product.id);
-
-  const [openResult, closedResult, suggested] = await Promise.all([
+  const [productsResult, openResult, closedResult, lastEndResult, balanceResult] = await Promise.all([
+    supabaseAdmin
+      .from('chemical_products')
+      .select(
+        'id, name, image_url, container_size_l, sort_order, kg_per_litre, unit, is_active, tracking_mode, issue_size_l'
+      )
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true }),
     supabaseAdmin
       .from('chemical_weigh_ins')
       .select(`
@@ -212,11 +226,11 @@ export async function listKioskChemicals(): Promise<KioskChemicalProduct[]> {
         product_id,
         start_kg,
         added_l,
+        poured_l,
         start_recorded_at,
         start_employee:employees!chemical_weigh_ins_start_employee_id_fkey(full_name)
       `)
       .eq('status', 'open')
-      .in('product_id', productIds)
       .order('start_recorded_at', { ascending: false }),
     supabaseAdmin
       .from('chemical_weigh_ins')
@@ -227,46 +241,85 @@ export async function listKioskChemicals(): Promise<KioskChemicalProduct[]> {
         end_employee:employees!chemical_weigh_ins_end_employee_id_fkey(full_name)
       `)
       .eq('status', 'closed')
-      .eq('shift_date', today)
-      .in('product_id', productIds),
-    Promise.all(products.map(async (product) => [product.id, await suggestedStartKg(product.id)] as const)),
+      .eq('shift_date', today),
+    supabaseAdmin.from('chemical_last_end_kg').select('product_id, end_kg'),
+    supabaseAdmin.from('chemical_kiosk_stock').select('id, jug_l, drum_l'),
   ]);
 
+  if (productsResult.error) {
+    throw new Error(`Failed to fetch chemicals: ${productsResult.error.message}`);
+  }
   if (openResult.error) {
     throw new Error(`Failed to fetch open weigh-ins: ${openResult.error.message}`);
   }
   if (closedResult.error) {
     throw new Error(`Failed to fetch today's weigh-ins: ${closedResult.error.message}`);
   }
+  if (lastEndResult.error) {
+    throw new Error(`Failed to fetch last end weights: ${lastEndResult.error.message}`);
+  }
+  if (balanceResult.error) {
+    throw new Error(`Failed to fetch jug and drum stock: ${balanceResult.error.message}`);
+  }
+
+  const products = ((productsResult.data ?? []) as ProductRow[]).filter((row) =>
+    isActiveFlag(row.is_active)
+  );
+  if (products.length === 0) return [];
+
+  const productIds = new Set(products.map((product) => product.id));
 
   const openByProduct = new Map<string, OpenRow>();
   for (const row of (openResult.data ?? []) as unknown as OpenRow[]) {
-    if (!openByProduct.has(row.product_id)) openByProduct.set(row.product_id, row);
+    if (!productIds.has(row.product_id) || openByProduct.has(row.product_id)) continue;
+    openByProduct.set(row.product_id, row);
   }
 
   const closedByProduct = new Map<string, ClosedTodayRow>();
   for (const row of (closedResult.data ?? []) as unknown as ClosedTodayRow[]) {
-    if (!closedByProduct.has(row.product_id)) closedByProduct.set(row.product_id, row);
+    if (!productIds.has(row.product_id) || closedByProduct.has(row.product_id)) continue;
+    closedByProduct.set(row.product_id, row);
   }
 
-  const suggestedByProduct = new Map<string, number | null>(suggested);
+  const lastEndByProduct = new Map<string, number>();
+  for (const row of (lastEndResult.data ?? []) as LastEndRow[]) {
+    if (!productIds.has(row.product_id) || row.end_kg == null) continue;
+    lastEndByProduct.set(row.product_id, round3(requiredNumber(row.end_kg, 'end weight')));
+  }
 
-  const rows = products.map((product) => {
+  const balanceByProduct = new Map<string, BalanceRow>();
+  for (const row of (balanceResult.data ?? []) as BalanceRow[]) {
+    balanceByProduct.set(row.id, row);
+  }
+
+  const rows: KioskChemicalProduct[] = products.map((product) => {
     const open = openByProduct.get(product.id);
     const closed = closedByProduct.get(product.id);
+    const balance = balanceByProduct.get(product.id);
+    const trackingMode: KioskChemicalProduct['tracking_mode'] = isDecantMode(product.tracking_mode)
+      ? 'decant'
+      : 'container';
+    const unit = stockUnit(product.unit);
     return {
       id: product.id,
       name: product.name,
+      image_url: product.image_url?.trim() ? product.image_url : null,
       container_size_l: round3(numberOrZero(product.container_size_l)),
       sort_order: numberOrZero(product.sort_order),
-      avg_daily_use_l_14d: round3(numberOrZero(product.avg_daily_use_l_14d)),
-      kg_per_litre: round3(numberOrZero(product.kg_per_litre)) || 1,
-      suggested_start_kg: suggestedByProduct.get(product.id) ?? null,
+      kg_per_litre: densityForUnit(unit, numberOrZero(product.kg_per_litre)),
+      unit,
+      tracking_mode: trackingMode,
+      issue_size_l: round3(numberOrZero(product.issue_size_l)) || 5,
+      jug_l: round3(numberOrZero(balance?.jug_l)),
+      drum_l: trackingMode === 'decant' ? round3(numberOrZero(balance?.drum_l)) : null,
+      suggested_start_kg:
+        trackingMode === 'decant' ? null : lastEndByProduct.get(product.id) ?? null,
       open_weigh_in: open
         ? {
             id: open.id,
             start_kg: round3(numberOrZero(open.start_kg)),
             added_l: round3(numberOrZero(open.added_l)),
+            poured_l: round3(numberOrZero(open.poured_l)),
             start_employee_name: firstName(embeddedFullName(open.start_employee)),
             start_recorded_at: open.start_recorded_at,
           }
@@ -290,10 +343,16 @@ export async function listKioskChemicals(): Promise<KioskChemicalProduct[]> {
   return rows;
 }
 
-async function getActiveProduct(productId: string): Promise<{ id: string }> {
+async function getActiveProduct(productId: string): Promise<{
+  id: string;
+  tracking_mode: string;
+  issue_size_l: number;
+  kg_per_litre: number;
+  unit: StockUnit;
+}> {
   const { data, error } = await supabaseAdmin
     .from('chemical_products')
-    .select('id, is_active')
+    .select('id, is_active, tracking_mode, issue_size_l, kg_per_litre, unit')
     .eq('id', productId)
     .maybeSingle();
 
@@ -303,7 +362,27 @@ async function getActiveProduct(productId: string): Promise<{ id: string }> {
   if (!data || !isActiveFlag(data.is_active)) {
     throw new KioskChemicalError('Product not found', 404);
   }
-  return { id: data.id };
+  const unit = stockUnit(data.unit);
+  return {
+    id: data.id,
+    tracking_mode: data.tracking_mode,
+    issue_size_l: round3(numberOrZero(data.issue_size_l)) || 5,
+    kg_per_litre: densityForUnit(unit, numberOrZero(data.kg_per_litre)),
+    unit,
+  };
+}
+
+async function readDrumLitres(productId: string): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('chemical_stock_levels')
+    .select('drum_l')
+    .eq('id', productId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch drum stock: ${error.message}`);
+  }
+  return round3(numberOrZero(data?.drum_l));
 }
 
 async function assertWeighInCanStart(productId: string, today: string): Promise<void> {
@@ -367,12 +446,31 @@ async function assertWeighInCanStart(productId: string, today: string): Promise<
 export async function startKioskWeighIn(input: {
   employeeId: string;
   productId: string;
+  /** Decant: bottle weight before filling. Container: start weight. */
   startKg: number;
+  /** Ignored. A decant pour is calculated from the bottle weight. */
+  pouredL?: number;
   notes?: string | null;
 }): Promise<ChemicalWeighIn> {
   const product = await getActiveProduct(input.productId);
   const today = getSastDateString();
   await assertWeighInCanStart(product.id, today);
+
+  let pouredL = 0;
+  let startKg = round3(input.startKg);
+  if (isDecantMode(product.tracking_mode)) {
+    const fill = pourToFillBottle(input.startKg, product.issue_size_l, product.kg_per_litre);
+    pouredL = fill.pouredL;
+    startKg = fill.startKg;
+    if (pouredL >= 1000) {
+      throw new KioskChemicalError(
+        `${product.unit === 'kg' ? 'Kilograms' : 'Litres'} poured must be 0 or more and below 1000`,
+        400
+      );
+    }
+    const drumL = await readDrumLitres(product.id);
+    assertPourFitsDrum(pouredL, drumL, product.unit);
+  }
 
   const { data, error } = await supabaseAdmin
     .from('chemical_weigh_ins')
@@ -380,9 +478,10 @@ export async function startKioskWeighIn(input: {
       product_id: product.id,
       shift_date: today,
       status: 'open',
-      start_kg: round3(input.startKg),
+      start_kg: startKg,
       start_employee_id: input.employeeId,
       added_l: 0,
+      poured_l: pouredL,
       notes: blankToNull(input.notes),
     })
     .select('*')
@@ -455,7 +554,7 @@ export async function endKioskWeighIn(input: {
 
   const { data: product, error: productError } = await supabaseAdmin
     .from('chemical_products')
-    .select('id, kg_per_litre')
+    .select('id, kg_per_litre, tracking_mode, unit')
     .eq('id', weighIn.product_id)
     .maybeSingle();
 
@@ -466,19 +565,27 @@ export async function endKioskWeighIn(input: {
     throw new KioskChemicalError('Product not found', 404);
   }
 
-  const kgPerLitre = requiredNumber(product.kg_per_litre, 'kg per litre');
-  if (kgPerLitre <= 0) {
-    throw new Error('Product is missing a valid kg per litre');
-  }
+  const unit = stockUnit(product.unit);
+  const kgPerLitre = densityForUnit(unit, numberOrZero(product.kg_per_litre));
 
   const startKg = round3(requiredNumber(weighIn.start_kg, 'start weight'));
   const addedL = round3(input.addedL);
   const endKg = round3(input.endKg);
+  if (isDecantMode(product.tracking_mode) && addedL > 0) {
+    const drumL = await readDrumLitres(product.id);
+    assertPourFitsDrum(addedL, drumL, unit);
+  }
+  // poured_l is already inside the start weight, so it is not added again.
   const usedKg = round3(startKg + addedL * kgPerLitre - endKg);
   const usedL = round3(usedKg / kgPerLitre);
 
   if (usedKg < 0) {
-    throw new KioskChemicalError(END_ABOVE_START, 400);
+    throw new KioskChemicalError(
+      isDecantMode(product.tracking_mode)
+        ? `End weight is higher than the bottle start weight. If you poured more from the drum, enter those ${unit === 'kg' ? 'kilograms' : 'litres'}.`
+        : endAboveStartMessage(unit),
+      400
+    );
   }
   if (Math.abs(usedKg) > 99999.999 || Math.abs(usedL) > 99999.999) {
     throw new KioskChemicalError('Calculated usage is outside the allowed range', 400);

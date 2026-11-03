@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { authFetch } from '@/lib/auth-fetch';
+import { johannesburgDate } from '@/components/inventory/stock-display';
 import type {
   ChemicalProduct,
   ChemicalStockLevel,
@@ -70,7 +71,18 @@ const STOCK_LEVELS_KEY = ['inventory', 'stock-levels'] as const;
 const MOVEMENTS_KEY = ['inventory', 'movements'] as const;
 const WEIGH_INS_KEY = ['inventory', 'weigh-ins'] as const;
 
-function invalidateInventory(queryClient: QueryClient) {
+const listQueryOptions = {
+  staleTime: 60 * 1000,
+  refetchOnWindowFocus: false,
+  refetchOnMount: true,
+  placeholderData: keepPreviousData,
+} as const;
+
+function stockLevelsQueryKey(includeArchived: boolean) {
+  return [...STOCK_LEVELS_KEY, { includeArchived }] as const;
+}
+
+export function invalidateInventory(queryClient: QueryClient) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: STOCK_LEVELS_KEY }),
     queryClient.invalidateQueries({ queryKey: MOVEMENTS_KEY }),
@@ -115,6 +127,14 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<ApiEnvel
   return envelope;
 }
 
+export function prefetchStockLevels(queryClient: QueryClient) {
+  return queryClient.prefetchQuery({
+    queryKey: stockLevelsQueryKey(false),
+    queryFn: () => apiRequest<ChemicalStockLevel[]>('/api/inventory/products'),
+    staleTime: listQueryOptions.staleTime,
+  });
+}
+
 async function apiData<T>(path: string, init?: RequestInit): Promise<T> {
   const envelope = await apiRequest<T>(path, init);
   if (envelope.data == null) {
@@ -125,12 +145,12 @@ async function apiData<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function useStockLevels(includeArchived = false) {
   return useQuery({
-    queryKey: [...STOCK_LEVELS_KEY, { includeArchived }],
+    queryKey: stockLevelsQueryKey(includeArchived),
     queryFn: () =>
       apiRequest<ChemicalStockLevel[]>(
         includeArchived ? '/api/inventory/products?includeArchived=1' : '/api/inventory/products'
       ),
-    staleTime: 30 * 1000,
+    ...listQueryOptions,
   });
 }
 
@@ -187,7 +207,7 @@ export function useDeliveries(filters: DeliveryQuery = {}, options?: { enabled?:
     queryFn: () =>
       apiRequest<ChemicalStockMovement[]>(withQuery('/api/inventory/deliveries', params)),
     enabled: options?.enabled ?? true,
-    staleTime: 30 * 1000,
+    ...listQueryOptions,
   });
 }
 
@@ -222,18 +242,28 @@ export function useMovements(filters: MovementQuery = {}, options?: { enabled?: 
     queryFn: () =>
       apiRequest<ChemicalMovementListItem[]>(withQuery('/api/inventory/movements', params)),
     enabled: options?.enabled ?? true,
-    staleTime: 30 * 1000,
+    ...listQueryOptions,
   });
 }
 
-export function useWeighIns(filters: WeighInQuery = {}, options?: { enabled?: boolean }) {
+export function defaultWeighInRange(): { from: string; to: string } {
+  return { from: johannesburgDate(-13), to: johannesburgDate(0) };
+}
+
+export function weighInsQueryOptions(filters: WeighInQuery = {}) {
   const params = definedParams(filters);
-  return useQuery({
+  return {
     queryKey: [...WEIGH_INS_KEY, params],
     queryFn: () =>
       apiRequest<ChemicalWeighInWithEmployees[]>(withQuery('/api/inventory/weigh-ins', params)),
+    ...listQueryOptions,
+  };
+}
+
+export function useWeighIns(filters: WeighInQuery = {}, options?: { enabled?: boolean }) {
+  return useQuery({
+    ...weighInsQueryOptions(filters),
     enabled: options?.enabled ?? true,
-    staleTime: 30 * 1000,
   });
 }
 
@@ -261,11 +291,14 @@ export function useDeleteWeighIn() {
 }
 
 export function useUsage(filters: UsageQuery = {}, options?: { enabled?: boolean }) {
-  const params = definedParams(filters);
+  const params = definedParams({
+    from: filters.from ?? johannesburgDate(-13),
+    to: filters.to ?? johannesburgDate(0),
+  });
   return useQuery({
     queryKey: ['inventory', 'usage', params],
     queryFn: () => apiRequest<UsageByDayRow[]>(withQuery('/api/inventory/usage', params)),
     enabled: options?.enabled ?? true,
-    staleTime: 30 * 1000,
+    ...listQueryOptions,
   });
 }

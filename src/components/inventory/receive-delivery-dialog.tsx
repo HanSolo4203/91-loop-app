@@ -18,7 +18,8 @@ import type { ChemicalStockLevel } from '@/types/database';
 import {
   asNumber,
   asNumberOrNull,
-  formatLitres,
+  formatQuantity,
+  stockUnit,
   johannesburgDate,
 } from '@/components/inventory/stock-display';
 import type { RecordDeliveryPayload } from '@/lib/hooks/use-inventory';
@@ -90,7 +91,9 @@ export default function ReceiveDeliveryDialog({
       return;
     }
     if (!Number.isFinite(litreValue) || litreValue < 0 || litreValue >= 1000) {
-      setError('Litres must be 0 or more and below 1000');
+      setError(
+        `${stockUnit(product.unit) === 'kg' ? 'Kilograms' : 'Litres'} must be 0 or more and below 1000`
+      );
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -157,7 +160,7 @@ export default function ReceiveDeliveryDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="delivery-litres">Litres *</Label>
+            <Label htmlFor="delivery-litres">{stockUnit(product?.unit) === 'kg' ? 'Kilograms' : 'Litres'} *</Label>
             <Input
               id="delivery-litres"
               type="number"
@@ -171,7 +174,8 @@ export default function ReceiveDeliveryDialog({
             />
             {calculated != null && (
               <p className="text-xs text-slate-500">
-                Calculated from containers × {formatLitres(size)}: {formatLitres(calculated)}. You can edit the litres.
+                Calculated from containers × {formatQuantity(size, product?.unit)}:{' '}
+                {formatQuantity(calculated, product?.unit)}. You can edit the amount.
               </p>
             )}
           </div>
